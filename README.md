@@ -1,7 +1,11 @@
 # BiologiDex
 A Pokedex style social network app that allows users to share pictures of their real world zoologic observations in order to collaboratively build an ever expanding "evolutionary tree" with their friends.  
 
+
 Uses computer vision services to identify biological species (animals) in images taken by users. Once identified, the user adds the animal to their local database of seen animals with additional information & flavor as provided by the BiologiDex platform. BiologiDex is a placeholder name representing the walled-garden structure of the user networks and the giant evolutionary tree of animals being created by all "friends" of the user. 
+
+## Evolutionary Tree
+Find reference of actual evolutionary taxonomic tree which we can place animals & species on based on 
 
 ## Creating Animal Record Workflow
 - User uploads image
@@ -49,13 +53,31 @@ https://dribbble.com/shots/19287892-Pokemon-Neobrutalism
 
 # Customization
 Animal Record Cards
-    - Different background colors
-    - Different background color shapes
-    - Can add optional stickers & annotations
-    - Clicking on an image makes it full-resolution w/o any user customization visible
+- Different background colors
+- Different background color shapes
+- Can add optional stickers & annotations
+- Clicking on an image makes it full-resolution w/o any user customization visible
 
 Player Record Cards
-    - Inherits Animal Record Card design but allows for far more customization
-    - Different Player Stats & Badges
-    - Can use any animal picture caught or seen as a pfp
+- Inherits Animal Record Card design but allows for far more customization
+- Different Player Stats & Badges
+- Can use any animal picture caught or seen as a pfp
 
+# Implementation
+- Django API
+    - Handles
+        - User Account
+            - Creation
+            - Login
+            - Management
+            - Authentication
+        - Animal Identification
+        - Animal Record Lookups 
+- MySQL DB
+    - Tables for   
+        - Users
+        - Animals
+            - name
+            - description
+            - metadata
+        
