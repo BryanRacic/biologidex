@@ -1,6 +1,7 @@
 # BiologiDex
 A Pokedex style social network app that allows users to share pictures of their real world zoologic observations in order to collaboratively build an ever expanding "evolutionary tree" with their friends.  
 
+ This is a pokedex style app where CV is utilized to identify animals in user uploaded images which are turned into pokedex-style dex entries. In this version, friend's dex entries are counted as "seen animals" and displayed in a graph structure similar to an evolutionary tree.
 
 Uses computer vision services to identify biological species (animals) in images taken by users. Once identified, the user adds the animal to their local database of seen animals with additional information & flavor as provided by the BiologiDex platform. BiologiDex is a placeholder name representing the walled-garden structure of the user networks and the giant evolutionary tree of animals being created by all "friends" of the user. 
 
@@ -80,4 +81,16 @@ Player Record Cards
             - name
             - description
             - metadata
-        
+
+# Project Usage
+## Requirements
+- pyenv
+- poetry
+- django 
+
+## Setup
+1. pyenv install 3.12.10
+2. pyenv local 3.12.10
+3. poetry install
+4. apt install python3-django
+
