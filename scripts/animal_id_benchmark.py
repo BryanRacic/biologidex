@@ -87,13 +87,16 @@ class OpenAIVisionMethod(CVMethod):
     def identify_animal(self, image_path: str) -> Tuple[str, float, float]:
         """Identify animal using OpenAI Vision API"""
         start_time = time.time()
-        
+
         try:
             base64_image = self.encode_image(image_path)
-            
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+
+            # GPT-5 models use max_completion_tokens, GPT-4 and earlier use max_tokens
+            is_gpt5_or_later = self.model.startswith("gpt-5") or self.model.startswith("o1") or self.model.startswith("o3") or self.model.startswith("o4")
+
+            request_params = {
+                "model": self.model,
+                "messages": [
                     {
                         "role": "user",
                         "content": [
@@ -108,9 +111,16 @@ class OpenAIVisionMethod(CVMethod):
                         ]
                     }
                 ],
-                max_tokens=300
-            )
-            
+            }
+
+            # Add the correct token limit parameter based on model version
+            if is_gpt5_or_later:
+                request_params["max_completion_tokens"] = 300
+            else:
+                request_params["max_tokens"] = 300
+
+            response = self.client.chat.completions.create(**request_params)
+            logging.info(response)
             runtime = time.time() - start_time
             prediction = response.choices[0].message.content.strip()
             
@@ -369,7 +379,7 @@ def main():
         # OpenAIVisionMethod("gpt-4.1-mini", "low"),
         # OpenAIVisionMethod("gpt-4.1-nano", "low"),
         # OpenAIVisionMethod("gpt-5-nano", "low"),
-        #OpenAIVisionMethod("gpt-5-mini", "low"),
+        # OpenAIVisionMethod("gpt-5-mini", "low"),
     ]
     
     logging.info(f"Testing {len(cv_methods)} CV methods:")
