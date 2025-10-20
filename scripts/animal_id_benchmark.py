@@ -24,6 +24,7 @@ load_dotenv(dotenv_path=env_path)
 # Prompt constant for animal identification
 ANIMAL_ID_PROMPT = " ".join([
 'Please identify the animal(s) in this image.',
+'Bugs, arachnids & other invertabrits are considered animals for the purpose of this task.',
 'Provide a specific species name if possible, or a general animal type if the species cannot be determined.',
 'If there are multiple animals, list all of them.',
 'Your response should be formatted in Binomial nomenclature, formatted as the following `genus, species (common name)` if at least one animal can be identified.',

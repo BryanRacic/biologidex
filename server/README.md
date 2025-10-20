@@ -78,49 +78,247 @@ pokedex/
 - “Seen” logic tweaks: mark seen_source = "self" | "friend" | "suggested" on edges/nodes for the UI.
 - Search: add trigram or full-text index on common_name/scientific_name.
 
-## Usage
-1. Set up PostgreSQL and Redis:
-   ```bash
-   docker-compose up -d
-   ```
+## Local Development - Getting Started
 
-2. Install dependencies:
-   ```bash
-   poetry shell
-   poetry install
-   ```
+This guide will help you set up BiologiDex on a fresh machine for local development.
 
-3. Set up Google Cloud Storage:
-   - Create a GCS bucket in Google Cloud Console
-   - Create a service account with Storage Admin role
-   - Download the service account key JSON file
-   - Add credentials to .env file
+### Prerequisites
+- Python 3.12+ with pyenv
+- Poetry for dependency management
+- Docker & Docker Compose
+- OpenAI API key (for CV identification)
+- Google Cloud account (for media storage)
 
-4. Configure environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
+### Step-by-Step Setup
 
-5. Run migrations:
-   ```bash
-   python manage.py migrate
-   ```
+#### 1. Install Dependencies
+```bash
+poetry install
+poetry shell
+```
 
-6. Create superuser:
-   ```bash
-   python manage.py createsuperuser
-   ```
+**Note**: This installs all dependencies including development tools like `django-debug-toolbar`, `pytest`, `black`, and `flake8`.
 
-7. Start development server:
-   ```bash
-   python manage.py runserver
-   ```
+#### 2. Configure Environment Variables
+Copy the example environment file and fill in your credentials:
+```bash
+cp .env.example .env
+```
 
-8. Start Celery worker (in another terminal):
-   ```bash
-   celery -A biologidex worker -l info
-   ```
+Edit `.env` and provide values for:
+- `SECRET_KEY` - Django secret key (generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`)
+- `DB_PASSWORD` - Choose a secure password for PostgreSQL
+- `OPENAI_API_KEY` - Your OpenAI API key
+- `GCS_BUCKET_NAME` - Your Google Cloud Storage bucket name
+- `GCS_PROJECT_ID` - Your GCP project ID
+- `GOOGLE_APPLICATION_CREDENTIALS` - Path to your GCS service account JSON key file
+
+**Note**: The `.env` file is NOT tracked in git. Each machine/developer needs their own local configuration.
+
+#### 3. Set Up Google Cloud Storage
+- Create a GCS bucket in Google Cloud Console
+- Create a service account with Storage Admin role
+- Download the service account key JSON file
+- Add the path to this file in your `.env` as `GOOGLE_APPLICATION_CREDENTIALS`
+
+#### 4. Start PostgreSQL and Redis
+Start the Docker containers for the database and cache:
+```bash
+docker-compose up -d
+```
+
+This creates:
+- PostgreSQL database on port 5432
+- Redis cache on port 6379
+- Data is stored in Docker volumes (local to this machine)
+
+#### 5. Create Database Tables
+Run Django migrations to create the database schema:
+```bash
+python manage.py makemigrations accounts animals dex social vision
+python manage.py migrate
+```
+
+**Important**: Always create migrations in the order shown above, as `accounts.User` must exist before other apps.
+
+#### 6. Create a Superuser (Admin Account)
+Run this command to create an admin user for accessing the Django admin panel:
+```bash
+python manage.py createsuperuser
+```
+
+**What it does**: Creates a user account with superuser privileges (access to the admin panel and all permissions).
+
+**What it will prompt you for:**
+1. **Username** - Choose any username (e.g., "admin", "bryan", etc.)
+2. **Email address** - Required by the custom User model
+3. **Password** - Enter a password (twice for confirmation)
+   - Django will warn if it's too simple, but you can bypass this in development by typing "y"
+
+**After creation:**
+- The superuser will have `is_staff=True` and `is_superuser=True` automatically set
+- A `friend_code` will be auto-generated (8 random alphanumeric characters)
+- A `UserProfile` will be auto-created via Django signals
+- You can then log in at `http://localhost:8000/admin/` with your username and password
+
+**Note**: This username/password is stored in your local database only. If you clone the repo to another machine, you'll need to create a new superuser there.
+
+#### 7. Start Development Server
+```bash
+python manage.py runserver
+```
+
+The server will start at `http://localhost:8000/`
+
+#### 8. Start Celery Worker (in another terminal)
+Open a second terminal window and run:
+```bash
+poetry shell
+celery -A biologidex worker -l info
+```
+
+This enables async processing for CV image identification.
+
+### Verify Your Setup
+
+Once everything is running, you can access:
+- **API Documentation (Swagger)**: http://localhost:8000/api/docs/
+- **API Documentation (ReDoc)**: http://localhost:8000/api/redoc/
+- **Admin Panel**: http://localhost:8000/admin/
+- **API Base URL**: http://localhost:8000/api/v1/
+
+### Quick Test
+Try registering a user via the API:
+```bash
+curl -X POST http://localhost:8000/api/v1/users/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "email": "test@example.com", "password": "testpass123", "password_confirm": "testpass123"}'
+```
+
+---
+
+## Useful Endpoints & Tools
+
+### Django Debug Toolbar (Development Only)
+**URL**: Appears as a sidebar on any page when running in development mode
+
+**What it does**: A powerful debugging tool that provides detailed information about:
+- **SQL Queries**: See all database queries executed, their execution time, and identify N+1 query problems
+- **Request/Response**: View headers, session data, and request parameters
+- **Templates**: See which templates were rendered and their context
+- **Cache**: Monitor cache hits/misses
+- **Signals**: Track Django signals being fired
+- **Performance Profiling**: Identify slow code paths
+- **Settings**: View current Django settings
+
+**How to use**: Simply load any page in your browser while running the development server, and the toolbar will appear on the right side. Click on any panel to see detailed information.
+
+**Note**: The toolbar only appears when `DEBUG=True` (development mode) and requests come from `INTERNAL_IPS` (localhost/127.0.0.1).
+
+### Django Admin Panel
+**URL**: http://localhost:8000/admin/
+
+**Login**: Use the superuser credentials you created in Step 6
+
+**What it does**: The Django admin panel provides a web-based interface for managing your database records directly. It's extremely useful for development, testing, and manual data management.
+
+**Available Models**:
+
+- **Users** (`accounts/User`) - View/edit user accounts, friend codes, badges, bios
+- **User Profiles** (`accounts/UserProfile`) - View user statistics (total catches, unique species)
+- **Animals** (`animals/Animal`) - Browse the canonical animal species database
+  - View taxonomic information (kingdom → species)
+  - See creation_index (Pokedex-style numbers)
+  - Mark animals as verified
+  - Edit descriptions, habitats, conservation status
+- **Dex Entries** (`dex/DexEntry`) - View user collections
+  - See which users have caught which animals
+  - View images, locations, notes
+  - Manage visibility settings (private/friends/public)
+  - Check customizations
+- **Friendships** (`social/Friendship`) - Manage social connections
+  - View friend relationships
+  - See friendship status (pending/accepted/rejected/blocked)
+  - Manually create or modify friendships
+- **Analysis Jobs** (`vision/AnalysisJob`) - Monitor CV identification pipeline
+  - Track image analysis requests
+  - View status (pending/processing/completed/failed)
+  - See cost, token usage, processing time
+  - Inspect raw API responses
+  - Retry failed jobs
+- **Groups** and **Permissions** - Django's built-in auth system for managing user permissions
+
+**Common Admin Tasks**:
+- **Seed test data**: Manually create Animals, Users, and DexEntries for testing
+- **Debug CV issues**: Check AnalysisJob records to see why identifications failed
+- **Verify animals**: Mark AI-identified animals as verified by an expert
+- **Manage users**: View user stats, reset passwords, manage permissions
+- **Test social features**: Create friendships between test users
+
+### API Documentation (Swagger UI)
+**URL**: http://localhost:8000/api/docs/
+
+**What it does**: Interactive API documentation where you can:
+- Browse all available endpoints
+- See request/response schemas
+- Test API calls directly from the browser
+- Authenticate with JWT tokens
+- View example requests and responses
+
+**How to use**:
+1. Click "Authorize" button at the top
+2. Login via `/api/v1/auth/login/` to get a JWT token
+3. Paste the access token in the authorization dialog
+4. Test any authenticated endpoint interactively
+
+### API Documentation (ReDoc)
+**URL**: http://localhost:8000/api/redoc/
+
+**What it does**: Alternative API documentation with a cleaner, read-only interface. Better for:
+- Reading documentation
+- Copying code examples
+- Understanding API structure
+- Sharing documentation with others
+
+### Key API Endpoints
+
+**Authentication**:
+- `POST /api/v1/auth/login/` - Get JWT tokens
+- `POST /api/v1/auth/refresh/` - Refresh access token
+- `POST /api/v1/users/` - Register new user (no auth required)
+
+**User Management**:
+- `GET /api/v1/users/me/` - Get current user profile
+- `GET /api/v1/users/friend-code/` - Get your friend code
+- `POST /api/v1/users/lookup_friend_code/` - Find user by friend code
+
+**Animal Identification** (the core workflow):
+- `POST /api/v1/vision/jobs/` - Upload image, triggers async CV analysis
+- `GET /api/v1/vision/jobs/{id}/` - Check analysis status
+- `POST /api/v1/dex/entries/` - Create dex entry after successful identification
+
+**Collections**:
+- `GET /api/v1/dex/entries/my_entries/` - Your personal collection
+- `GET /api/v1/animals/` - Browse all discovered animals
+- `POST /api/v1/dex/entries/{id}/toggle_favorite/` - Mark favorites
+
+**Social**:
+- `POST /api/v1/social/friendships/send_request/` - Send friend request by code
+- `GET /api/v1/social/friendships/friends/` - List your friends
+- `POST /api/v1/social/friendships/{id}/respond/` - Accept/reject requests
+
+**Graph**:
+- `GET /api/v1/graph/evolutionary-tree/` - Get collaborative evolutionary tree data
+
+---
+
+## Migrating to a New Machine
+
+When cloning this repository to a new machine, remember:
+- **Database is local**: You'll have an empty database and need to run migrations + create a new superuser
+- **Environment variables**: Copy `.env.example` to `.env` and fill in your credentials
+- **Docker volumes**: New Docker containers will have fresh PostgreSQL/Redis instances
+- **Dependencies**: Run `poetry install` to install Python packages
 
 ---
 
@@ -130,49 +328,109 @@ pokedex/
 Transform the existing default Django template into a fully functional MVP for BiologiDex - a Pokedex-style social network for sharing zoological observations with collaborative evolutionary tree building.
 
 ### Current State Assessment
-- **Status**: Fresh Django 3.2.12 project with only default configuration
-- **Architecture**: Well-documented in README but not implemented
-- **CV Integration**: Benchmarking script exists and works with OpenAI Vision API
-- **Database**: SQLite with only Django defaults
+- **Status**: ✅ **PHASE 1 COMPLETE** - All core infrastructure and apps implemented
+- **Architecture**: Fully implemented with 6 Django apps
+- **CV Integration**: OpenAI Vision API integrated with Celery async processing
+- **Database**: PostgreSQL with Redis caching
 
 ---
 
-## Phase 1: Foundation & Infrastructure (Days 1-2)
+## Quick Start
 
-### 1.1 Project Setup & Dependencies
+### Prerequisites
+- Python 3.12+ with pyenv
+- Poetry for dependency management
+- Docker & Docker Compose
+- OpenAI API key
+
+### Setup Instructions
+
+1. **Install dependencies:**
+   ```bash
+   poetry install
+   ```
+
+2. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
+
+3. **Start services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Create migrations and database:**
+   ```bash
+   poetry shell
+   python manage.py makemigrations accounts animals dex social vision
+   python manage.py migrate
+   python manage.py createsuperuser
+   ```
+
+5. **Run development server:**
+   ```bash
+   python manage.py runserver
+   ```
+
+6. **Start Celery worker (separate terminal):**
+   ```bash
+   poetry shell
+   celery -A biologidex worker -l info
+   ```
+
+### Testing the API
+
+Access the interactive API documentation at:
+- **Swagger UI**: http://localhost:8000/api/docs/
+- **ReDoc**: http://localhost:8000/api/redoc/
+- **Admin Panel**: http://localhost:8000/admin/
+
+Example workflow:
+```bash
+# 1. Register a user
+curl -X POST http://localhost:8000/api/v1/users/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "email": "test@example.com", "password": "testpass123", "password_confirm": "testpass123"}'
+
+# 2. Login to get JWT token
+curl -X POST http://localhost:8000/api/v1/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "password": "testpass123"}'
+
+# 3. Use token for authenticated requests
+curl -X GET http://localhost:8000/api/v1/users/me/ \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
-# Required packages to add to requirements.txt or pyproject.toml
-django==4.2.7  # Upgrade from 3.2.12
-djangorestframework==3.14.0
-djangorestframework-simplejwt==5.3.0
-django-cors-headers==4.3.0
-django-filter==23.3
-django-storages==1.14.2
-google-cloud-storage==2.10.0  # For Google Cloud Storage
-Pillow==10.1.0  # Image processing
-celery==5.3.4
-redis==5.0.1
-python-dotenv==1.0.0
-openai==1.3.0  # Already used in benchmark
-drf-spectacular==0.26.5  # API documentation
-django-extensions==3.2.3
-psycopg2-binary==2.9.9  # PostgreSQL adapter
-```
 
-### 1.2 Settings Configuration
-- Split settings into base/development/production
-- Configure environment variables (.env integration)
-- Set up CORS, JWT authentication
-- Configure media/static files with Google Cloud Storage
-- Set up Celery for async tasks
-- Configure logging
+See [SETUP.md](SETUP.md) for detailed documentation.
 
-### 1.3 Database Setup
-- PostgreSQL for both development and production
-- Docker Compose for local PostgreSQL instance
-- Configure connection pooling
-- Set up initial database and user
-- Environment variables for database credentials
+---
+
+## Phase 1: Foundation & Infrastructure ✅ COMPLETE
+
+### 1.1 Project Setup & Dependencies ✅
+**Status**: Complete
+- Poetry-based dependency management with pyproject.toml
+- All dependencies configured with latest compatible versions
+- Python 3.12.10 environment with pyenv
+
+### 1.2 Settings Configuration ✅
+**Status**: Complete
+- Split settings architecture (base/development/production)
+- Environment variables via python-dotenv
+- JWT authentication configured
+- Google Cloud Storage for media files
+- Celery + Redis for async tasks
+- Comprehensive logging with rotating file handlers
+
+### 1.3 Database Setup ✅
+**Status**: Complete
+- PostgreSQL 15 via Docker Compose
+- Connection pooling configured (CONN_MAX_AGE=600)
+- Redis for caching and Celery backend
+- Proper indexing on all models for query performance
 
 **PostgreSQL Configuration:**
 ```python
@@ -271,7 +529,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ---
 
-## Phase 2: Core Django Apps Creation (Days 3-5)
+## Phase 2: Core Django Apps Creation
 
 ### 2.1 Accounts App
 **Models:**
@@ -377,7 +635,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ---
 
-## Phase 3: API Implementation (Days 6-8)
+## Phase 3: API Implementation
 
 ### 3.1 RESTful API Structure
 ```
@@ -425,7 +683,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ---
 
-## Phase 4: Core Workflows (Days 9-11)
+## Phase 4: Core Workflows
 
 ### 4.1 Animal Identification Workflow
 ```python
@@ -452,7 +710,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ---
 
-## Phase 5: Testing & Documentation (Day 12)
+## Phase 5: Testing & Documentation
 
 ### 5.1 Testing Suite
 ```python
@@ -471,7 +729,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ---
 
-## Phase 6: Production Readiness (Days 13-14)
+## Phase 6: Production Readiness
 
 ### 6.1 Security & Performance
 - Implement rate limiting

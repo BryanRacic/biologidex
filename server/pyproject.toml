@@ -1,0 +1,60 @@
+[tool.poetry]
+name = "biologidex-server"
+version = "0.1.0"
+description = "BiologiDex Django API Server - A Pokedex-style social network for zoological observations"
+authors = ["BiologiDex Team <contact@biologidex.io>"]
+readme = "README.md"
+packages = [{include = "biologidex"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+django = "*"
+djangorestframework = "*"
+djangorestframework-simplejwt = "*"
+django-cors-headers = "*"
+django-filter = "*"
+django-extensions = "*"
+django-storages = {extras = ["google"], version = "*"}
+google-cloud-storage = "*"
+psycopg2-binary = "*"
+celery = "*"
+redis = "*"
+python-dotenv = "*"
+openai = "*"
+drf-spectacular = "*"
+pillow = "*"
+
+[tool.poetry.group.dev.dependencies]
+ipython = "*"
+pytest = "*"
+pytest-django = "*"
+black = "*"
+flake8 = "*"
+pytest-cov = "*"
+django-debug-toolbar = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | __pycache__
+  | migrations
+)/
+'''
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "biologidex.settings.development"
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=. --cov-report=html --cov-report=term-missing"
+testpaths = ["accounts", "animals", "dex", "social", "vision", "graph"]
