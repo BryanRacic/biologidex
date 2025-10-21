@@ -70,3 +70,6 @@ CORS_ALLOW_ALL_ORIGINS = True
 LOGGING['loggers']['django']['level'] = 'DEBUG'
 LOGGING['loggers']['biologidex']['level'] = 'DEBUG'
 LOGGING['loggers']['vision']['level'] = 'DEBUG'
+
+# Auto-seed test users on startup (development only)
+AUTO_SEED_TEST_USERS = True
