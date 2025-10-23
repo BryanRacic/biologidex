@@ -3,15 +3,54 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
 
-## Current Status (Updated 2025-10-20)
+## Current Status (Updated 2025-10-23)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
-- ⏳ **Frontend**: Not started
+- ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
 
 ---
 
 ## Technical Architecture
+
+### Frontend Stack (Godot 4.5)
+- **Engine**: Godot 4.5 (GL Compatibility renderer)
+- **Target Platforms**: Web (primary), Mobile, Desktop
+- **Base Resolution**: 1280×720 (16:9)
+- **Stretch Mode**: canvas_items with expand aspect
+- **Font Rendering**: MSDF (Multichannel Signed Distance Field)
+
+### Client Structure
+```
+client/biologidex-client/
+├── main.tscn                    # Main responsive scene
+├── responsive.gd                # Base responsive behavior script
+├── navigation_manager.gd        # Navigation singleton (autoload)
+├── responsive_container.gd      # Auto-margin container class
+├── theme.tres                   # Base theme resource
+├── project.godot                # Project configuration
+└── IMPLEMENTATION_NOTES.md      # Phase 1 implementation details
+```
+
+### Key Godot Patterns
+
+**Responsive Design System**:
+- AspectRatioContainer maintains 16:9 proportions
+- Dynamic margin adjustment per device class (mobile: 16px, tablet: 32px, desktop: 48px)
+- Viewport size monitoring with automatic layout updates
+- Device class detection: mobile (<800px), tablet (800-1280px), desktop (>1280px)
+
+**Navigation System**:
+- Global NavigationManager singleton with history stack (max 10 scenes)
+- Scene validation before navigation
+- Back navigation support with `go_back()`
+- Signals: `scene_changed`, `navigation_failed`
+
+**Common Gotchas**:
+- GDScript type inference: `min()`, `max()`, and `Array[T].pop_back()` return Variant - always explicitly type as `float` or `String`
+- Scene hierarchy: Main (Control) → Panel → AspectRatioContainer → MarginContainer → VBoxContainer
+- Touch targets must be minimum 44×44 pixels for mobile
+- MSDF fonts enable crisp rendering at all scales without rasterization
 
 ### Backend Stack
 - **Framework**: Django 4.2+ with Django REST Framework
@@ -199,12 +238,18 @@ celery -A biologidex worker -l info   # Start worker
 
 ---
 
-## Next Steps (Phase 2+)
-- Frontend development (React/Vue.js)
+## Next Steps
+
+### Frontend - Phase 2: Core Pages
+- Login/Registration scenes (connect to `/api/v1/auth/`)
+- Home screen with tab navigation (Dex, Camera, Tree, Social)
+- Profile view with stats and badges
+- Camera integration placeholder
+
+### Backend - Future Phases
 - Enhanced CV pipeline (multiple providers)
 - Gamification features (achievements, leaderboards)
 - Real-time updates (WebSockets)
-- Mobile app considerations
 
 ## Environment Setup
 - `.env` file in `server/` directory with all credentials
