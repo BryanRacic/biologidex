@@ -11,29 +11,34 @@ config_version=5
 [application]
 
 config/name="biologidex-client"
-run/main_scene="uid://dvvrbn8ufje50"
+run/main_scene="res://login.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
 NavigationManager="*res://navigation_manager.gd"
+APIManager="*res://api_manager.gd"
+TokenManager="*res://token_manager.gd"
 
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
+window/size/initial_position_type=3
 window/size/window_width_override=1280
 window/size/window_height_override=720
-window/size/initial_position_type=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=6
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot-file-access-web/addons/FileAccessWeb/plugin.cfg")
+
 [gui]
 
 theme/default_font_multichannel_signed_distance_field=true
-theme/default_theme_scale=1.0
 
 [rendering]
 

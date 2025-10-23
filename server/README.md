@@ -1,6 +1,37 @@
 # Local Development / Getting Started
 see server/development.md
 
+# Usage
+### Step-by-Step Setup
+
+Start python env
+```bash
+poetry shell
+```
+
+Start PostgreSQL and Redis
+```bash
+docker-compose up -d
+```
+
+Run migrations (if necissary)
+```bash
+python manage.py migrate
+```
+
+Start Development Server
+```bash
+python manage.py runserver
+```
+The server will start at `http://localhost:8000/`
+
+Start Celery Worker (in another terminal)
+Open a second terminal window and run:
+```bash
+poetry shell
+celery -A biologidex worker -l info
+```
+
 # Outline
 User
 - Account creation

@@ -205,32 +205,32 @@ curl -X POST http://localhost:8000/api/v1/users/ \
 ### Key API Endpoints
 
 **Authentication**:
-- `POST /api/v1/auth/login/` - Get JWT tokens
-- `POST /api/v1/auth/refresh/` - Refresh access token
-- `POST /api/v1/users/` - Register new user (no auth required)
+- `POST /api/v1/auth/login/`: Get JWT tokens
+- `POST /api/v1/auth/refresh/`: Refresh access token
+- `POST /api/v1/users/`: Register new user (no auth required)
 
 **User Management**:
-- `GET /api/v1/users/me/` - Get current user profile
-- `GET /api/v1/users/friend-code/` - Get your friend code
-- `POST /api/v1/users/lookup_friend_code/` - Find user by friend code
+- `GET /api/v1/users/me/`: Get current user profile
+- `GET /api/v1/users/friend-code/`: Get your friend code
+- `POST /api/v1/users/lookup_friend_code/`: Find user by friend code
 
 **Animal Identification** (the core workflow):
-- `POST /api/v1/vision/jobs/` - Upload image, triggers async CV analysis
-- `GET /api/v1/vision/jobs/{id}/` - Check analysis status
-- `POST /api/v1/dex/entries/` - Create dex entry after successful identification
+- `POST /api/v1/vision/jobs/`: Upload image, triggers async CV analysis
+- `GET /api/v1/vision/jobs/{id}/`: Check analysis status
+- `POST /api/v1/dex/entries/`: Create dex entry after successful identification
 
 **Collections**:
-- `GET /api/v1/dex/entries/my_entries/` - Your personal collection
-- `GET /api/v1/animals/` - Browse all discovered animals
-- `POST /api/v1/dex/entries/{id}/toggle_favorite/` - Mark favorites
+- `GET /api/v1/dex/entries/my_entries/`: Your personal collection
+- `GET /api/v1/animals/`: Browse all discovered animals
+- `POST /api/v1/dex/entries/{id}/toggle_favorite/`: Mark favorites
 
 **Social**:
-- `POST /api/v1/social/friendships/send_request/` - Send friend request by code
-- `GET /api/v1/social/friendships/friends/` - List your friends
-- `POST /api/v1/social/friendships/{id}/respond/` - Accept/reject requests
+- `POST /api/v1/social/friendships/send_request/`: Send friend request by code
+- `GET /api/v1/social/friendships/friends/`: List your friends
+- `POST /api/v1/social/friendships/{id}/respond/`: Accept/reject requests
 
 **Graph**:
-- `GET /api/v1/graph/evolutionary-tree/` - Get collaborative evolutionary tree data
+- `GET /api/v1/graph/evolutionary-tree/`: Get collaborative evolutionary tree data
 
 ---
 

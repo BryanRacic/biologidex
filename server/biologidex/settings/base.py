@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_filters',
     'drf_spectacular',
@@ -58,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'biologidex.middleware.RequestLoggingMiddleware',  # API request/response logging
 ]
 
 ROOT_URLCONF = 'biologidex.urls'
@@ -264,6 +266,11 @@ LOGGING = {
             'propagate': False,
         },
         'vision': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'biologidex.api': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,

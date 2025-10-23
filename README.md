@@ -8,40 +8,6 @@ Uses computer vision services to identify biological species (animals) in images
 ## Evolutionary Tree
 Find reference of actual evolutionary taxonomic tree which we can place animals & species on based on 
 
-## Creating Animal Record Workflow
-- User uploads image
-- AI Processing & Animal ID
-    - Start w/ LLM service for ease of use
-    - Layered ID approach 
-        - Iterate over the following until a match is identified (or steps exhausted)
-            - CV-specific animal ID service
-                - wildlifeinsights
-                - inaturalist
-                - animaldetect.com
-            - LLM Image Processing service
-    - If a match is identified
-        - Display match to user (and source) 
-        - Ask user if they want to manually enter
-    - If a match is not identified
-        - Ask the user to manually enter
-        - Or upload a different image
-- Once animal is ID
-    - Query Animal DB
-        - If animal doesn't exist
-            - Then create animal record
-                - animal name
-                - animal info lookup (primary free apis first, then LLM fallback)
-                    - genus species  
-                    - kingdom phylum
-                    - conservation status
-                    - fact/info/about
-                        -  start w/ summarization/RAG find by LLM
-                - animal creation index
-                    - similar to pokedex number, users are encouraged to "find them all"
-        - If animal does exist
-            - Lookup animal record
-        - Create animal record in player's animal record DB
-
 # Design
 - Inspired by Biological illustration: https://en.wikipedia.org/wiki/Biological_illustration
 - A modern & clean version like might be seen on the history channel (design-wise)
@@ -134,33 +100,98 @@ Player Record Cards
 - Have you considered carbon credit offsets
     - Unfortunately these are usually the product of greenwashing
 
-# Implementation
-- Django API
-    - Handles
-        - User Account
-            - Creation
-            - Login
-            - Management
-            - Authentication
-        - Animal Identification
-        - Animal Record Lookups 
-- MySQL DB
-    - Tables for   
-        - Users
-        - Animals
-            - name
-            - description
-            - metadata
+# Required Pages/User Workflow
+1. Login
+    - Show If
+        - no valid refresh token
+    - Details
+        - login form
+            - username
+                - prepopulated from local account details 
+            - password
+        - login button
+            - on success
+                - login process
+                    - get refresh token (long term)
+                        - `POST /api/v1/auth/refresh/`: Refresh access token
+                            - TODO double check this generates a refresh token
+                    - login/get jwt token (short term, uses refresh token)
+                        - `POST /api/v1/auth/login/`: Get JWT tokens
+                    - save account details locally
+                        - username, refresh token
+                        - TODO make saving username/account details optional
+                    3. Home
+                        4. Create animal record (take/upload photo)
+                            - upload picture
+                                - HTML5 build
+                                    - use godot-file-access-web plugin
+                                        - Code & Examples: client/biologidex-client/addons/godot-file-access-web
+                                        - Source: https://github.com/Scrawach/godot-file-access-web/tree/main
+                                - `POST /api/v1/vision/jobs/`: Upload image, triggers async CV analysis
+                            - on upload success
+                                - display loading icon
+                                    - `GET /api/v1/vision/jobs/{id}/`: Check analysis status
+                        5. View taxonomic tree(s)
+                        6. Profile
+                            - Details
+                                - Username (display only)
+                                - Firstname
+                                - Lastname
+                                - Bio
+                            7. Friends (view/manage/add)
+                            8. Settings
+                                - Change password
+                                - Change email
+                                - Details
+                                    - Logout
+        - reset password button
+            - TODO
+        - create account button
+            2. Create account
+                - Details        
+                    - account creation form
+                        - username
+                        - email
+                        - password
+                        - confirm password
+                    - create account button
+                            - `POST /api/v1/users/`: Register new user (no auth required)
+                                - TODO add validation
+                                    - username, email, password match
+                            - on success
+                                - see login process
 
-# Project Usage
-## Requirements
-- pyenv
-- poetry
-- django 
 
-## Setup
-1. pyenv install 3.12.10
-2. pyenv local 3.12.10
-3. poetry install
-4. apt install python3-django
-
+## Creating Animal Record Workflow (Planned)
+- User uploads image
+- AI Processing & Animal ID
+    - Start w/ LLM service for ease of use
+    - Layered ID approach 
+        - Iterate over the following until a match is identified (or steps exhausted)
+            - CV-specific animal ID service
+                - wildlifeinsights
+                - inaturalist
+                - animaldetect.com
+            - LLM Image Processing service
+    - If a match is identified
+        - Display match to user (and source) 
+        - Ask user if they want to manually enter
+    - If a match is not identified
+        - Ask the user to manually enter
+        - Or upload a different image
+- Once animal is ID
+    - Query Animal DB
+        - If animal doesn't exist
+            - Then create animal record
+                - animal name
+                - animal info lookup (primary free apis first, then LLM fallback)
+                    - genus species  
+                    - kingdom phylum
+                    - conservation status
+                    - fact/info/about
+                        -  start w/ summarization/RAG find by LLM
+                - animal creation index
+                    - similar to pokedex number, users are encouraged to "find them all"
+        - If animal does exist
+            - Lookup animal record
+        - Create animal record in player's animal record DB

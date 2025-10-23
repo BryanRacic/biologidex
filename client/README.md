@@ -1,4 +1,30 @@
-# BiologiDex Client - Godot 4.5 Implementation Guide
+# BiologiDex Client
+
+# Usage
+
+## Note: *File Upload Limitations*
+- File upload is only available in the HTML5 build 
+- Browsers enforce CORS (Cross-Origin Resource Sharing) policies that prevent file:// URLs from loading resources
+    - Godot HTML5 exports require:
+        - .wasm (WebAssembly binary)
+        - .pck (game data package)
+    - These files must be served via HTTP/HTTPS to work properly.
+        - See the web server under the File Upload Compatible instructions
+
+## No File Upload
+Open html export in web browser
+```
+client/biologidex-client/export/web/biologidex-client.html
+```
+
+## File Upload Compatible
+```
+client/biologidex-client/export/web/serve.sh
+# Runs on: http://localhost:8080
+```
+Then access: http://localhost:8080/biologidex-client.html
+
+# Godot 4.5 Implementation Guide
 
 ## Table of Contents
 1. [Project Structure](#project-structure)
