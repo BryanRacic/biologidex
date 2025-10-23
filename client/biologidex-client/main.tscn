@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://dvvrbn8ufje50"]
+
+[node name="CanvasLayer" type="CanvasLayer"]
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control"]
+layout_mode = 0
+offset_right = 116.0
+offset_bottom = 62.0
+
+[node name="Header" type="HBoxContainer" parent="Control/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HeaderLabel" type="Label" parent="Control/VBoxContainer/Header"]
+layout_mode = 2
+text = "HEADER"
+
+[node name="MainContent" type="ScrollContainer" parent="Control/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="GridContainer" type="GridContainer" parent="Control/VBoxContainer/MainContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ContentLabel" type="Label" parent="Control/VBoxContainer/MainContent/GridContainer"]
+layout_mode = 2
+text = "Content"
+
+[node name="FooterNav" type="HBoxContainer" parent="Control/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FooterButton" type="Button" parent="Control/VBoxContainer/FooterNav"]
+layout_mode = 2
+text = "Footer Button"

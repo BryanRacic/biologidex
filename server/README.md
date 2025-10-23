@@ -494,6 +494,11 @@ app_name/
 ## Next Steps & Essential Improvements
 
 ### Immediate Next Steps (Post-MVP)
+
+TODO: Figure out email stuff? 
+  - Sending out email verification
+  - Reset password
+
 1. **Frontend Development**
    - React/Vue.js application
    - Mobile-responsive design
