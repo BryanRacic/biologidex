@@ -1,0 +1,176 @@
+# Monitoring Stack for BiologiDex
+# Prometheus + Grafana + Node Exporter + Postgres Exporter
+# Usage: docker-compose -f docker-compose.monitoring.yml up -d
+
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: biologidex-prometheus
+    restart: always
+    user: "65534:65534"  # nobody user
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - biologidex-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: biologidex-grafana
+    restart: always
+    user: "472:472"  # grafana user
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,redis-datasource
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_SMTP_ENABLED: ${GF_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${EMAIL_HOST:-smtp.gmail.com:587}
+      GF_SMTP_USER: ${EMAIL_HOST_USER:-}
+      GF_SMTP_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${DEFAULT_FROM_EMAIL:-noreply@biologidex.com}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - biologidex-network
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: biologidex-node-exporter
+    restart: always
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/host/root'
+      - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)'
+      - '--collector.netclass.ignored-devices=^(veth.*)$'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    ports:
+      - "127.0.0.1:9100:9100"
+    networks:
+      - biologidex-network
+    pid: host
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: biologidex-postgres-exporter
+    restart: always
+    environment:
+      DATA_SOURCE_NAME: postgresql://${DB_USER:-biologidex}:${DB_PASSWORD}@db:5432/${DB_NAME:-biologidex}?sslmode=disable
+      PG_EXPORTER_EXCLUDE_DATABASES: template0,template1
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "true"
+    ports:
+      - "127.0.0.1:9187:9187"
+    networks:
+      - biologidex-network
+    depends_on:
+      - db
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: biologidex-redis-exporter
+    restart: always
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "127.0.0.1:9121:9121"
+    networks:
+      - biologidex-network
+    depends_on:
+      - redis
+
+  # Optional: Loki for log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: biologidex-loki
+    restart: always
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - biologidex-network
+
+  # Optional: Promtail for log shipping
+  promtail:
+    image: grafana/promtail:latest
+    container_name: biologidex-promtail
+    restart: always
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./logs:/app/logs:ro
+    networks:
+      - biologidex-network
+    depends_on:
+      - loki
+
+  # Optional: AlertManager for alert routing
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: biologidex-alertmanager
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    volumes:
+      - ./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - biologidex-network
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+
+networks:
+  biologidex-network:
+    external: true

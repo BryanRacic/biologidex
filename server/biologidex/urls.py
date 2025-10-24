@@ -47,6 +47,15 @@ urlpatterns = [
     ])),
 ]
 
+# Health check endpoints (always available, even in production)
+from biologidex.health import health_check, liveness_check, readiness_check
+
+urlpatterns += [
+    path('api/v1/health/', health_check, name='health-check'),
+    path('health/', liveness_check, name='liveness-check'),
+    path('ready/', readiness_check, name='readiness-check'),
+]
+
 # Media files (development only)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

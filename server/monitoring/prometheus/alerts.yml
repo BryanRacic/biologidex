@@ -1,0 +1,217 @@
+# Alert Rules for BiologiDex
+groups:
+  - name: biologidex_system
+    interval: 30s
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% (current value: {{ $value }}%)"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 90% (current value: {{ $value }}%)"
+
+      # Disk Space Low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is below 10% (current value: {{ $value }}%)"
+
+  - name: biologidex_database
+    interval: 30s
+    rules:
+      # PostgreSQL Down
+      - alert: PostgreSQLDown
+        expr: up{job="postgresql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL exporter is not responding"
+
+      # High Database Connections
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends{datname="biologidex"} > 180
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "High number of database connections"
+          description: "Database connections are above 180 (current value: {{ $value }})"
+
+      # Slow Queries
+      - alert: SlowQueries
+        expr: rate(pg_stat_database_blk_read_time{datname="biologidex"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Database read time is high (current value: {{ $value }}ms)"
+
+  - name: biologidex_redis
+    interval: 30s
+    rules:
+      # Redis Down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis exporter is not responding"
+
+      # High Redis Memory Usage
+      - alert: HighRedisMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is above 90% (current value: {{ $value }}%)"
+
+      # Redis Connection Rejected
+      - alert: RedisConnectionsRejected
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis connections rejected"
+          description: "Redis has rejected {{ $value }} connections in the last 5 minutes"
+
+  - name: biologidex_application
+    interval: 30s
+    rules:
+      # API Endpoint Down
+      - alert: APIEndpointDown
+        expr: probe_http_status_code{job="blackbox-http"} != 200
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API endpoint is down"
+          description: "Endpoint {{ $labels.instance }} is not returning 200 OK"
+
+      # High API Response Time
+      - alert: HighAPIResponseTime
+        expr: probe_http_duration_seconds{job="blackbox-http"} > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High API response time"
+          description: "API response time is above 2 seconds for {{ $labels.instance }}"
+
+      # Application Health Check Failed
+      - alert: HealthCheckFailed
+        expr: up{job="biologidex-health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Application health check failed"
+          description: "BiologiDex health check is not responding"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High error rate in API"
+          description: "5xx error rate is above 5% (current value: {{ $value }})"
+
+  - name: biologidex_celery
+    interval: 30s
+    rules:
+      # Celery Worker Down
+      - alert: CeleryWorkerDown
+        expr: flower_worker_online == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "Celery worker is down"
+          description: "No Celery workers are online"
+
+      # High Celery Task Queue
+      - alert: HighCeleryTaskQueue
+        expr: celery_queue_length > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "High Celery task queue"
+          description: "Celery queue length is above 100 (current value: {{ $value }})"
+
+      # Celery Task Failures
+      - alert: CeleryTaskFailures
+        expr: rate(celery_task_failed[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "Celery task failure rate is above 10% (current value: {{ $value }})"
+
+  - name: biologidex_security
+    interval: 30s
+    rules:
+      # Too Many Failed Login Attempts
+      - alert: TooManyFailedLogins
+        expr: rate(django_auth_failed_login_attempts[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "Too many failed login attempts"
+          description: "Failed login attempts are above 10 per minute"
+
+      # Suspicious API Activity
+      - alert: SuspiciousAPIActivity
+        expr: rate(nginx_http_requests_total{status="429"}[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "Suspicious API activity detected"
+          description: "Rate limiting is blocking more than 50 requests per minute"

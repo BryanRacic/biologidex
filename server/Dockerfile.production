@@ -1,0 +1,112 @@
+# Production Dockerfile for BiologiDex
+# Multi-stage build for optimized image size
+
+# Stage 1: Python dependencies
+FROM python:3.12-slim as python-deps
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    postgresql-client \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    POETRY_VERSION=1.7.1 \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_OPTIONS_ALWAYS_COPY=true
+
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="$POETRY_HOME/bin:$PATH"
+
+# Copy dependency files
+WORKDIR /app
+COPY pyproject.toml poetry.lock ./
+
+# Install production dependencies only
+RUN poetry install --no-dev --no-root --no-ansi
+
+# Stage 2: Application build
+FROM python:3.12-slim as build
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r biologidex && useradd -r -g biologidex biologidex
+
+# Set work directory
+WORKDIR /app
+
+# Copy virtual environment from python-deps stage
+COPY --from=python-deps /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy application code
+COPY --chown=biologidex:biologidex . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/static /app/media \
+    && chown -R biologidex:biologidex /app/logs /app/static /app/media
+
+# Collect static files
+RUN python manage.py collectstatic --noinput --settings=biologidex.settings.production_local
+
+# Switch to non-root user
+USER biologidex
+
+# Stage 3: Production image
+FROM python:3.12-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    libpq5 \
+    curl \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r biologidex && useradd -r -g biologidex biologidex
+
+# Set work directory
+WORKDIR /app
+
+# Copy application from build stage
+COPY --from=build --chown=biologidex:biologidex /app /app
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=biologidex.settings.production_local
+
+# Create volume mount points
+VOLUME ["/app/logs", "/app/media"]
+
+# Switch to non-root user
+USER biologidex
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Use tini as entrypoint to handle signals properly
+ENTRYPOINT ["tini", "--"]
+
+# Default command
+CMD ["gunicorn", "biologidex.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--worker-class", "sync", "--worker-connections", "1000", "--timeout", "60", "--access-logfile", "/app/logs/gunicorn-access.log", "--error-logfile", "/app/logs/gunicorn-error.log", "--log-level", "info"]
