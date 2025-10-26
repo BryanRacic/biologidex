@@ -3,11 +3,13 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
 
-## Current Status (Updated 2025-10-23)
+## Current Status (Updated 2025-10-26)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
 - ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
+- ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
+- ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
 
 ---
 
@@ -29,7 +31,7 @@ client/biologidex-client/
 ├── responsive_container.gd      # Auto-margin container class
 ├── theme.tres                   # Base theme resource
 ├── project.godot                # Project configuration
-└── IMPLEMENTATION_NOTES.md      # Phase 1 implementation details
+└── implementation-notes.md      # Phase 1 implementation details
 ```
 
 ### Key Godot Patterns
@@ -178,7 +180,8 @@ Reason: accounts.User is AUTH_USER_MODEL, must exist before admin/auth migration
 
 **Settings Configuration**:
 - Development: `biologidex.settings.development`
-- Production: `biologidex.settings.production`
+- Production Local: `biologidex.settings.production_local` (Docker/local server)
+- Production Cloud: `biologidex.settings.production` (GCP/cloud)
 - manage.py defaults to development
 
 **Required Environment Variables**:
@@ -214,6 +217,122 @@ Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into
 
 ---
 
+## Production Infrastructure (Added 2025-10-26)
+
+### Infrastructure Components
+
+**Docker Compose Stack** (`docker-compose.production.yml`):
+- **Nginx**: Reverse proxy, SSL termination, static files
+- **Gunicorn**: Application server (workers = CPU*2+1)
+- **PostgreSQL 15**: With pgBouncer connection pooling
+- **Redis**: Cache + Celery broker (256MB, LRU policy)
+- **Celery**: Worker + Beat for async tasks
+
+### Configuration Files
+
+**Critical Files Created**:
+- `gunicorn.conf.py`: Worker management, logging, timeout settings
+- `redis.conf`: Production Redis with persistence, security
+- `init.sql`: PostgreSQL optimization, indexes, monitoring users
+- `nginx/nginx.conf`: Reverse proxy, caching, security headers
+- `biologidex/monitoring.py`: Prometheus metrics middleware
+- `biologidex/health.py`: Health check endpoints
+
+### Monitoring & Health
+
+**Health Endpoints**:
+- `/api/v1/health/`: Comprehensive health (DB, Redis, Celery, storage)
+- `/health/`: Liveness check (simple alive status)
+- `/ready/`: Readiness check (ready for traffic)
+- `/metrics/`: Prometheus metrics endpoint
+
+**Key Metrics Available**:
+- `django_http_requests_total`: Request counts by endpoint
+- `django_http_request_duration_seconds`: Response times
+- `cv_processing_total`: CV job statistics
+- `celery_tasks_total`: Task execution counts
+- `active_users`, `total_dex_entries`: Business metrics
+
+### Operational Scripts
+
+**Deployment & Setup**:
+- `scripts/setup.sh`: Complete Ubuntu server setup
+- `scripts/deploy.sh`: Zero-downtime deployment with rollback
+- `scripts/backup.sh`: Automated database backups
+- `scripts/monitor.sh`: Real-time system monitoring dashboard
+- `scripts/diagnose.sh`: Comprehensive diagnostics
+
+### Production Settings
+
+**Key Differences from Dev** (`production_local.py`):
+- `DEBUG=False`, strict `ALLOWED_HOSTS`
+- Connection pooling: `CONN_MAX_AGE=600`
+- PrometheusMiddleware for metrics
+- Structured JSON logging
+- Security headers enabled
+- Static file optimization
+
+### Docker Production Patterns
+
+**Multi-stage Dockerfile**:
+1. Python dependencies stage (poetry install)
+2. Build stage (collect static)
+3. Production stage (minimal, non-root user)
+
+**Health Checks**: All services have health checks for orchestration
+**Volumes**: Persistent for postgres_data, redis_data, media_files
+**Networks**: Isolated biologidex-network bridge
+
+### Cloudflare Tunnel Integration
+
+**Setup**: `cloudflared tunnel create biologidex`
+**Config**: `/etc/cloudflared/config.yml` with ingress rules
+**DNS**: Auto-configured via `cloudflared tunnel route dns`
+
+### Critical Learnings
+
+**Database Optimization**:
+- Always use pgBouncer for connection pooling
+- Create indexes AFTER Django migrations
+- Use `ATOMIC_REQUESTS=True` for transaction safety
+
+**Redis Configuration**:
+- Set `maxmemory-policy allkeys-lru` for cache behavior
+- Rename dangerous commands (FLUSHDB, KEYS)
+- Use password auth even in private networks
+
+**Gunicorn Tuning**:
+- `max_requests=1000` prevents memory leaks
+- `preload_app=True` for faster worker spawns
+- Access logs essential for debugging
+
+**Monitoring Best Practices**:
+- Instrument early (PrometheusMiddleware)
+- Multiple health check levels (liveness vs readiness)
+- Log aggregation with structured JSON
+
+**Docker Compose Patterns**:
+- Always use health checks for dependencies
+- Scale with `--scale web=N` for load testing
+- Use `.env.production` for secrets (never commit)
+
+### Troubleshooting Quick Reference
+
+| Issue | Check | Fix |
+|-------|-------|-----|
+| 502 Bad Gateway | `docker-compose ps web` | Restart web service |
+| DB Connection Errors | `docker-compose exec db pg_isready` | Check pgBouncer config |
+| Celery Tasks Stuck | `celery inspect active` | Restart workers |
+| High Memory | `docker stats` | Reduce Gunicorn workers |
+| Slow API | Check `/metrics/` endpoint | Add caching/indexes |
+
+### Files to Never Modify in Production
+- `.env.production` (use environment-specific overrides)
+- `init.sql` (runs only on first DB creation)
+- Migration files (use new migrations for changes)
+
+---
+
 ## Development Workflow
 
 **Setup**: `poetry install` → `docker-compose up -d` → migrations → `runserver`
@@ -222,12 +341,21 @@ Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into
 
 **Common Commands**:
 ```bash
+# Development
 poetry shell                           # Activate environment
 python manage.py makemigrations       # Create migrations
 python manage.py migrate              # Apply migrations
 python manage.py createsuperuser      # Admin access
 python manage.py runserver            # Dev server
 celery -A biologidex worker -l info   # Start worker
+
+# Production
+docker-compose -f docker-compose.production.yml up -d     # Start all services
+docker-compose -f docker-compose.production.yml logs -f   # View logs
+docker-compose -f docker-compose.production.yml ps        # Check status
+./scripts/deploy.sh                                       # Deploy updates
+./scripts/monitor.sh                                      # Real-time monitoring
+./scripts/diagnose.sh                                     # System diagnostics
 ```
 
 **Debugging**:

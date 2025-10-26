@@ -1,606 +1,492 @@
-# Local Development / Getting Started
-see server/development.md
+# BiologiDex Server
 
-# Usage
-### Step-by-Step Setup
+A production-ready Django REST API for the BiologiDex application - a Pokedex-style social network for sharing real-world zoological observations.
 
-Start python env
-```bash
-poetry shell
+## Architecture Overview
+
+### System Architecture
+
+```
+Internet
+    ↓
+[Cloudflare Tunnel / Load Balancer]
+    ↓
+[Nginx Reverse Proxy]
+    ↓
+[Django Application (Gunicorn)]
+    ↓
+[PostgreSQL] [Redis] [Celery Workers]
 ```
 
-Start PostgreSQL and Redis
+### Component Architecture
+
+| Component | Purpose | Technology | Configuration |
+|-----------|---------|------------|---------------|
+| **Web Server** | Reverse proxy, static files | Nginx | nginx/nginx.conf |
+| **Application Server** | Django application | Gunicorn + Django 4.2 | gunicorn.conf.py |
+| **Database** | Primary data storage | PostgreSQL 15 | init.sql, pgBouncer for pooling |
+| **Cache** | Session storage, task queue | Redis 7 | redis.conf |
+| **Task Queue** | Async processing | Celery | celery_worker, celery_beat |
+| **Storage** | Media files | Local filesystem / GCS | /var/lib/biologidex/media |
+| **Monitoring** | Metrics and health checks | Prometheus + Grafana | monitoring.py |
+
+## Infrastructure Components
+
+### 1. Web Layer (Nginx)
+- **Purpose**: Reverse proxy, SSL termination, static file serving
+- **Features**:
+  - Request routing to application servers
+  - Load balancing across multiple Gunicorn workers
+  - Static and media file serving with caching headers
+  - Security headers (HSTS, CSP, X-Frame-Options)
+  - Rate limiting at the edge
+  - Gzip compression
+
+### 2. Application Layer (Django + Gunicorn)
+- **Purpose**: Business logic and API endpoints
+- **Features**:
+  - RESTful API with Django REST Framework
+  - JWT authentication
+  - Modular app architecture
+  - Comprehensive middleware stack
+  - Health check endpoints
+  - Prometheus metrics integration
+
+### 3. Database Layer (PostgreSQL)
+- **Purpose**: Persistent data storage
+- **Features**:
+  - PostgreSQL 15 with optimized configuration
+  - Connection pooling via pgBouncer
+  - Read replica support (optional)
+  - Automated backups
+  - Performance indexes on critical queries
+  - UUID primary keys for distributed systems
+
+### 4. Caching Layer (Redis)
+- **Purpose**: Cache, session storage, Celery broker
+- **Features**:
+  - LRU eviction policy
+  - Persistence with RDB snapshots
+  - Separate databases for cache/sessions/celery
+  - Password authentication
+  - Memory limit enforcement (256MB default)
+
+### 5. Task Queue (Celery)
+- **Purpose**: Asynchronous task processing
+- **Features**:
+  - Computer vision processing via OpenAI API
+  - Scheduled tasks via Celery Beat
+  - Task result backend in Redis
+  - Worker auto-scaling
+  - Task retry with exponential backoff
+
+### 6. Monitoring Stack
+- **Purpose**: Observability and alerting
+- **Components**:
+  - **Health Checks**: `/api/v1/health/`, `/ready/`, `/health/`
+  - **Metrics**: Prometheus metrics at `/metrics/`
+  - **Logging**: Structured JSON logging to files
+  - **Tracing**: Request ID tracking
+  - **Alerting**: Integration with monitoring services
+
+## Documentation
+
+- **[Operations Guide](operations.md)** - Complete guide for operating, monitoring, and troubleshooting
+- **[Migration Audit](migration-audit.md)** - Detailed migration planning and architecture decisions
+- **[API Documentation](#api-documentation)** - Interactive API docs and endpoint reference
+
+## Quick Start
+
+### Prerequisites
+- Ubuntu 22.04 LTS or newer
+- Docker and Docker Compose
+- Python 3.12+
+- 4GB RAM minimum
+- 20GB disk space
+
+### Initial Setup
+
+1. **Clone the repository:**
 ```bash
-docker-compose up -d
+git clone https://github.com/yourusername/biologidex.git
+cd biologidex/server
 ```
 
-Run migrations (if necissary)
+2. **Run the setup script:**
 ```bash
+sudo bash scripts/setup.sh
+```
+
+3. **Configure environment:**
+```bash
+cp .env.production.example .env.production
+# Edit .env.production with your configuration
+nano .env.production
+```
+
+4. **Start the services:**
+```bash
+docker-compose -f docker-compose.production.yml up -d
+```
+
+5. **Run migrations:**
+```bash
+docker-compose -f docker-compose.production.yml exec web python manage.py migrate
+```
+
+6. **Create superuser:**
+```bash
+docker-compose -f docker-compose.production.yml exec web python manage.py createsuperuser
+```
+
+7. **Verify deployment:**
+```bash
+curl http://localhost/api/v1/health/
+```
+
+## Deployment
+
+### Production Deployment
+
+Deploy updates using the deployment script:
+```bash
+./scripts/deploy.sh
+```
+
+Options:
+- `--skip-backup`: Skip database backup
+- `--skip-migrate`: Skip database migrations
+- `--skip-static`: Skip static files collection
+- `--rollback`: Rollback to previous version
+- `--maintenance`: Enable maintenance mode during deployment
+
+### Docker Compose Commands
+
+```bash
+# Start all services
+docker-compose -f docker-compose.production.yml up -d
+
+# View logs
+docker-compose -f docker-compose.production.yml logs -f [service]
+
+# Stop all services
+docker-compose -f docker-compose.production.yml down
+
+# Restart a service
+docker-compose -f docker-compose.production.yml restart web
+
+# Execute command in container
+docker-compose -f docker-compose.production.yml exec web python manage.py shell
+
+# Scale services
+docker-compose -f docker-compose.production.yml up -d --scale web=3
+```
+
+## Development
+
+### Local Development Setup
+
+For local development without Docker:
+
+```bash
+# Install dependencies
+poetry install
+
+# Start services
+docker-compose up -d  # Just PostgreSQL and Redis
+
+# Run migrations
 python manage.py migrate
-```
 
-Start Development Server
-```bash
+# Start development server
 python manage.py runserver
-```
-The server will start at `http://localhost:8000/`
 
-Start Celery Worker (in another terminal)
-Open a second terminal window and run:
-```bash
-poetry shell
+# Start Celery worker (new terminal)
 celery -A biologidex worker -l info
+
+# Start Celery beat (new terminal)
+celery -A biologidex beat -l info
 ```
 
-# Outline
-User
-- Account creation
-- Login
-- View Profile
-- Update Profile
-- Get friendslist
-- Get friend code
-- Add friend by code
+### Testing
 
-Create Dex Entry
-- Analyze image
-- Get animal Record
-  - Create animal record if doesn't exist
-- Create dex entry
-
-Modify dex entry
-- modify dex entry 
-
-Get Dex Entries (all nodes: user's & friend's)
-- Get known dex entries
-- Get dex entry
-- Download dex image
-
-## Layout
-High-level app breakdown:
-- accounts/ – user auth, profiles, friend codes, settings
-- social/ – friendships & friend lists
-- animals/ – canonical “Animal” records (taxonomy, metadata)
-- dex/ – user “DexEntry” (links user ↔ animal + image + status)
-- vision/ – CV pipeline (image ingestion, analysis jobs, adapters to providers)
-- graph/ – graph APIs (seen network across user + friends)
-
-Each app owns its models, serializers, viewsets, urls, tasks, and admin.
-
-Minimal project layout
-pokedex/
-  manage.py
-  pokedex/settings.py
-  pokedex/urls.py
-  accounts/
-    models.py, serializers.py, views.py, urls.py, services.py, admin.py, signals.py, permissions.py
-  social/
-    models.py, serializers.py, views.py, urls.py, admin.py
-  animals/
-    models.py, serializers.py, views.py, urls.py, admin.py
-  dex/
-    models.py, serializers.py, views.py, urls.py, admin.py
-  vision/
-    models.py, tasks.py, adapters/..., services.py, urls.py
-  graph/
-    views.py, urls.py, services.py
-
-
-# Implementation
-## Best Practice Notes
-- Auth: Use JWT (e.g., djangorestframework-simplejwt). Require auth on all mutating endpoints.
-- Storage: Google Cloud Storage via django-storages; store original + a standardized dex image (create on upload with a signal/task).
-- Database: PostgreSQL for both development and production for consistency and feature parity.
-- Throttling/Rate limits: DRF throttles for image upload & friend-adds; per-IP + per-user.
-- Validation: Server-side file type/size; optionally run an async safety check (e.g., NSFW) before public display.
-- Indexing: Add composite indexes on DexEntry(owner, status, created_at) and DexEntry(owner, animal).
-- Caching: Cache Graph results per user for a short TTL (e.g., 60–120s); cache Animal lookups.
-- Idempotency: For CV callbacks or retries, use AnalysisJob as the idempotency key.
-- Observability: Log AnalysisJob transitions; add Prometheus metrics (jobs queued/succeeded/failed, latency).
-- OpenAPI: Generate swagger with drf-spectacular; document upload schema & graph schema.
-- Migrations at scale: Prefer additive (nullable → backfill → not null), avoid column renames during traffic.
-
-## Quick Start Recommended Settings
-- AUTH_USER_MODEL = "accounts.User"
-- Installed apps: django.contrib.*, rest_framework, django_filters, storages, your apps.
-- DRF defaults (auth, throttle, pagination).
-- Celery config + Redis; CELERY_TASK_ALWAYS_EAGER=False in prod.
-
-## Post MVP TODO
-- Admin for Animals/DexEntry/Profile.
-- Override control: allow trusted users to correct misidentified animals (with audit trail).
-- “Seen” logic tweaks: mark seen_source = "self" | "friend" | "suggested" on edges/nodes for the UI.
-- Search: add trigram or full-text index on common_name/scientific_name.
-
----
-
-# Implementation Plan
-
-## Project Overview
-Transform the existing default Django template into a fully functional MVP for BiologiDex - a Pokedex-style social network for sharing zoological observations with collaborative evolutionary tree building.
-
-### Current State Assessment
-- **Status**: ✅ **PHASE 1 COMPLETE** - All core infrastructure and apps implemented
-- **Architecture**: Fully implemented with 6 Django apps
-- **CV Integration**: OpenAI Vision API integrated with Celery async processing
-- **Database**: PostgreSQL with Redis caching
-
----
-
-## Phase 1: Foundation & Infrastructure ✅ COMPLETE
-
-### 1.1 Project Setup & Dependencies ✅
-**Status**: Complete
-- Poetry-based dependency management with pyproject.toml
-- All dependencies configured with latest compatible versions
-- Python 3.12.10 environment with pyenv
-
-### 1.2 Settings Configuration ✅
-**Status**: Complete
-- Split settings architecture (base/development/production)
-- Environment variables via python-dotenv
-- JWT authentication configured
-- Google Cloud Storage for media files
-- Celery + Redis for async tasks
-- Comprehensive logging with rotating file handlers
-
-### 1.3 Database Setup ✅
-**Status**: Complete
-- PostgreSQL 15 via Docker Compose
-- Connection pooling configured (CONN_MAX_AGE=600)
-- Redis for caching and Celery backend
-- Proper indexing on all models for query performance
-
-**PostgreSQL Configuration:**
-```python
-# settings.py
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'biologidex'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-        'CONN_MAX_AGE': 600,  # Connection pooling
-    }
-}
-```
-
-**Docker Compose for Local Development:**
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: biologidex
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-volumes:
-  postgres_data:
-```
-
-### 1.4 Google Cloud Storage Setup
-**Storage Configuration:**
-```python
-# settings.py
-from google.oauth2 import service_account
-
-# Google Cloud Storage settings
-GS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
-GS_PROJECT_ID = os.getenv('GCS_PROJECT_ID')
-GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
-    os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-)
-
-# Media files
-DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-GS_DEFAULT_ACL = 'publicRead'  # Or 'private' for authenticated access
-GS_FILE_OVERWRITE = False
-GS_MAX_MEMORY_SIZE = 5242880  # 5MB
-
-# Static files (optional - can use GCS or local/CDN)
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-# Media URL from GCS
-MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
-```
-
-**Environment Variables (.env):**
 ```bash
-# Database
-DB_NAME=biologidex
-DB_USER=postgres
-DB_PASSWORD=your_secure_password
-DB_HOST=localhost
-DB_PORT=5432
+# Run all tests
+python manage.py test
 
-# Google Cloud Storage
-GCS_BUCKET_NAME=biologidex-media
-GCS_PROJECT_ID=your-project-id
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+# Run with coverage
+coverage run --source='.' manage.py test
+coverage report
 
-# Django
-SECRET_KEY=your_secret_key_here
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
+# Run specific app tests
+python manage.py test accounts
 
-# OpenAI
-OPENAI_API_KEY=your_openai_key
-
-# Celery
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
+# Run with parallel execution
+python manage.py test --parallel
 ```
 
----
+## API Documentation
 
-## Phase 2: Core Django Apps Creation
+### Available Endpoints
 
-### 2.1 Accounts App
-**Models:**
-```python
-# accounts/models.py
-- User (extends AbstractUser)
-  - friend_code (unique, auto-generated)
-  - bio, avatar, created_at, updated_at
-  - badges (JSONField for achievements)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/auth/login/` | POST | User login |
+| `/api/v1/auth/refresh/` | POST | Refresh JWT token |
+| `/api/v1/users/` | POST | Register new user |
+| `/api/v1/users/me/` | GET | Current user profile |
+| `/api/v1/animals/` | GET | List all animals |
+| `/api/v1/dex/entries/` | GET/POST | User's dex entries |
+| `/api/v1/vision/jobs/` | POST | Submit image for analysis |
+| `/api/v1/social/friendships/` | GET/POST | Manage friendships |
+| `/api/v1/graph/evolutionary-tree/` | GET | Get evolutionary tree data |
 
-- UserProfile (OneToOne with User)
-  - total_catches, unique_species, join_date
-  - preferred_card_style (JSONField)
-```
+### Interactive API Documentation
 
-**Key Features:**
-- JWT authentication endpoints
-- User registration/login/logout
-- Profile CRUD operations
-- Friend code generation system
-- Password reset flow
+- Swagger UI: `http://localhost/api/docs/`
+- ReDoc: `http://localhost/api/redoc/`
 
-### 2.2 Animals App
-**Models:**
-```python
-# animals/models.py
-- Animal
-  - scientific_name (genus + species, unique)
-  - common_name
-  - kingdom, phylum, class, order, family
-  - conservation_status
-  - description, habitat, diet
-  - creation_index (auto-increment, like Pokedex #)
-  - created_by (ForeignKey to User)
-  - verified (boolean)
-```
+## Configuration
 
-**Key Features:**
-- Animal database with taxonomic information
-- Auto-lookup from external APIs
-- Fallback to LLM for missing data
-- Admin interface for verification
+### Environment Variables
 
-### 2.3 Dex App
-**Models:**
-```python
-# dex/models.py
-- DexEntry
-  - owner (ForeignKey to User)
-  - animal (ForeignKey to Animal)
-  - original_image (ImageField)
-  - processed_image (ImageField, auto-generated)
-  - location (optional GPS)
-  - notes (TextField)
-  - catch_date, created_at
-  - visibility (private/friends/public)
-  - customizations (JSONField for card styling)
-```
+Key environment variables (see `.env.production.example` for full list):
 
-**Key Features:**
-- User's personal collection management
-- Image upload and processing
-- Card customization options
-- Privacy controls
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `SECRET_KEY` | Django secret key | Random 50-char string |
+| `DB_PASSWORD` | PostgreSQL password | Strong password |
+| `REDIS_PASSWORD` | Redis password | Strong password |
+| `OPENAI_API_KEY` | OpenAI API key | sk-... |
+| `ALLOWED_HOSTS` | Allowed hostnames | localhost,api.example.com |
+| `CORS_ALLOWED_ORIGINS` | CORS origins | https://app.example.com |
 
-### 2.4 Social App
-**Models:**
-```python
-# social/models.py
-- Friendship
-  - user_from, user_to (ForeignKeys to User)
-  - status (pending/accepted/blocked)
-  - created_at
+### Django Settings
 
-- SharedTree
-  - Cached representation of friend network's catches
-```
+Settings are split into modules:
+- `base.py`: Common settings
+- `development.py`: Development settings
+- `production_local.py`: Local production settings
+- `production.py`: Cloud production settings
 
-**Key Features:**
-- Friend request system using friend codes
-- Friends list management
-- Shared evolutionary tree generation
+## Monitoring
 
-### 2.5 Vision App
-**Models:**
-```python
-# vision/models.py
-- AnalysisJob
-  - image (ImageField)
-  - status (pending/processing/completed/failed)
-  - cv_method (openai/fallback)
-  - raw_response (JSONField)
-  - identified_animal (ForeignKey to Animal, nullable)
-  - confidence_score
-  - cost_usd, processing_time
-```
+### Health Checks
 
-**Services:**
-- Integrate existing `animal_id_benchmark.py` code
-- OpenAI Vision API adapter
-- Fallback CV service adapters
-- Async processing with Celery
+Three health check endpoints are available:
 
----
+1. **Comprehensive Health Check**: `/api/v1/health/`
+   - Checks database, Redis, Celery, storage
+   - Returns detailed status and response times
 
-## Phase 3: API Implementation
+2. **Liveness Check**: `/health/`
+   - Simple check if application is running
+   - Used by Docker/Kubernetes
 
-### 3.1 RESTful API Structure
-```
-/api/v1/
-├── auth/
-│   ├── register/
-│   ├── login/
-│   ├── refresh/
-│   └── logout/
-├── users/
-│   ├── profile/
-│   ├── {id}/
-│   └── friend-code/
-├── social/
-│   ├── friends/
-│   ├── friend-requests/
-│   └── add-friend/
-├── animals/
-│   ├── list/
-│   ├── {id}/
-│   └── search/
-├── dex/
-│   ├── entries/
-│   ├── {id}/
-│   ├── upload/
-│   └── analyze/
-├── vision/
-│   ├── identify/
-│   └── job/{id}/
-└── graph/
-    └── evolutionary-tree/
-```
+3. **Readiness Check**: `/ready/`
+   - Checks if application is ready for traffic
+   - Verifies database and cache connectivity
 
-### 3.2 Serializers & ViewSets
-- Implement ModelSerializers for all models
-- Create nested serializers for related data
-- Add validation and permissions
-- Implement pagination and filtering
+### Prometheus Metrics
 
-### 3.3 Business Logic Services
-- Create service layers for complex operations
-- Implement the animal identification workflow
-- Friend network calculations
-- Evolutionary tree generation algorithm
+Metrics available at `/metrics/` include:
 
----
+- HTTP request count and duration
+- API endpoint performance
+- Database query metrics
+- Cache hit/miss rates
+- Celery task metrics
+- CV processing metrics
+- Active user count
 
-## Phase 4: Core Workflows
+### Logging
 
-### 4.1 Animal Identification Workflow
-```python
-# Workflow steps:
-1. User uploads image → Create AnalysisJob
-2. Async task: Send to OpenAI Vision API
-3. Parse response using ANIMAL_ID_PROMPT format
-4. Lookup or create Animal record
-5. Create DexEntry for user
-6. Send notification on completion
-```
+Logs are written to `/var/log/biologidex/` with rotation:
+- `app.log`: Application logs
+- `error.log`: Error logs
+- `celery.log`: Celery worker logs
+- `gunicorn-access.log`: HTTP access logs
+- `gunicorn-error.log`: Gunicorn error logs
 
-### 4.2 Social Features
-- Friend code generation and sharing
-- Friend request acceptance flow
-- Shared collection visibility
-- Collaborative tree building
+## Security
 
-### 4.3 Data Enrichment Pipeline
-- External API integration for animal facts
-- LLM fallback for missing information
-- Image processing and thumbnail generation
-- Card style generation
+### Security Features
 
----
-
-## Phase 5: Testing & Documentation
-
-### 5.1 Testing Suite
-```python
-# Test coverage targets:
-- Unit tests for models and serializers
-- Integration tests for workflows
-- API endpoint tests
-- CV integration tests (using benchmark framework)
-```
-
-### 5.2 API Documentation
-- Auto-generate OpenAPI schema with drf-spectacular
-- Document all endpoints
-- Provide example requests/responses
-- Authentication flow documentation
-
----
-
-## Phase 6: Production Readiness
-
-### 6.1 Security & Performance
-- Implement rate limiting
-- Add request throttling
-- Set up caching (Redis)
-- Database query optimization
-- Add proper indexes
-
-### 6.2 Deployment Configuration
-- Docker containerization
-- Environment-specific settings
-- Gunicorn/uWSGI configuration
-- Nginx setup for static files
-- Database migrations strategy
-
----
-
-## Implementation Order & Priority
-
-### Week 1 Focus (MVP Core)
-1. **Day 1-2**: Setup & infrastructure
-2. **Day 3-4**: Accounts & Animals apps
-3. **Day 5-6**: Vision app & CV integration
-4. **Day 7**: Dex app & core workflow
-
-### Week 2 Focus (Social & Polish)
-5. **Day 8-9**: Social features & friend system
-6. **Day 10-11**: Evolutionary tree & graph APIs
-7. **Day 12**: Testing & documentation
-8. **Day 13-14**: Production readiness
-
----
-
-## Best Practices Implementation
-
-### Code Organization
-```python
-# Each app follows this structure:
-app_name/
-├── models.py       # Django models
-├── serializers.py  # DRF serializers
-├── views.py        # ViewSets and APIViews
-├── urls.py         # URL routing
-├── services.py     # Business logic
-├── tasks.py        # Celery async tasks
-├── signals.py      # Django signals
-├── permissions.py  # Custom permissions
-├── admin.py        # Admin interface
-└── tests/          # Test directory
-    ├── test_models.py
-    ├── test_views.py
-    └── test_services.py
-```
+- **Authentication**: JWT with access/refresh tokens
+- **Authorization**: Permission-based access control
+- **Rate Limiting**: Per-user and per-IP limits
+- **CORS**: Configurable allowed origins
+- **CSRF Protection**: Enabled for state-changing operations
+- **SQL Injection Prevention**: Django ORM with parameterized queries
+- **XSS Protection**: Template auto-escaping, CSP headers
+- **File Upload Validation**: Type and size restrictions
+- **Secrets Management**: Environment variables, no hardcoded secrets
+- **HTTPS**: SSL/TLS via Nginx or Cloudflare
+- **Security Headers**: HSTS, X-Frame-Options, CSP
 
 ### Security Checklist
-- [x] JWT authentication on all endpoints
-- [x] CORS properly configured
-- [x] File upload validation
-- [x] SQL injection prevention (ORM)
-- [x] Rate limiting on expensive operations
-- [x] Secure secret management (.env)
-- [x] HTTPS enforcement in production
 
-### Performance Optimizations
-- Database indexes on frequently queried fields
-- Celery for async image processing
-- Redis caching for evolutionary tree
-- Pagination on list endpoints
-- Select_related/prefetch_related optimization
-- Image compression and thumbnails
+- [ ] Change all default passwords
+- [ ] Configure SSL certificates
+- [ ] Set up firewall rules
+- [ ] Enable fail2ban
+- [ ] Configure backup encryption
+- [ ] Review Django security settings
+- [ ] Set up monitoring alerts
+- [ ] Configure log aggregation
+- [ ] Implement intrusion detection
+- [ ] Regular security updates
+
+## Backup and Recovery
+
+### Automated Backups
+
+Backups run daily at 2 AM via cron:
+```bash
+/opt/biologidex/server/scripts/backup.sh
+```
+
+### Manual Backup
+```bash
+docker-compose -f docker-compose.production.yml exec db pg_dump -U biologidex biologidex > backup.sql
+```
+
+### Restore from Backup
+```bash
+docker-compose -f docker-compose.production.yml exec -T db psql -U biologidex biologidex < backup.sql
+```
+
+## Troubleshooting
+
+For detailed troubleshooting procedures, monitoring guides, and operational documentation, see the **[Operations Guide](operations.md)**.
+
+### Common Issues
+
+**Container won't start:**
+```bash
+# Check logs
+docker-compose -f docker-compose.production.yml logs web
+
+# Check container status
+docker ps -a
+
+# Verify environment variables
+docker-compose -f docker-compose.production.yml config
+```
+
+**Database connection errors:**
+```bash
+# Test database connection
+docker-compose -f docker-compose.production.yml exec web python manage.py dbshell
+
+# Check PostgreSQL logs
+docker-compose -f docker-compose.production.yml logs db
+```
+
+**Celery tasks not processing:**
+```bash
+# Check worker status
+docker-compose -f docker-compose.production.yml exec celery_worker celery -A biologidex inspect active
+
+# Check Redis connectivity
+docker-compose -f docker-compose.production.yml exec redis redis-cli ping
+```
+
+**High memory usage:**
+```bash
+# Check memory usage
+docker stats
+
+# Restart services
+docker-compose -f docker-compose.production.yml restart
+
+# Clear Redis cache
+docker-compose -f docker-compose.production.yml exec redis redis-cli FLUSHALL
+```
+
+### Debug Mode
+
+To enable debug mode temporarily:
+```bash
+docker-compose -f docker-compose.production.yml exec web python manage.py shell
+>>> from django.conf import settings
+>>> settings.DEBUG = True
+```
+
+## Performance Optimization
+
+### Database Optimization
+- Indexes on frequently queried fields
+- Connection pooling via pgBouncer
+- Query optimization with select_related/prefetch_related
+- Database vacuuming schedule
+
+### Caching Strategy
+- Redis for session storage
+- Cache frequently accessed data
+- API response caching with proper invalidation
+- Static file caching with Nginx
+
+### Application Optimization
+- Gunicorn worker tuning
+- Async task processing with Celery
+- Image optimization before storage
+- Pagination for large datasets
+
+## Maintenance
+
+### Regular Maintenance Tasks
+
+**Daily:**
+- Check health endpoints
+- Review error logs
+- Monitor disk space
+
+**Weekly:**
+- Update dependencies
+- Review security alerts
+- Check backup integrity
+
+**Monthly:**
+- Performance analysis
+- Security audit
+- Update documentation
+
+### Upgrade Procedure
+
+1. Test upgrades in staging environment
+2. Create full backup
+3. Enable maintenance mode
+4. Deploy updates
+5. Run migrations
+6. Verify functionality
+7. Disable maintenance mode
+
+## Support
+
+### Resources
+- [Django Documentation](https://docs.djangoproject.com/)
+- [Django REST Framework](https://www.django-rest-framework.org/)
+- [Docker Documentation](https://docs.docker.com/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+
+### Getting Help
+- GitHub Issues: [Report bugs and feature requests]
+- Email: support@biologidex.example.com
+- Slack: #biologidex-support
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributors
+
+- Development Team
+- DevOps Team
+- QA Team
 
 ---
 
-## Next Steps & Essential Improvements
-
-### Immediate Next Steps (Post-MVP)
-
-TODO: Figure out email stuff? 
-  - Sending out email verification
-  - Reset password
-
-1. **Frontend Development**
-   - React/Vue.js application
-   - Mobile-responsive design
-   - Real-time updates (WebSocket)
-
-2. **Enhanced CV Pipeline**
-   - Multiple CV service integration
-   - Confidence scoring improvements
-   - Species verification system
-
-3. **Gamification Features**
-   - Achievement system
-   - Leaderboards
-   - Rare species alerts
-   - Collection completion tracking
-
-### Essential Improvements
-1. **Scalability**
-   - Microservice architecture consideration
-   - GraphQL API option
-   - CDN for media files (Cloud CDN with GCS backend)
-   - Database sharding strategy (PostgreSQL partitioning)
-   - Cloud SQL for managed PostgreSQL in production
-
-2. **ML/AI Enhancements**
-   - Custom trained animal recognition model
-   - Species suggestion algorithm
-   - Habitat-based recommendations
-
-3. **Social Features**
-   - Group collections
-   - Trading card mechanics
-   - Community challenges
-   - Expert verification system
-
-4. **Data Quality**
-   - Crowdsourced verification
-   - Expert review panel
-   - Automated quality checks
-   - Report/flag system
-
----
-
-## Risk Mitigation
-
-### Technical Risks
-- **CV API Costs**: Implement caching, batch processing
-- **Data Quality**: Manual verification, community moderation
-- **Scalability**: Start with vertical scaling, plan for horizontal
-- **Privacy**: Implement robust permission system
-
-### Operational Risks
-- **Image Storage Costs**: Compress images, implement quotas, use GCS lifecycle policies
-- **API Rate Limits**: Queue system, multiple API keys
-- **Database Growth**: Archival strategy, data retention policies, PostgreSQL partitioning
-
----
-
-## Success Metrics
-
-### MVP Success Criteria
-- ✓ Users can register and authenticate
-- ✓ Image upload triggers animal identification
-- ✓ Successful creation of dex entries
-- ✓ Friend system functional
-- ✓ Basic evolutionary tree visible
-- ✓ API response time < 2s for standard operations
-- ✓ CV identification accuracy > 70%
-
-### Performance Targets
-- API response time: < 200ms (cached), < 2s (uncached)
-- Image processing: < 10s end-to-end
-- Concurrent users: Support 100+ active users
-- Database queries: < 50ms for common operations 
+**Last Updated**: October 2024
+**Version**: 1.0.0
+**Status**: Production Ready

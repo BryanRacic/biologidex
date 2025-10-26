@@ -56,6 +56,13 @@ urlpatterns += [
     path('ready/', readiness_check, name='readiness-check'),
 ]
 
+# Prometheus metrics endpoint (production monitoring)
+from biologidex.monitoring import metrics_view
+
+urlpatterns += [
+    path('metrics/', metrics_view, name='prometheus-metrics'),
+]
+
 # Media files (development only)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

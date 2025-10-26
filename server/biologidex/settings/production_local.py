@@ -268,3 +268,7 @@ OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o')
 # Monitoring
 PROMETHEUS_METRICS_ENABLED = os.getenv('PROMETHEUS_METRICS_ENABLED', 'True') == 'True'
 HEALTH_CHECK_ENABLED = os.getenv('HEALTH_CHECK_ENABLED', 'True') == 'True'
+
+# Add Prometheus middleware if metrics are enabled
+if PROMETHEUS_METRICS_ENABLED:
+    MIDDLEWARE.insert(0, 'biologidex.monitoring.PrometheusMiddleware')

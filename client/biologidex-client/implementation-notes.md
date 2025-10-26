@@ -259,7 +259,7 @@ container.force_update()
 2. `navigation_manager.gd` - Scene navigation singleton
 3. `responsive_container.gd` - Auto-margin adjusting container
 4. `theme.tres` - Base theme resource
-5. `IMPLEMENTATION_NOTES.md` - This file
+5. `implementation-notes.md` - This file
 
 ### Modified Files
 1. `project.godot` - Display settings, GUI settings, autoload
