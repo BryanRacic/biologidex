@@ -475,16 +475,6 @@ docker-compose -f docker-compose.production.yml exec web python manage.py shell
 - Email: support@biologidex.example.com
 - Slack: #biologidex-support
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Contributors
-
-- Development Team
-- DevOps Team
-- QA Team
-
 ---
 
 **Last Updated**: October 2024

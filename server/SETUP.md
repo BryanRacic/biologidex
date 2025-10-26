@@ -1,18 +1,30 @@
 # BiologiDex Server Setup Guide
 
-This guide will help you set up the BiologiDex Django API server for development.
+This guide covers setup instructions for both development and production environments.
 
-## Prerequisites
+## Table of Contents
+
+1. [Development Setup](#development-setup)
+2. [Production Setup](#production-setup)
+3. [Operations Guide](#operations-guide)
+4. [API Documentation](#api-documentation)
+5. [Troubleshooting](#troubleshooting)
+
+---
+
+## Development Setup
+
+### Prerequisites
 
 - Python 3.12+ (managed with pyenv)
 - Poetry (Python dependency management)
 - Docker & Docker Compose (for PostgreSQL and Redis)
-- Google Cloud account (for media storage)
+- Google Cloud account (optional, for media storage)
 - OpenAI API key
 
-## Quick Start
+### Quick Start for Development
 
-### 1. Install Python with pyenv
+#### 1. Install Python with pyenv
 
 ```bash
 # Install pyenv if not already installed
@@ -23,24 +35,24 @@ pyenv install 3.12.10
 pyenv local 3.12.10
 ```
 
-### 2. Install Poetry
+#### 2. Install Poetry
 
 ```bash
+# Ubuntu/Debian
+sudo apt install python3-poetry
+
+# Or via official installer
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
-### 3. Install Dependencies
+#### 3. Install Dependencies
 
 ```bash
 # From the server/ directory
 poetry install
 ```
 
-This installs:
-- **Core dependencies**: Django, DRF, PostgreSQL drivers, Celery, Redis, OpenAI SDK
-- **Development tools**: `django-debug-toolbar`, `pytest`, `black`, `flake8`, `ipython`
-
-### 4. Set Up Environment Variables
+#### 4. Set Up Environment Variables
 
 ```bash
 # Copy the example environment file
@@ -51,12 +63,11 @@ nano .env
 ```
 
 Required environment variables:
-- `SECRET_KEY`: Django secret key (generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`)
+- `SECRET_KEY`: Django secret key
 - `DB_PASSWORD`: PostgreSQL password
 - `OPENAI_API_KEY`: Your OpenAI API key
-- `GCS_BUCKET_NAME`, `GCS_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`: Google Cloud Storage credentials
 
-### 5. Start Database and Redis
+#### 5. Start Development Services
 
 ```bash
 # Start PostgreSQL and Redis containers
@@ -66,214 +77,512 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### 6. Run Migrations
+#### 6. Initialize Database
 
 ```bash
 # Activate poetry shell
 poetry shell
 
-# Run migrations to create database tables
+# Run migrations
 python manage.py migrate
 
 # Create a superuser for admin access
 python manage.py createsuperuser
 ```
 
-### 7. Start Development Server
+#### 7. Start Development Server
 
 ```bash
-# Start Django development server
+# Terminal 1: Django development server
 python manage.py runserver
 
-# In another terminal, start Celery worker for async tasks
+# Terminal 2: Celery worker for async tasks
 poetry shell
 celery -A biologidex worker -l info
+
+# Terminal 3 (optional): Celery beat for scheduled tasks
+poetry shell
+celery -A biologidex beat -l info
 ```
 
-## Accessing the Application
+### Development Access Points
 
 - **API**: http://localhost:8000/api/v1/
 - **Admin Panel**: http://localhost:8000/admin/
-- **Django Debug Toolbar**: Appears as a sidebar in development mode (enabled by default)
 - **API Documentation (Swagger)**: http://localhost:8000/api/docs/
 - **API Documentation (ReDoc)**: http://localhost:8000/api/redoc/
-- **API Schema**: http://localhost:8000/api/schema/
+- **Django Debug Toolbar**: Appears as sidebar in development mode
 
-### Development Tools
+---
 
-**Django Debug Toolbar**:
-- Automatically enabled in development mode
-- Provides detailed debugging information including SQL queries, request/response data, cache hits, and performance profiling
-- Appears as a collapsible sidebar on the right side of any page
-- Only visible when accessing from localhost/127.0.0.1
+## Production Setup
 
-## API Endpoints Overview
+### Prerequisites
 
-### Authentication
-- `POST /api/v1/auth/login/` - Login with username/password
+- Ubuntu 22.04 LTS or newer
+- Docker and Docker Compose
+- Root or sudo access
+- Domain name (optional, for Cloudflare tunnel)
+- Minimum 4GB RAM, 20GB disk space
+
+### Option 1: Automated Setup (Recommended)
+
+#### 1. Clone Repository
+
+```bash
+git clone https://github.com/yourusername/biologidex.git
+cd biologidex/server
+```
+
+#### 2. Run Automated Setup Script
+
+```bash
+# This script installs all dependencies and configures the system
+sudo bash scripts/setup.sh
+```
+
+The setup script will:
+- Install Docker and Docker Compose
+- Install Python and Poetry
+- Configure firewall (UFW)
+- Set up fail2ban
+- Create necessary directories
+- Install monitoring tools
+- Configure log rotation
+- Set up systemd service
+
+#### 3. Configure Production Environment
+
+```bash
+# Copy and edit production environment file
+cp .env.production.example .env.production
+nano .env.production
+```
+
+Required variables:
+```env
+# Security
+SECRET_KEY=your-very-secret-key-here
+DEBUG=False
+ALLOWED_HOSTS=localhost,your-domain.com
+
+# Database
+DB_PASSWORD=strong-database-password
+DB_USER=biologidex
+DB_NAME=biologidex
+DB_HOST=db
+DB_PORT=5432
+
+# Redis
+REDIS_PASSWORD=strong-redis-password
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# OpenAI
+OPENAI_API_KEY=sk-your-openai-api-key
+
+# Optional: Google Cloud Storage
+GCS_BUCKET_NAME=your-bucket
+GCS_PROJECT_ID=your-project
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+```
+
+#### 4. Start Production Services
+
+```bash
+# Start all services with Docker Compose
+docker-compose -f docker-compose.production.yml up -d
+
+# Check service status
+docker-compose -f docker-compose.production.yml ps
+
+# View logs
+docker-compose -f docker-compose.production.yml logs -f
+```
+
+#### 5. Initialize Production Database
+
+```bash
+# Run migrations
+docker-compose -f docker-compose.production.yml exec web python manage.py migrate
+
+# Create superuser
+docker-compose -f docker-compose.production.yml exec web python manage.py createsuperuser
+
+# Collect static files
+docker-compose -f docker-compose.production.yml exec web python manage.py collectstatic --noinput
+```
+
+### Option 2: Manual Production Setup
+
+If you prefer manual setup or need custom configuration:
+
+```bash
+# 1. Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+# 2. Install Docker Compose
+COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
+curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# 3. Create directories
+mkdir -p /opt/biologidex
+mkdir -p /var/log/biologidex
+mkdir -p /var/lib/biologidex/{media,static,backups}
+
+# 4. Clone repository
+cd /opt
+git clone https://github.com/yourusername/biologidex.git
+
+# 5. Configure environment
+cd biologidex/server
+cp .env.production.example .env.production
+nano .env.production
+
+# 6. Start services
+docker-compose -f docker-compose.production.yml up -d
+```
+
+### Production Services
+
+The production stack includes:
+
+| Service | Purpose | Port | Health Check |
+|---------|---------|------|--------------|
+| **Nginx** | Reverse proxy, static files | 80, 443 | `/` |
+| **Django/Gunicorn** | Application server | 8000 | `/api/v1/health/` |
+| **PostgreSQL** | Primary database | 5432 | `pg_isready` |
+| **pgBouncer** | Connection pooling | 6432 | `SHOW POOLS` |
+| **Redis** | Cache & Celery broker | 6379 | `ping` |
+| **Celery Worker** | Async task processing | - | `celery inspect ping` |
+| **Celery Beat** | Scheduled tasks | - | - |
+
+### Production Access Points
+
+- **API**: http://your-domain.com/api/v1/
+- **Admin Panel**: http://your-domain.com/admin/
+- **Health Check**: http://your-domain.com/api/v1/health/
+- **Metrics**: http://your-domain.com/metrics/
+- **API Documentation**: http://your-domain.com/api/docs/
+
+### Deployment & Updates
+
+Deploy updates with zero downtime:
+
+```bash
+# Pull latest code and deploy
+./scripts/deploy.sh
+
+# Options:
+./scripts/deploy.sh --skip-backup    # Skip database backup
+./scripts/deploy.sh --skip-migrate   # Skip migrations
+./scripts/deploy.sh --rollback       # Rollback to previous version
+./scripts/deploy.sh --maintenance    # Enable maintenance mode
+```
+
+### Monitoring
+
+#### Real-time Monitoring Dashboard
+
+```bash
+# Launch monitoring dashboard
+./scripts/monitor.sh
+```
+
+Shows:
+- System health status
+- Container status
+- Resource usage
+- Recent errors
+- Key metrics
+
+#### System Diagnostics
+
+```bash
+# Run diagnostics
+./scripts/diagnose.sh
+
+# Full diagnostics with details
+./scripts/diagnose.sh --full
+```
+
+#### Health Endpoints
+
+- **Comprehensive Health**: `/api/v1/health/`
+  ```bash
+  curl http://localhost/api/v1/health/ | jq .
+  ```
+
+- **Liveness Check**: `/health/`
+  ```bash
+  curl http://localhost/health/
+  ```
+
+- **Readiness Check**: `/ready/`
+  ```bash
+  curl http://localhost/ready/
+  ```
+
+### Backup & Recovery
+
+#### Automated Backups
+
+Backups run daily at 2 AM via cron:
+
+```bash
+# Manual backup
+./scripts/backup.sh
+
+# Restore from backup
+docker-compose -f docker-compose.production.yml exec -T db psql -U biologidex biologidex < backup.sql
+```
+
+### Cloudflare Tunnel Setup (Optional)
+
+Expose your local server to the internet securely:
+
+```bash
+# Install cloudflared
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Authenticate
+cloudflared tunnel login
+
+# Create tunnel
+cloudflared tunnel create biologidex
+
+# Configure tunnel (edit /etc/cloudflared/config.yml)
+tunnel: biologidex
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: api.biologidex.example.com
+    service: http://localhost:80
+  - service: http_status:404
+
+# Start tunnel
+cloudflared tunnel run biologidex
+```
+
+---
+
+## Operations Guide
+
+For detailed operational procedures, see **[OPERATIONS.md](OPERATIONS.md)**, which covers:
+
+- Nginx operations and troubleshooting
+- Gunicorn worker management
+- Prometheus metrics and Grafana setup
+- Database operations and optimization
+- Redis cache management
+- Celery task monitoring
+- Log analysis and aggregation
+- Performance tuning
+- Security hardening
+- Emergency procedures
+
+---
+
+## API Documentation
+
+### Interactive Documentation
+
+- **Swagger UI**: `/api/docs/` - Interactive API explorer
+- **ReDoc**: `/api/redoc/` - Alternative documentation format
+- **OpenAPI Schema**: `/api/schema/` - Machine-readable API specification
+
+### Key API Endpoints
+
+#### Authentication
+- `POST /api/v1/auth/login/` - User login
 - `POST /api/v1/auth/refresh/` - Refresh JWT token
+
+#### Users
 - `POST /api/v1/users/` - Register new user
+- `GET /api/v1/users/me/` - Current user profile
+- `GET /api/v1/users/friend-code/` - Get friend code
 
-### Users
-- `GET /api/v1/users/me/` - Get current user profile
-- `PATCH /api/v1/users/me/` - Update profile
-- `GET /api/v1/users/friend-code/` - Get your friend code
-- `POST /api/v1/users/lookup_friend_code/` - Look up user by friend code
-
-### Animals
+#### Animals
 - `GET /api/v1/animals/` - List all animals
-- `GET /api/v1/animals/{id}/` - Get animal details
-- `POST /api/v1/animals/lookup_or_create/` - Find or create animal record
+- `POST /api/v1/animals/lookup_or_create/` - Find or create animal
 
-### Dex Entries
+#### Dex Entries
 - `GET /api/v1/dex/entries/` - List dex entries
-- `POST /api/v1/dex/entries/` - Create new dex entry
-- `GET /api/v1/dex/entries/my_entries/` - Get your entries
-- `GET /api/v1/dex/entries/favorites/` - Get favorite entries
+- `POST /api/v1/dex/entries/` - Create new entry
+- `GET /api/v1/dex/entries/my_entries/` - User's entries
 
-### Social/Friends
-- `GET /api/v1/social/friendships/friends/` - Get friends list
-- `GET /api/v1/social/friendships/pending/` - Get pending friend requests
+#### Social
+- `GET /api/v1/social/friendships/friends/` - Friends list
 - `POST /api/v1/social/friendships/send_request/` - Send friend request
-- `POST /api/v1/social/friendships/{id}/respond/` - Accept/reject friend request
 
-### Vision/Analysis
+#### Vision
 - `POST /api/v1/vision/jobs/` - Submit image for analysis
-- `GET /api/v1/vision/jobs/{id}/` - Check analysis job status
-- `GET /api/v1/vision/jobs/completed/` - Get completed jobs
+- `GET /api/v1/vision/jobs/{id}/` - Check job status
 
-### Graph
-- `GET /api/v1/graph/evolutionary-tree/` - Get evolutionary tree data
+#### Monitoring
+- `GET /api/v1/health/` - Comprehensive health check
+- `GET /metrics/` - Prometheus metrics
+
+---
+
+## Troubleshooting
+
+### Common Development Issues
+
+#### ModuleNotFoundError
+
+```bash
+# Ensure you're in poetry shell
+poetry shell
+```
+
+#### Database Connection Errors
+
+```bash
+# Check Docker containers
+docker-compose ps
+docker-compose up -d
+
+# Test database connection
+docker-compose exec db psql -U biologidex
+```
+
+#### OpenAI API Errors
+
+```bash
+# Verify API key
+echo $OPENAI_API_KEY
+
+# Test API key
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $OPENAI_API_KEY"
+```
+
+### Common Production Issues
+
+#### Container Won't Start
+
+```bash
+# Check logs
+docker-compose -f docker-compose.production.yml logs web
+
+# Verify environment variables
+docker-compose -f docker-compose.production.yml config
+```
+
+#### High Memory Usage
+
+```bash
+# Check memory usage
+docker stats
+
+# Restart services
+docker-compose -f docker-compose.production.yml restart
+
+# Clear Redis cache
+docker-compose -f docker-compose.production.yml exec redis redis-cli FLUSHALL
+```
+
+#### 502 Bad Gateway
+
+```bash
+# Check if Django is running
+docker-compose -f docker-compose.production.yml ps web
+
+# Check Gunicorn logs
+tail -f /var/log/biologidex/gunicorn-error.log
+
+# Restart application
+docker-compose -f docker-compose.production.yml restart web
+```
+
+#### Database Issues
+
+```bash
+# Check connections
+docker-compose -f docker-compose.production.yml exec db psql -U biologidex -c "SELECT count(*) FROM pg_stat_activity;"
+
+# Check pgBouncer
+docker-compose -f docker-compose.production.yml exec pgbouncer psql -h localhost -p 6432 -U biologidex pgbouncer -c "SHOW POOLS;"
+```
+
+### Emergency Procedures
+
+#### Complete System Restart
+
+```bash
+docker-compose -f docker-compose.production.yml down
+docker-compose -f docker-compose.production.yml up -d
+```
+
+#### Rollback Deployment
+
+```bash
+./scripts/deploy.sh --rollback
+```
+
+#### Emergency Backup
+
+```bash
+docker-compose -f docker-compose.production.yml exec db pg_dump -U biologidex biologidex | gzip > emergency_backup_$(date +%Y%m%d_%H%M%S).sql.gz
+```
+
+---
 
 ## Project Structure
 
 ```
 server/
-├── biologidex/              # Main project configuration
-│   ├── settings/           # Split settings (base, dev, prod)
-│   ├── celery.py          # Celery configuration
-│   └── urls.py            # Root URL configuration
-├── accounts/              # User authentication & profiles
+├── biologidex/              # Main Django configuration
+│   ├── settings/           # Environment-specific settings
+│   │   ├── base.py        # Common settings
+│   │   ├── development.py # Development settings
+│   │   ├── production_local.py # Local production
+│   │   └── production.py  # Cloud production
+│   ├── health.py          # Health check endpoints
+│   ├── monitoring.py      # Prometheus metrics
+│   └── urls.py            # URL configuration
+├── accounts/              # User authentication
 ├── animals/               # Animal species database
-├── dex/                   # User's animal collections
-├── social/                # Friendships & social features
-├── vision/                # CV/AI identification pipeline
-├── graph/                 # Evolutionary tree generation
+├── dex/                   # User collections
+├── social/                # Social features
+├── vision/                # CV/AI pipeline
+├── graph/                 # Evolutionary tree
+├── scripts/               # Operational scripts
+│   ├── setup.sh          # Server setup
+│   ├── deploy.sh         # Deployment
+│   ├── backup.sh         # Backup
+│   ├── monitor.sh        # Monitoring
+│   └── diagnose.sh       # Diagnostics
+├── nginx/                 # Nginx configuration
 ├── logs/                  # Application logs
-├── media/                 # Uploaded media files
-├── staticfiles/           # Static files (CSS, JS)
-├── docker-compose.yml     # Docker services configuration
-├── pyproject.toml         # Poetry dependencies
-└── manage.py              # Django management script
+├── media/                 # Uploaded files
+├── static/                # Static files
+├── docker-compose.yml     # Development stack
+├── docker-compose.production.yml # Production stack
+├── Dockerfile.production  # Production image
+├── gunicorn.conf.py      # Gunicorn config
+├── redis.conf            # Redis config
+├── init.sql              # PostgreSQL init
+├── .env.example          # Development env template
+├── .env.production.example # Production env template
+└── pyproject.toml        # Python dependencies
 ```
 
-## Development Workflow
+---
 
-### Running Tests
+## Support & Resources
 
-```bash
-pytest
-```
+- **Operations Guide**: [OPERATIONS.md](OPERATIONS.md) - Detailed operational procedures
+- **Migration Audit**: [migration-audit.md](migration-audit.md) - Architecture decisions
+- **README**: [README.md](README.md) - High-level project overview
+- **API Docs**: `/api/docs/` - Interactive API documentation
+- **GitHub Issues**: Report bugs and request features
 
-### Code Formatting
+---
 
-```bash
-# Format code with Black
-black .
-
-# Check code style with Flake8
-flake8 .
-```
-
-### Database Management
-
-```bash
-# Create new migration
-python manage.py makemigrations
-
-# Apply migrations
-python manage.py migrate
-
-# Reset database (WARNING: destroys all data)
-python manage.py flush
-```
-
-### Celery Tasks
-
-```bash
-# Start Celery worker
-celery -A biologidex worker -l info
-
-# Start Celery beat (for periodic tasks)
-celery -A biologidex beat -l info
-
-# Run both worker and beat together
-celery -A biologidex worker -B -l info
-```
-
-## Common Issues
-
-### ModuleNotFoundError: No module named 'django'
-
-Make sure you're in the poetry shell:
-```bash
-poetry shell
-```
-
-### Database connection errors
-
-Ensure Docker containers are running:
-```bash
-docker-compose ps
-docker-compose up -d
-```
-
-### OpenAI API errors
-
-Verify your API key is set in `.env`:
-```bash
-echo $OPENAI_API_KEY
-```
-
-### Google Cloud Storage errors
-
-1. Create a GCS bucket in Google Cloud Console
-2. Create a service account with Storage Admin role
-3. Download service account key JSON
-4. Set `GOOGLE_APPLICATION_CREDENTIALS` in `.env` to point to the JSON file
-
-## Production Deployment
-
-### Settings
-
-Change `DJANGO_SETTINGS_MODULE` to use production settings:
-```bash
-export DJANGO_SETTINGS_MODULE=biologidex.settings.production
-```
-
-### Required Changes
-
-1. Set `DEBUG=False` in production
-2. Configure proper `ALLOWED_HOSTS`
-3. Use managed PostgreSQL (e.g., Cloud SQL)
-4. Use managed Redis (e.g., Cloud Memorystore)
-5. Set up proper secrets management
-6. Configure HTTPS/SSL
-7. Set up proper logging and monitoring
-8. Use Gunicorn or uWSGI as WSGI server
-9. Set up Nginx for static files and reverse proxy
-10. Configure Cloud Storage for media files
-
-### Example Production Start
-
-```bash
-# Collect static files
-python manage.py collectstatic --no-input
-
-# Run with Gunicorn
-gunicorn biologidex.wsgi:application --bind 0.0.0.0:8000 --workers 4
-```
-
-## Support
-
-For issues or questions, please refer to the main project README or open an issue on GitHub.
+**Last Updated**: October 2025
+**Version**: 2.0.0 (Production Ready)
