@@ -155,8 +155,8 @@ The setup script will:
 
 ```bash
 # Copy and edit production environment file
-cp .env.production.example .env.production
-nano .env.production
+cp .env.example .env
+nano .env
 ```
 
 Required variables:
@@ -238,8 +238,8 @@ git clone https://github.com/yourusername/biologidex.git
 
 # 5. Configure environment
 cd biologidex/server
-cp .env.production.example .env.production
-nano .env.production
+cp .env.example .env
+nano .env
 
 # 6. Start services
 docker-compose -f docker-compose.production.yml up -d
@@ -568,7 +568,7 @@ server/
 ├── redis.conf            # Redis config
 ├── init.sql              # PostgreSQL init
 ├── .env.example          # Development env template
-├── .env.production.example # Production env template
+├── .env.example # Production env template
 └── pyproject.toml        # Python dependencies
 ```
 

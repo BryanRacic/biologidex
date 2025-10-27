@@ -119,9 +119,9 @@ sudo bash scripts/setup.sh
 
 3. **Configure environment:**
 ```bash
-cp .env.production.example .env.production
-# Edit .env.production with your configuration
-nano .env.production
+cp .env.example .env
+# Edit .env with your configuration
+nano .env
 ```
 
 4. **Start the services:**
@@ -250,7 +250,7 @@ python manage.py test --parallel
 
 ### Environment Variables
 
-Key environment variables (see `.env.production.example` for full list):
+Key environment variables (see `.env.example` for full list):
 
 | Variable | Description | Example |
 |----------|-------------|---------|

@@ -30,8 +30,10 @@ group = None
 tmp_upload_dir = None
 
 # Logging
-accesslog = "/app/logs/gunicorn-access.log"
-errorlog = "/app/logs/gunicorn-error.log"
+# For Docker, we log to stdout/stderr and let Docker handle log collection
+# This avoids permission issues with mounted volumes
+accesslog = "-"  # Log to stdout
+errorlog = "-"   # Log to stderr
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 capture_output = True
@@ -66,5 +68,8 @@ def worker_abort(worker):
 preload_app = True
 
 # StatsD integration (optional, for monitoring)
-statsd_host = os.environ.get("STATSD_HOST", "localhost:8125")
-statsd_prefix = "biologidex.gunicorn"
+# Only enable if STATSD_HOST is explicitly configured
+if os.environ.get("STATSD_HOST"):
+    statsd_host = os.environ.get("STATSD_HOST")
+    statsd_prefix = "biologidex.gunicorn"
+# If STATSD_HOST is not set, StatsD monitoring is disabled

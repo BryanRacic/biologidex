@@ -19,10 +19,16 @@ google-cloud-storage = "*"
 psycopg2-binary = "*"
 celery = "*"
 redis = "*"
+django-redis = "*"
 python-dotenv = "*"
+python-json-logger = "*"
 openai = "*"
 drf-spectacular = "*"
 pillow = "*"
+gunicorn = "*"
+sentry-sdk = {extras = ["django", "celery", "pure_eval"], version = "*"}
+hiredis = "*"
+prometheus-client = "*"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "*"

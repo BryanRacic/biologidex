@@ -29,12 +29,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    command: redis-server --requirepass ${REDIS_PASSWORD:-}
+    command: redis-server --requirepass "${REDIS_PASSWORD:-defaultpass123}" --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD:-defaultpass123}\" --raw incr ping || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,7 +57,7 @@ services:
       DJANGO_SETTINGS_MODULE: biologidex.settings.production_local
       PYTHONUNBUFFERED: "1"
     env_file:
-      - .env.production
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -88,7 +87,7 @@ services:
       DJANGO_SETTINGS_MODULE: biologidex.settings.production_local
       C_FORCE_ROOT: "1"  # Allow celery to run as root in container
     env_file:
-      - .env.production
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -115,7 +114,7 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: biologidex.settings.production_local
     env_file:
-      - .env.production
+      - .env
     depends_on:
       celery_worker:
         condition: service_healthy
@@ -151,6 +150,11 @@ services:
     image: edoburu/pgbouncer:latest
     restart: always
     environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-biologidex}
+      DB_USER: ${DB_USER:-biologidex}
+      DB_PASSWORD: ${DB_PASSWORD}
       DATABASES_HOST: db
       DATABASES_PORT: 5432
       DATABASES_DBNAME: ${DB_NAME:-biologidex}

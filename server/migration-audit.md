@@ -41,7 +41,7 @@ This document provides a comprehensive audit for migrating the BiologiDex Django
 - Complete operations guide (`OPERATIONS.md`)
 - Updated README with production architecture
 - Comprehensive troubleshooting guide
-- Environment configuration templates (`.env.production.example`)
+- Environment configuration templates (`.env.example`)
 
 ### 🔄 Ready for Testing (Phase 4)
 - Local production deployment via Docker Compose
@@ -361,7 +361,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=biologidex.settings.production_local
     env_file:
-      - .env.production
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -384,7 +384,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=biologidex.settings.production_local
     env_file:
-      - .env.production
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -405,7 +405,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=biologidex.settings.production_local
     env_file:
-      - .env.production
+      - .env
     depends_on:
       - celery_worker
     networks:
@@ -508,7 +508,7 @@ vault kv put secret/biologidex/production \
 # Option 2: Encrypted .env files with git-crypt
 git-crypt init
 git-crypt add-gpg-user YOUR_GPG_KEY_ID
-echo ".env.production filter=git-crypt diff=git-crypt" >> .gitattributes
+echo ".env filter=git-crypt diff=git-crypt" >> .gitattributes
 ```
 
 ### 3.2 API Security
@@ -1189,7 +1189,7 @@ substitutions:
 - [x] Implement health check endpoints - Three levels: /health/, /ready/, /api/v1/health/
 - [x] Set up structured logging - JSON logging configured
 - [x] Add rate limiting - Configured in production settings
-- [x] Implement secret management - .env.production with comprehensive examples
+- [x] Implement secret management - .env with comprehensive examples
 
 ### Phase 3: Containerization ✅ COMPLETED (2025-10-26)
 - [x] Create production Dockerfiles - Multi-stage Dockerfile.production created
@@ -1418,7 +1418,7 @@ class BiologiDexUser(HttpUser):
 - `scripts/monitor.sh` - Real-time monitoring dashboard
 - `scripts/diagnose.sh` - System diagnostics tool
 - `OPERATIONS.md` - Complete operational guide
-- `.env.production.example` - Production environment template
+- `.env.example` - Production environment template
 
 ### Files Modified
 - `docker-compose.production.yml` - Production orchestration

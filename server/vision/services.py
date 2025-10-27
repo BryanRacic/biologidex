@@ -40,9 +40,13 @@ class OpenAIVisionService(CVService):
         """
         api_key = settings.OPENAI_API_KEY
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not configured in settings")
+            logger.warning("OPENAI_API_KEY not configured - CV identification will not work")
+            self.client = None
+            self.configured = False
+        else:
+            self.client = OpenAI(api_key=api_key)
+            self.configured = True
 
-        self.client = OpenAI(api_key=api_key)
         self.model = model
         self.detail = detail
 
@@ -63,6 +67,20 @@ class OpenAIVisionService(CVService):
             Dict with keys: prediction, cost_usd, processing_time, raw_response,
                           input_tokens, output_tokens
         """
+        # Check if service is configured
+        if not self.configured:
+            error_msg = "OpenAI Vision API not configured - please set OPENAI_API_KEY"
+            logger.error(error_msg)
+            return {
+                'prediction': "Service not configured",
+                'cost_usd': 0.0,
+                'processing_time': 0.0,
+                'raw_response': error_msg,
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'error': error_msg
+            }
+
         start_time = time.time()
 
         try:

@@ -314,7 +314,8 @@ Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into
 **Docker Compose Patterns**:
 - Always use health checks for dependencies
 - Scale with `--scale web=N` for load testing
-- Use `.env.production` for secrets (never commit)
+- (Deprecated) Use `.env.production` for secrets (never commit)
+  - Just use a single .env file
 
 ### Troubleshooting Quick Reference
 
@@ -327,7 +328,8 @@ Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into
 | Slow API | Check `/metrics/` endpoint | Add caching/indexes |
 
 ### Files to Never Modify in Production
-- `.env.production` (use environment-specific overrides)
+- (Deprecated)`.env.production` (use environment-specific overrides)
+  - Just use a single .env fil
 - `init.sql` (runs only on first DB creation)
 - Migration files (use new migrations for changes)
 

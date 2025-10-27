@@ -256,9 +256,9 @@ sysctl -p
 
 # Setup environment file template
 log_info "Creating environment file template..."
-if [ ! -f /opt/biologidex/server/.env.production ]; then
-    cp /opt/biologidex/server/.env.production.example /opt/biologidex/server/.env.production
-    log_warning "Please edit /opt/biologidex/server/.env.production with your configuration"
+if [ ! -f /opt/biologidex/server/.env ]; then
+    cp /opt/biologidex/server/.env.example /opt/biologidex/server/.env
+    log_warning "Please edit /opt/biologidex/server/.env with your configuration"
 fi
 
 # Final instructions
@@ -273,8 +273,8 @@ echo "   cd /opt && git clone https://github.com/yourusername/biologidex.git"
 echo ""
 echo "2. Configure environment variables:"
 echo "   cd /opt/biologidex/server"
-echo "   cp .env.production.example .env.production"
-echo "   nano .env.production"
+echo "   cp .env.example .env"
+echo "   nano .env"
 echo ""
 echo "3. Start the application:"
 echo "   cd /opt/biologidex/server"
@@ -298,7 +298,7 @@ echo "   systemctl start biologidex"
 echo ""
 echo "=================================================="
 log_warning "Remember to:"
-log_warning "- Change all default passwords in .env.production"
+log_warning "- Change all default passwords in .env"
 log_warning "- Configure SSL certificates"
 log_warning "- Set up monitoring and alerting"
 log_warning "- Configure backup destinations"

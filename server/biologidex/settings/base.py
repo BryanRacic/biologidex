@@ -215,8 +215,10 @@ GCS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
 GCS_PROJECT_ID = os.getenv('GCS_PROJECT_ID')
 GOOGLE_APPLICATION_CREDENTIALS = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
-# OpenAI Settings
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+# OpenAI Settings - Optional for CV functionality
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
+if not OPENAI_API_KEY or OPENAI_API_KEY in ['', 'your-openai-api-key']:
+    OPENAI_API_KEY = None  # Explicitly set to None when not configured
 
 # File Upload Settings
 MAX_UPLOAD_SIZE = int(os.getenv('MAX_UPLOAD_SIZE_MB', '10')) * 1024 * 1024  # Convert to bytes

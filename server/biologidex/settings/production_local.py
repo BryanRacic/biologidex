@@ -5,6 +5,13 @@ Inherits from base settings and overrides for production environment
 import os
 from .base import *
 
+# Import Google Cloud Storage libraries only if needed
+try:
+    from google.oauth2 import service_account
+    HAS_GCS = True
+except ImportError:
+    HAS_GCS = False
+
 # Environment identifier
 ENVIRONMENT = 'production_local'
 VERSION = os.getenv('APP_VERSION', '1.0.0')
@@ -41,7 +48,7 @@ DATABASES = {
 # Redis Cache configuration
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': f"redis://:{os.getenv('REDIS_PASSWORD', '')}@{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/1",
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
@@ -52,7 +59,7 @@ CACHES = {
             'SOCKET_CONNECT_TIMEOUT': 5,
             'SOCKET_TIMEOUT': 5,
             'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-            'PARSER_CLASS': 'redis.connection.HiredisParser',
+            # HiredisParser removed - optional performance optimization that requires specific setup
         },
         'KEY_PREFIX': 'biologidex',
         'VERSION': 1,
@@ -111,7 +118,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # Google Cloud Storage (optional, for media files)
-if os.getenv('GCS_BUCKET_NAME'):
+if os.getenv('GCS_BUCKET_NAME') and HAS_GCS:
     DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
     GS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
     GS_PROJECT_ID = os.getenv('GCS_PROJECT_ID')
@@ -119,19 +126,35 @@ if os.getenv('GCS_BUCKET_NAME'):
     GS_FILE_OVERWRITE = False
     GS_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
     GS_BLOB_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
-    GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
-        os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-    ) if os.getenv('GOOGLE_APPLICATION_CREDENTIALS') else None
 
-# Email configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    # Only set credentials if the file path is provided
+    credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    if credentials_path and os.path.exists(credentials_path):
+        GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
+            credentials_path
+        )
+    else:
+        GS_CREDENTIALS = None
+else:
+    # Use local file storage as fallback when GCS is not configured
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+# Email configuration - Make optional
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587')) if os.getenv('EMAIL_PORT') else 587
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@biologidex.com')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Only use SMTP backend if email is configured
+if EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    print("Email configured with SMTP backend")
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("Email not configured - using console backend (emails will be logged)")
 
 # Logging configuration for production
 LOGGING = {
@@ -216,24 +239,33 @@ LOGGING = {
 }
 
 # Sentry error tracking (optional)
-if os.getenv('SENTRY_DSN'):
-    import sentry_sdk
-    from sentry_sdk.integrations.django import DjangoIntegration
-    from sentry_sdk.integrations.celery import CeleryIntegration
-    from sentry_sdk.integrations.redis import RedisIntegration
+SENTRY_DSN = os.getenv('SENTRY_DSN', '').strip()
+# Only initialize Sentry if a valid DSN is provided
+if SENTRY_DSN and SENTRY_DSN not in ['', 'None', 'none', 'disabled', 'https://your-sentry-dsn@sentry.io/project-id']:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
 
-    sentry_sdk.init(
-        dsn=os.getenv('SENTRY_DSN'),
-        integrations=[
-            DjangoIntegration(),
-            CeleryIntegration(),
-            RedisIntegration(),
-        ],
-        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
-        send_default_pii=False,
-        environment=ENVIRONMENT,
-        release=VERSION,
-    )
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[
+                DjangoIntegration(),
+                CeleryIntegration(),
+                RedisIntegration(),
+            ],
+            traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
+            send_default_pii=False,
+            environment=ENVIRONMENT,
+            release=VERSION,
+        )
+        print("Sentry error tracking enabled")
+    except Exception as e:
+        print(f"Warning: Failed to initialize Sentry: {e}")
+        print("Continuing without Sentry error tracking")
+else:
+    print("Sentry not configured - error tracking disabled")
 
 # Admin URL (security through obscurity)
 ADMIN_URL = os.getenv('ADMIN_URL', 'admin/')

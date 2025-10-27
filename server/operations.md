@@ -648,7 +648,7 @@ docker-compose -f docker-compose.production.yml config
 ```
 
 **Solutions:**
-- Verify `.env.production` exists and has all required variables
+- Verify `.env` exists and has all required variables
 - Check database connectivity
 - Ensure migrations have run
 - Verify SECRET_KEY is set

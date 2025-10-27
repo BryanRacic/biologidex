@@ -138,7 +138,7 @@ if [ "$FULL_MODE" = true ]; then
     echo ""
 
     echo -e "${YELLOW}10. Environment Variables Check${NC}"
-    ENV_FILE=".env.production"
+    ENV_FILE=".env"
     if [ -f "$ENV_FILE" ]; then
         echo "   Required variables:"
         for var in SECRET_KEY DB_PASSWORD REDIS_PASSWORD OPENAI_API_KEY; do
@@ -149,7 +149,7 @@ if [ "$FULL_MODE" = true ]; then
             fi
         done
     else
-        echo -e "   ${RED}Warning: .env.production file not found!${NC}"
+        echo -e "   ${RED}Warning: .env file not found!${NC}"
     fi
     echo ""
 
