@@ -7,7 +7,7 @@ signal request_started(url: String, method: String)
 signal request_completed(url: String, response_code: int, body: Dictionary)
 signal request_failed(url: String, error: String)
 
-const BASE_URL = "http://localhost:8000/api/v1"
+const BASE_URL = "https://biologidex.io/api/v1"
 
 # API Endpoints
 const ENDPOINTS = {

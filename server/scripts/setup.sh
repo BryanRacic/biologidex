@@ -211,7 +211,8 @@ apt-get install -y \
 
 # Initialize AIDE
 log_info "Initializing AIDE (file integrity monitoring)..."
-aideinit
+# Disabled temporarily (no output/continue)
+#aideinit 
 
 # Create swap file if not exists
 log_info "Checking swap configuration..."
