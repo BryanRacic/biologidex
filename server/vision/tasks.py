@@ -97,16 +97,21 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
     try:
         # Parse the prediction
         # Expected formats:
-        # - "Genus, species (common name)"
+        # - "*Genus species* (common name)" - with markdown italics
         # - "Genus species (common name)"
+        # - "Genus, species (common name)"
+        # - "Genus species subspecies (common name)" - with subspecies
         # - Multiple animals separated by newlines or commas
 
         # Take first animal if multiple
         first_line = prediction.split('\n')[0].strip()
 
+        # Remove markdown formatting (asterisks, underscores)
+        first_line = re.sub(r'[*_]', '', first_line)
+
         # Extract scientific name and common name
-        # Pattern: genus species (common name) or genus, species (common name)
-        pattern = r'([A-Z][a-z]+)[,\s]+([a-z]+)\s*\(([^)]+)\)'
+        # Pattern: Genus species [subspecies] (optional common name)
+        pattern = r'([A-Z][a-z]+)[,\s]+([a-z]+(?:\s+[a-z]+)?)\s*(?:\(([^)]+)\))?'
         match = re.search(pattern, first_line)
 
         if not match:
@@ -114,9 +119,13 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
             return None
 
         genus = match.group(1)
-        species = match.group(2)
-        common_name = match.group(3).strip()
-        scientific_name = f"{genus} {species}"
+        species_full = match.group(2).strip()  # May include subspecies
+        common_name = match.group(3).strip() if match.group(3) else ""
+
+        # Split species from subspecies if present
+        species_parts = species_full.split()
+        species = species_parts[0]
+        scientific_name = f"{genus} {species_full}"
 
         logger.info(f"Parsed: {scientific_name} ({common_name})")
 
@@ -129,7 +138,7 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
             # Create new animal
             animal = Animal.objects.create(
                 scientific_name=scientific_name,
-                common_name=common_name,
+                common_name=common_name or f"Unknown {genus}",  # Fallback if no common name
                 genus=genus,
                 species=species,
                 created_by=user,

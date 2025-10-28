@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
-from django.db import models
+from django.db import models, transaction
 from .models import AnalysisJob
 from .serializers import (
     AnalysisJobSerializer,
@@ -49,8 +49,9 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         job = serializer.save()
 
-        # Trigger async processing
-        process_analysis_job.delay(str(job.id))
+        # Trigger async processing AFTER transaction commits
+        # This prevents race condition where Celery tries to fetch job before it's committed
+        transaction.on_commit(lambda: process_analysis_job.delay(str(job.id)))
 
         # Return full job details
         response_serializer = AnalysisJobSerializer(job)
@@ -110,8 +111,8 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
         job.error_message = ''
         job.save(update_fields=['status', 'error_message'])
 
-        # Trigger processing again
-        process_analysis_job.delay(str(job.id))
+        # Trigger processing again AFTER transaction commits
+        transaction.on_commit(lambda: process_analysis_job.delay(str(job.id)))
 
         serializer = self.get_serializer(job)
         return Response(serializer.data)
