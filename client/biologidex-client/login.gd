@@ -3,11 +3,11 @@ extends Control
 # Login scene - Handles user authentication
 # Shows login form if no valid refresh token exists
 
-@onready var username_input: LineEdit = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/UsernameField/UsernameInput
-@onready var password_input: LineEdit = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/PasswordField/PasswordInput
-@onready var login_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/LoginButton
-@onready var status_label: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/StatusLabel
-@onready var loading_spinner: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/LoadingSpinner
+@onready var username_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/UsernameField/UsernameInput
+@onready var password_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/PasswordField/PasswordInput
+@onready var login_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/LoginButton
+@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/StatusLabel
+@onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/LoadingSpinner
 
 var is_loading: bool = false
 

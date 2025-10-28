@@ -8,7 +8,7 @@ var gui_aspect_ratio := 16.0 / 9.0
 var gui_margin := 20.0
 
 @onready var main_panel: Panel = $Panel if has_node("Panel") else null
-@onready var aspect_container: AspectRatioContainer = $Panel/AspectRatioContainer if has_node("Panel/AspectRatioContainer") else null
+@onready var margin_container: MarginContainer = $Panel/MarginContainer if has_node("Panel/MarginContainer") else null
 
 
 func _ready() -> void:
@@ -30,24 +30,17 @@ func _update_responsive_layout() -> void:
 	var viewport_size := get_viewport_rect().size
 	var scale_factor: float = min(viewport_size.x / base_size.x, viewport_size.y / base_size.y)
 
-	# Update aspect ratio container if it exists
-	if aspect_container:
-		aspect_container.ratio = min(viewport_size.aspect(), gui_aspect_ratio)
-
-	# Apply GUI margins for safe area
-	_apply_margins(gui_margin)
-
-	# Adjust for different device classes
+	# Adjust for different device classes (updates gui_margin)
 	_adjust_for_device_class(viewport_size, scale_factor)
 
+	# Apply updated GUI margins to margin container
+	if margin_container:
+		margin_container.add_theme_constant_override("margin_left", int(gui_margin))
+		margin_container.add_theme_constant_override("margin_top", int(gui_margin))
+		margin_container.add_theme_constant_override("margin_right", int(gui_margin))
+		margin_container.add_theme_constant_override("margin_bottom", int(gui_margin))
 
-func _apply_margins(margin: float) -> void:
-	# Apply margins to the main panel if it exists
-	if main_panel:
-		main_panel.offset_left = margin
-		main_panel.offset_top = margin
-		main_panel.offset_right = -margin
-		main_panel.offset_bottom = -margin
+
 
 
 func _adjust_for_device_class(viewport_size: Vector2, scale_factor: float) -> void:

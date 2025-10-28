@@ -3,13 +3,13 @@ extends Control
 # Camera/Upload scene - Handles photo selection and upload for CV analysis
 # Uses godot-file-access-web plugin for HTML5 file access
 
-@onready var select_photo_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/SelectPhotoButton
-@onready var upload_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/UploadButton
-@onready var status_label: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/StatusLabel
-@onready var progress_label: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ProgressLabel
-@onready var loading_spinner: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/LoadingSpinner
-@onready var result_label: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ResultLabel
-@onready var back_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Header/BackButton
+@onready var select_photo_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/SelectPhotoButton
+@onready var upload_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/UploadButton
+@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/StatusLabel
+@onready var progress_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ProgressLabel
+@onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/LoadingSpinner
+@onready var result_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ResultLabel
+@onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 
 var file_access_web: FileAccessWeb
 var selected_file_name: String = ""

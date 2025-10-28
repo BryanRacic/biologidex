@@ -3,12 +3,12 @@ extends Control
 # Home scene - Main screen after login
 # Provides navigation to main app features
 
-@onready var welcome_label: Label = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/WelcomeLabel
-@onready var camera_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Footer/CameraButton
-@onready var dex_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Footer/DexButton
-@onready var tree_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Footer/TreeButton
-@onready var social_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Footer/SocialButton
-@onready var menu_button: Button = $Panel/AspectRatioContainer/MarginContainer/VBoxContainer/Header/MenuButton
+@onready var welcome_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/WelcomeLabel
+@onready var camera_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/CameraButton
+@onready var dex_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/DexButton
+@onready var tree_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/TreeButton
+@onready var social_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/SocialButton
+@onready var menu_button: Button = $Panel/MarginContainer/VBoxContainer/Header/MenuButton
 
 
 func _ready() -> void:
