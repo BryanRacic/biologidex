@@ -1,1 +1,41 @@
-{"background_color":"#000000","display":"standalone","icons":[{"sizes":"144x144","src":"index.144x144.png","type":"image/png"},{"sizes":"180x180","src":"index.180x180.png","type":"image/png"},{"sizes":"512x512","src":"index.512x512.png","type":"image/png"}],"name":"biologidex-client","orientation":"any","start_url":"./index.html"}
+{
+  "name": "BiologiDex",
+  "short_name": "BiologiDex",
+  "description": "Catch and collect real-world animals in your personal Pokedex",
+  "start_url": "./index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#4CAF50",
+  "icons": [
+    {
+      "src": "index.144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "index.180x180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "index.512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "index.512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "BiologiDex application"
+    }
+  ],
+  "categories": ["games", "education"]
+}
