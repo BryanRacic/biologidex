@@ -3,13 +3,14 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
 
-## Current Status (Updated 2025-10-26)
+## Current Status (Updated 2025-10-29)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
 - ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
 - ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
 - ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
+- ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
 
 ---
 
@@ -31,7 +32,14 @@ client/biologidex-client/
 ├── responsive_container.gd      # Auto-margin container class
 ├── theme.tres                   # Base theme resource
 ├── project.godot                # Project configuration
-└── implementation-notes.md      # Phase 1 implementation details
+├── export_presets.cfg           # Web export configuration (single-threaded)
+├── implementation-notes.md      # Phase 1 implementation details
+└── export/web/                  # Godot web export output
+    ├── index.html               # Entry point
+    ├── index.wasm               # WebAssembly binary (~36MB)
+    ├── index.pck                # Game data package
+    ├── index.js                 # JavaScript loader
+    └── [PWA assets]             # Manifest, service worker, icons
 ```
 
 ### Key Godot Patterns
@@ -258,9 +266,13 @@ Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into
 **Deployment & Setup**:
 - `scripts/setup.sh`: Complete Ubuntu server setup
 - `scripts/deploy.sh`: Zero-downtime deployment with rollback
+- `scripts/export-to-prod.sh`: Godot web client export and deployment
 - `scripts/backup.sh`: Automated database backups
 - `scripts/monitor.sh`: Real-time system monitoring dashboard
 - `scripts/diagnose.sh`: Comprehensive diagnostics
+
+**Documentation**:
+- `client-host.md`: Detailed plan for Godot web client hosting architecture
 
 ### Production Settings
 
@@ -329,9 +341,162 @@ Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into
 
 ### Files to Never Modify in Production
 - (Deprecated)`.env.production` (use environment-specific overrides)
-  - Just use a single .env fil
+  - Just use a single .env file
 - `init.sql` (runs only on first DB creation)
 - Migration files (use new migrations for changes)
+
+---
+
+## Godot Web Client Deployment (Added 2025-10-29)
+
+### Overview
+Godot 4.5 web client served via nginx at root path (`/`), with Django API at `/api/` and admin at `/admin/`.
+
+### Export Configuration
+
+**Single-Threaded Mode** (Best Compatibility):
+- `export_presets.cfg`: `variant/thread_support=false`
+- `progressive_web_app/ensure_cross_origin_isolation_headers=false`
+- No COOP/COEP headers required
+- Works on all browsers including Safari/iOS
+- Compatible with all hosting platforms (itch.io, Newgrounds, etc.)
+
+### Deployment Workflow
+
+**Export Script**: `server/scripts/export-to-prod.sh`
+- Automated Godot CLI export using headless mode
+- Pre-compression (gzip) for performance
+- Backup system (keeps last 5 deployments)
+- Rollback capability on failure
+- Zero-downtime deployment
+
+**Usage**:
+```bash
+cd server
+./scripts/export-to-prod.sh              # Full export + deploy
+./scripts/export-to-prod.sh --skip-export  # Deploy existing export
+```
+
+### File Structure
+
+**Production Path**: `server/client_files/`
+- Mounted in nginx container at `/var/www/biologidex/client/`
+- Served directly by nginx (no proxy)
+- Automatic backups in `server/client_files_backup/`
+
+### Nginx Configuration
+
+**URL Routing**:
+```
+/                  → Godot web client (index.html)
+/api/              → Django REST API (proxied to port 8000)
+/admin/            → Django admin panel (proxied to port 8000)
+/static/           → Django static files
+/media/            → User uploaded media
+```
+
+**MIME Types**:
+- `.wasm` → `application/wasm` (already in default mime.types)
+- `.pck` → `application/octet-stream`
+
+**Caching Strategy**:
+- `.wasm`, `.pck`: 7 days, immutable
+- `.html`: 1 hour, must-revalidate
+- `.js`, `.css`: 1 hour, public
+- PWA files (manifest.json, service.worker.js): no-cache
+
+**Compression**:
+- gzip enabled for all text assets and wasm
+- Pre-compressed .gz files served via `gzip_static on`
+- Brotli optional (requires module)
+
+### Docker Integration
+
+**Volume Mount** (docker-compose.production.yml):
+```yaml
+nginx:
+  volumes:
+    - ./client_files:/var/www/biologidex/client:ro
+```
+
+**Deployment**:
+```bash
+# After running export-to-prod.sh
+docker-compose -f docker-compose.production.yml exec nginx nginx -s reload
+```
+
+### Cloudflare Tunnel Configuration
+
+**Critical**: Tunnel must point to **nginx (port 80)**, not Django (port 8000)
+
+**Token-based setup** (via Cloudflare dashboard):
+1. Navigate to Zero Trust → Networks → Tunnels
+2. Configure tunnel → Public Hostname
+3. Set service URL: `http://localhost:80`
+
+**Config-based setup** (/etc/cloudflared/config.yml):
+```yaml
+ingress:
+  - hostname: biologidex.io
+    service: http://localhost:80  # nginx, not 8000
+```
+
+### Critical Learnings
+
+**Environment Variable Parsing**:
+- `.env` files **cannot have inline comments** after values
+- BAD: `DB_HOST=db  # Docker service name`
+- GOOD: `DB_HOST=db`
+- Inline comments are parsed as part of the value
+
+**Docker Compose env_file**:
+- `docker-compose.production.yml` references specific env file
+- Default is `.env`, not `.env.production`
+- Must explicitly rename or update compose file
+
+**Database Connection in Docker**:
+- Use service names, not `localhost`
+- `DB_HOST=db` (Docker service name)
+- `REDIS_HOST=redis` (Docker service name)
+- `localhost` only works outside containers
+
+**Password Changes Require Volume Rebuild**:
+- PostgreSQL and Redis store credentials in volumes
+- Changing passwords in `.env` doesn't update running containers
+- Must remove volumes and reinitialize:
+  ```bash
+  docker-compose down -v  # Removes ALL volumes (deletes data)
+  docker-compose up -d    # Fresh start with new passwords
+  ```
+
+**Nginx Location Directive Gotchas**:
+- Cannot use nested `location` blocks inside `location` with `alias`
+- Regex locations (`~*`) evaluated before prefix locations
+- Use `root` with regex, `alias` with prefix
+- `try_files` with `alias` requires careful syntax
+
+### Troubleshooting
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| 404 at root path | Cloudflare tunnel points to Django | Point tunnel to port 80 (nginx) |
+| Client files not found | Volume not mounted | Check docker-compose.yml volume mount |
+| 301 redirect loop | try_files directive issue | Simplify to `try_files $uri /index.html` |
+| Black screen | CORS/MIME type issues | Check browser console for errors |
+| DB connection refused | DB_HOST=localhost in container | Set DB_HOST=db (service name) |
+| Inline comment in env value | Bash treats everything after `=` as value | Remove inline comments from .env |
+
+### Performance Optimization
+
+**Asset Loading**:
+- 37MB WASM file compresses to ~9MB with gzip
+- Enable gzip_static to serve pre-compressed files
+- Use CDN for static assets in production (future)
+
+**Browser Cache**:
+- Long cache for immutable assets (.wasm, .pck)
+- Short cache for HTML (allows updates)
+- No cache for PWA files (service worker control)
 
 ---
 
@@ -355,7 +520,8 @@ celery -A biologidex worker -l info   # Start worker
 docker-compose -f docker-compose.production.yml up -d     # Start all services
 docker-compose -f docker-compose.production.yml logs -f   # View logs
 docker-compose -f docker-compose.production.yml ps        # Check status
-./scripts/deploy.sh                                       # Deploy updates
+./scripts/deploy.sh                                       # Deploy backend updates
+./scripts/export-to-prod.sh                               # Deploy Godot client
 ./scripts/monitor.sh                                      # Real-time monitoring
 ./scripts/diagnose.sh                                     # System diagnostics
 ```
