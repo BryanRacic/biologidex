@@ -18,7 +18,7 @@ layout_mode = 3
 anchors_preset = 0
 size_flags_horizontal = 3
 
-[node name="AspectRatioContainer" type="AspectRatioContainer" parent="."]
+[node name="ImageBorderAspectRatio" type="AspectRatioContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -28,33 +28,36 @@ grow_vertical = 2
 size_flags_horizontal = 4
 ratio = 1.5
 
-[node name="ImageBorder" type="PanelContainer" parent="AspectRatioContainer"]
+[node name="ImageBorder" type="PanelContainer" parent="ImageBorderAspectRatio"]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_yeq50")
 
-[node name="Image" type="TextureRect" parent="AspectRatioContainer/ImageBorder"]
+[node name="Image" type="TextureRect" parent="ImageBorderAspectRatio/ImageBorder"]
 layout_mode = 2
-expand_mode = 3
-stretch_mode = 5
+stretch_mode = 1
 
-[node name="RecordMargin" type="MarginContainer" parent="AspectRatioContainer/ImageBorder"]
+[node name="RecordMargin" type="MarginContainer" parent="ImageBorderAspectRatio/ImageBorder"]
 layout_mode = 2
 theme_override_constants/margin_bottom = 25
 
-[node name="RecordBackground" type="PanelContainer" parent="AspectRatioContainer/ImageBorder/RecordMargin"]
+[node name="RecordBackground" type="PanelContainer" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin"]
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 8
 theme_override_styles/panel = SubResource("StyleBoxFlat_eheay")
 
-[node name="RecordTextMargin" type="MarginContainer" parent="AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground"]
+[node name="RecordTextMargin" type="MarginContainer" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground"]
 layout_mode = 2
 theme_override_constants/margin_left = 25
 theme_override_constants/margin_top = 25
 theme_override_constants/margin_right = 25
 theme_override_constants/margin_bottom = 25
 
-[node name="RecordLabel" type="Label" parent="AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
+[node name="RecordLabel" type="Label" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
 layout_mode = 2
-text = "common name (genus, species)"
+text = "Genus species - common name"
 label_settings = SubResource("LabelSettings_yeq50")
+
+[node name="Image" type="TextureRect" parent="."]
+layout_mode = 0
+stretch_mode = 1

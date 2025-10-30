@@ -11,9 +11,10 @@ extends Control
 @onready var result_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ResultLabel
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
-@onready var aspect_ratio_container: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer
-@onready var record_texture: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer/ImageBorder/Image
-@onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
+@onready var simple_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/Image
+@onready var bordered_container: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio
+@onready var bordered_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/Image
+@onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
 
 var file_access_web: FileAccessWeb
 var selected_file_name: String = ""
@@ -71,6 +72,8 @@ func _reset_ui() -> void:
 	upload_button.disabled = true
 	loading_spinner.visible = false
 	record_image.visible = false
+	simple_image.visible = false
+	bordered_container.visible = false
 	progress_label.text = ""
 	status_label.text = "Select a photo to identify an animal"
 	status_label.add_theme_color_override("font_color", Color.WHITE)
@@ -121,18 +124,14 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 
 	if image_error == OK:
 		var texture := ImageTexture.create_from_image(image)
-		record_texture.texture = texture
 
-		# Update aspect ratio container to match image
-		var img_width: float = float(image.get_width())
-		var img_height: float = float(image.get_height())
-		if img_height > 0.0:
-			var aspect_ratio: float = img_width / img_height
-			aspect_ratio_container.ratio = aspect_ratio
-			print("[Camera] Image aspect ratio: ", aspect_ratio)
+		# Show simple preview (no border) on initial load
+		simple_image.texture = texture
+		simple_image.visible = true
+		bordered_container.visible = false
 
 		record_image.visible = true
-		print("[Camera] Image loaded into preview")
+		print("[Camera] Image loaded into simple preview")
 	else:
 		print("[Camera] ERROR: Failed to load image for preview: ", image_error)
 
@@ -191,19 +190,14 @@ func _load_test_image() -> void:
 
 	print("[Camera] Test image loaded - Size: ", selected_file_data.size(), " bytes")
 
-	# Display in preview
+	# Display in simple preview (no border) on initial load
 	var texture := ImageTexture.create_from_image(image)
-	record_texture.texture = texture
-
-	# Update aspect ratio container to match image
-	var img_width: float = float(image.get_width())
-	var img_height: float = float(image.get_height())
-	if img_height > 0.0:
-		var aspect_ratio: float = img_width / img_height
-		aspect_ratio_container.ratio = aspect_ratio
-		print("[Camera] Image aspect ratio: ", aspect_ratio)
+	simple_image.texture = texture
+	simple_image.visible = true
+	bordered_container.visible = false
 
 	record_image.visible = true
+	print("[Camera] Test image loaded into simple preview")
 
 	# Update UI
 	status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
@@ -211,6 +205,19 @@ func _load_test_image() -> void:
 	upload_button.disabled = false
 
 	print("[Camera] Test image ready for upload")
+
+
+func _update_record_image_size() -> void:
+	"""Update RecordImage's custom_minimum_size to match AspectRatioContainer's calculated height"""
+	# Get the available width from the parent container
+	var available_width: float = float(record_image.get_parent_control().size.x)
+
+	# Calculate required height based on aspect ratio
+	var aspect_ratio: float = bordered_container.ratio
+	if aspect_ratio > 0.0:
+		var required_height: float = available_width / aspect_ratio
+		record_image.custom_minimum_size.y = required_height
+		print("[Camera] Updated RecordImage size - Width: ", available_width, " Height: ", required_height, " Ratio: ", aspect_ratio)
 
 
 func _on_upload_pressed() -> void:
@@ -363,49 +370,94 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	print("[Camera] Confidence: ", confidence)
 	print("[Camera] Animal details: ", animal_details)
 
+	# Switch from simple preview to bordered display with label
+	if simple_image.texture != null:
+		# Get image from simple preview
+		var texture := simple_image.texture
+		bordered_image.texture = texture
+
+		# Calculate aspect ratio from the texture
+		var img_width: float = float(texture.get_width())
+		var img_height: float = float(texture.get_height())
+		if img_height > 0.0:
+			var aspect_ratio: float = img_width / img_height
+			bordered_container.ratio = aspect_ratio
+			print("[Camera] Image aspect ratio: ", aspect_ratio)
+
+		# Hide simple preview, show bordered version
+		simple_image.visible = false
+		bordered_container.visible = true
+
+		# Update RecordImage's minimum size to accommodate the aspect ratio
+		await get_tree().process_frame
+		_update_record_image_size()
+
 	# Update RecordLabel with animal information
+	var common_name: String = ""
+	var scientific_name: String = ""
+	var kingdom: String = ""
+	var phylum: String = ""
+	var animal_class: String = ""
+	var order: String = ""
+	var family: String = ""
+
 	if animal_details.size() > 0:
 		var common_name_value = animal_details.get("common_name")
-		var common_name: String = "" if common_name_value == null else str(common_name_value)
+		common_name = "" if common_name_value == null else str(common_name_value)
 
-		var genus_value = animal_details.get("genus")
-		var genus: String = "" if genus_value == null else str(genus_value)
+		var scientific_name_value = animal_details.get("scientific_name")
+		scientific_name = "" if scientific_name_value == null else str(scientific_name_value)
 
-		var species_value = animal_details.get("species")
-		var species: String = "" if species_value == null else str(species_value)
+		var kingdom_value = animal_details.get("kingdom")
+		kingdom = "" if kingdom_value == null else str(kingdom_value)
 
-		# Format: "common name (genus, species)"
+		var phylum_value = animal_details.get("phylum")
+		phylum = "" if phylum_value == null else str(phylum_value)
+
+		var class_value = animal_details.get("class_name")
+		animal_class = "" if class_value == null else str(class_value)
+
+		var order_value = animal_details.get("order")
+		order = "" if order_value == null else str(order_value)
+
+		var family_value = animal_details.get("family")
+		family = "" if family_value == null else str(family_value)
+
+		# Format: "Scientific name - common name"
 		var record_text := ""
-		if common_name.length() > 0:
-			record_text = common_name
-		else:
-			record_text = "Unknown"
 
-		if genus.length() > 0 or species.length() > 0:
-			record_text += " ("
-			if genus.length() > 0:
-				record_text += genus
-			if genus.length() > 0 and species.length() > 0:
-				record_text += ", "
-			if species.length() > 0:
-				record_text += species
-			record_text += ")"
+		# Use scientific name
+		if scientific_name.length() > 0:
+			record_text = scientific_name
+
+		# Add common name
+		if common_name.length() > 0:
+			if record_text.length() > 0:
+				record_text += " - " + common_name
+			else:
+				record_text = common_name
+
+		# Fallback if no data
+		if record_text.length() == 0:
+			record_text = "Unknown"
 
 		record_label.text = record_text
 		print("[Camera] Updated RecordLabel: ", record_text)
 
-	# Display results
-	var result_text := "Identified: %s" % prediction
-	if confidence > 0.0:
-		result_text += "\nConfidence: %.1f%%" % (confidence * 100.0)
+	# Display detailed results - use same format as RecordLabel
+	var result_text := ""
 
-	if animal_details.size() > 0:
-		var common_name_value = animal_details.get("common_name")
-		var common_name: String = "" if common_name_value == null else str(common_name_value)
+	# Format: "Scientific name - common name"
+	if scientific_name.length() > 0:
+		result_text = scientific_name
 		if common_name.length() > 0:
-			result_text += "\nCommon name: %s" % common_name
+			result_text += " - " + common_name
+	elif common_name.length() > 0:
+		result_text = common_name
+	else:
+		result_text = "Unknown"
 
-	result_label.text = result_text
+	result_label.text = result_text.strip_edges()
 	result_label.add_theme_color_override("font_color", Color.GREEN)
 
 	# Re-enable buttons for another upload
