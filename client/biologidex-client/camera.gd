@@ -105,15 +105,16 @@ func _on_select_photo_pressed() -> void:
 
 func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 	"""
-	Re-encode image as PNG using browser's native decoder via JavaScriptBridge.
-	This converts problematic JPEG files into PNG format that Godot can load reliably.
+	Re-encode image as JPEG using browser's native decoder via JavaScriptBridge.
+	This converts problematic JPEG files into standard JPEG format that Godot can load reliably.
+	Also resizes large images to max 2048px to reduce data transfer overhead.
 	Returns null and starts async conversion.
 	"""
 	# Only available on Web platform
 	if OS.get_name() != "Web":
 		return null
 
-	print("[Camera] Starting browser image re-encoding (JPEG → PNG)...")
+	print("[Camera] Starting browser image re-encoding (problematic JPEG → standard JPEG)...")
 
 	# Store base64 data for callback reference
 	pending_base64_data = base64_data
@@ -131,22 +132,35 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 
 				img.onload = function() {
 					try {
+						// Resize large images to max 2048px to reduce data transfer
+						let targetWidth = img.width;
+						let targetHeight = img.height;
+						const maxDimension = 2048;
+
+						if (targetWidth > maxDimension || targetHeight > maxDimension) {
+							const scale = maxDimension / Math.max(targetWidth, targetHeight);
+							targetWidth = Math.floor(targetWidth * scale);
+							targetHeight = Math.floor(targetHeight * scale);
+							console.log('[Browser] Resizing from', img.width, 'x', img.height, 'to', targetWidth, 'x', targetHeight);
+						}
+
 						// Create canvas to re-render the image
 						const canvas = document.createElement('canvas');
-						canvas.width = img.width;
-						canvas.height = img.height;
+						canvas.width = targetWidth;
+						canvas.height = targetHeight;
 
 						const ctx = canvas.getContext('2d');
-						ctx.drawImage(img, 0, 0);
+						ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-						// Convert to PNG data URL
-						const pngDataUrl = canvas.toDataURL('image/png');
+						// Convert to JPEG (much smaller than PNG, and Godot can load it)
+						// Use quality 0.92 for good quality with reasonable size
+						const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
-						// Extract base64 from data:image/png;base64,XXXXX
-						const base64 = pngDataUrl.split(',')[1];
+						// Extract base64 from data:image/jpeg;base64,XXXXX
+						const base64 = jpegDataUrl.split(',')[1];
 
-						console.log('[Browser] Re-encoded image as PNG:', img.width, 'x', img.height);
-						console.log('[Browser] Base64 length:', base64.length);
+						console.log('[Browser] Re-encoded image as JPEG:', targetWidth, 'x', targetHeight);
+						console.log('[Browser] Base64 length:', base64.length, 'chars (~', Math.round(base64.length/1024), 'KB)');
 						console.log('[Browser] Calling Godot callback...');
 						callback(base64);
 						console.log('[Browser] Callback invoked successfully');
@@ -178,7 +192,7 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 
 
 func _on_browser_image_reencoded(args: Array) -> void:
-	"""Callback when browser finishes re-encoding the image as PNG"""
+	"""Callback when browser finishes re-encoding the image as JPEG"""
 	print("[Camera] === Browser callback received! ===")
 	print("[Camera] Callback args size: ", args.size())
 
@@ -187,30 +201,30 @@ func _on_browser_image_reencoded(args: Array) -> void:
 		_on_browser_reencode_failed()
 		return
 
-	var png_base64: String = str(args[0])
-	print("[Camera] Received PNG base64 length: ", png_base64.length())
+	var jpeg_base64: String = str(args[0])
+	print("[Camera] Received JPEG base64 length: ", jpeg_base64.length(), " chars (~", jpeg_base64.length() / 1024, " KB)")
 
-	if png_base64.length() == 0:
+	if jpeg_base64.length() == 0:
 		print("[Camera] ERROR: Browser re-encoder returned empty string")
 		_on_browser_reencode_failed()
 		return
 
-	print("[Camera] Browser re-encoded image to PNG (", png_base64.length(), " chars)")
+	print("[Camera] Browser re-encoded image to JPEG (", jpeg_base64.length(), " chars)")
 
 	# Convert base64 to binary
-	var png_data := Marshalls.base64_to_raw(png_base64)
-	print("[Camera] Converted to binary: ", png_data.size(), " bytes")
+	var jpeg_data := Marshalls.base64_to_raw(jpeg_base64)
+	print("[Camera] Converted to binary: ", jpeg_data.size(), " bytes (~", jpeg_data.size() / 1024, " KB)")
 
-	# Load with Godot's PNG decoder (should always work)
+	# Load with Godot's JPEG decoder (browser re-encoded to standard JPEG)
 	var image := Image.new()
-	var image_error := image.load_png_from_buffer(png_data)
+	var image_error := image.load_jpg_from_buffer(jpeg_data)
 
 	if image_error != OK:
-		print("[Camera] ERROR: Failed to load re-encoded PNG, error code: ", image_error)
+		print("[Camera] ERROR: Failed to load re-encoded JPEG, error code: ", image_error)
 		_on_browser_reencode_failed()
 		return
 
-	print("[Camera] ✓ Successfully loaded re-encoded PNG!")
+	print("[Camera] ✓ Successfully loaded re-encoded JPEG!")
 	print("[Camera] Image size: ", image.get_width(), "x", image.get_height())
 
 	# Create texture and display
