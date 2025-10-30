@@ -105,15 +105,15 @@ func _on_select_photo_pressed() -> void:
 
 func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 	"""
-	Load image using browser's native decoder via JavaScriptBridge.
-	This supports ALL JPEG formats including ones with uncommon chroma subsampling.
-	Returns null if not running on Web platform - starts async decoding instead.
+	Re-encode image as PNG using browser's native decoder via JavaScriptBridge.
+	This converts problematic JPEG files into PNG format that Godot can load reliably.
+	Returns null and starts async conversion.
 	"""
 	# Only available on Web platform
 	if OS.get_name() != "Web":
 		return null
 
-	print("[Camera] Starting browser's native image decoder (async)...")
+	print("[Camera] Starting browser image re-encoding (JPEG → PNG)...")
 
 	# Store base64 data for callback reference
 	pending_base64_data = base64_data
@@ -123,34 +123,37 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 
 	# Inject helper function into global scope if not already present
 	JavaScriptBridge.eval("""
-		if (typeof window._godot_decode_image === 'undefined') {
-			window._godot_decode_image = function(dataUrl, callback) {
+		if (typeof window._godot_reencode_image === 'undefined') {
+			window._godot_reencode_image = function(dataUrl, callback) {
 				const img = new Image();
 
 				img.onload = function() {
 					try {
-						// Create canvas to extract pixel data
+						// Create canvas to re-render the image
 						const canvas = document.createElement('canvas');
 						canvas.width = img.width;
 						canvas.height = img.height;
 
-						const ctx = canvas.getContext('2d', { willReadFrequently: true });
+						const ctx = canvas.getContext('2d');
 						ctx.drawImage(img, 0, 0);
 
-						// Get RGBA pixel data
-						const imageData = ctx.getImageData(0, 0, img.width, img.height);
+						// Convert to PNG data URL
+						const pngDataUrl = canvas.toDataURL('image/png');
 
-						// Call Godot callback with result
-						callback(img.width, img.height, Array.from(imageData.data));
+						// Extract base64 from data:image/png;base64,XXXXX
+						const base64 = pngDataUrl.split(',')[1];
+
+						console.log('[Browser] Re-encoded image as PNG:', img.width, 'x', img.height);
+						callback(base64);
 					} catch (e) {
 						console.error('Canvas error:', e);
-						callback(0, 0, []);  // Error result
+						callback('');  // Error result
 					}
 				};
 
 				img.onerror = function() {
 					console.error('Failed to load image');
-					callback(0, 0, []);  // Error result
+					callback('');  // Error result
 				};
 
 				img.src = dataUrl;
@@ -158,59 +161,55 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 		}
 	""", true)
 
-	# Create callback for when image is decoded
-	var callback := JavaScriptBridge.create_callback(_on_browser_image_decoded)
+	# Create callback for when image is re-encoded
+	var callback := JavaScriptBridge.create_callback(_on_browser_image_reencoded)
 
-	# Start decoding (this is asynchronous in JavaScript)
+	# Start re-encoding (this is asynchronous in JavaScript)
 	var js_window = JavaScriptBridge.get_interface("window")
-	js_window._godot_decode_image(data_url, callback)
+	js_window._godot_reencode_image(data_url, callback)
 
 	# Return null - actual processing happens in callback
 	return null
 
 
-func _on_browser_image_decoded(args: Array) -> void:
-	"""Callback when browser finishes decoding the image"""
-	if args.size() < 3:
-		print("[Camera] Browser decoder callback: invalid args")
+func _on_browser_image_reencoded(args: Array) -> void:
+	"""Callback when browser finishes re-encoding the image as PNG"""
+	if args.size() < 1:
+		print("[Camera] Browser re-encoder callback: invalid args")
+		_on_browser_reencode_failed()
 		return
 
-	var width: int = int(args[0])
-	var height: int = int(args[1])
-	var pixel_array = args[2]
+	var png_base64: String = str(args[0])
 
-	print("[Camera] Browser decoder callback: ", width, "x", height, " pixels")
-
-	if width <= 0 or height <= 0:
-		print("[Camera] Browser decoder failed")
+	if png_base64.length() == 0:
+		print("[Camera] Browser re-encoder failed")
+		_on_browser_reencode_failed()
 		return
 
-	# Convert to PackedByteArray
-	var rgba_data := PackedByteArray()
-	rgba_data.resize(width * height * 4)
+	print("[Camera] Browser re-encoded image to PNG (", png_base64.length(), " chars)")
 
-	if typeof(pixel_array) == TYPE_ARRAY:
-		for i in range(min(pixel_array.size(), rgba_data.size())):
-			rgba_data[i] = int(pixel_array[i]) & 0xFF
-	else:
-		print("[Camera] Unexpected pixel data type: ", typeof(pixel_array))
+	# Convert base64 to binary
+	var png_data := Marshalls.base64_to_raw(png_base64)
+
+	print("[Camera] PNG data size: ", png_data.size(), " bytes")
+
+	# Load with Godot's PNG decoder (should always work)
+	var image := Image.new()
+	var image_error := image.load_png_from_buffer(png_data)
+
+	if image_error != OK:
+		print("[Camera] ERROR: Failed to load re-encoded PNG: ", image_error)
+		_on_browser_reencode_failed()
 		return
 
-	# Create Godot Image from raw RGBA data
-	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, rgba_data)
-
-	if image == null:
-		print("[Camera] Failed to create Image from browser-decoded data")
-		return
-
-	print("[Camera] Successfully created Image from browser decoder!")
+	print("[Camera] Successfully loaded re-encoded PNG!")
 
 	# Create texture and display
 	var texture := ImageTexture.create_from_image(image)
 
 	# Store image dimensions
-	current_image_width = float(width)
-	current_image_height = float(height)
+	current_image_width = float(image.get_width())
+	current_image_height = float(image.get_height())
 
 	# Show simple preview (no border) on initial load
 	simple_image.texture = texture
@@ -223,7 +222,13 @@ func _on_browser_image_decoded(args: Array) -> void:
 	status_label.add_theme_color_override("font_color", Color.GREEN)
 	progress_label.text = ""
 
-	print("[Camera] Browser decoder completed successfully")
+	print("[Camera] Browser re-encoding completed successfully")
+
+
+func _on_browser_reencode_failed() -> void:
+	"""Called when browser re-encoding fails - continue with fallback"""
+	print("[Camera] Falling back to direct Godot decoder...")
+	# The fallback logic in _on_file_loaded will handle this
 
 
 func _detect_image_format(data: PackedByteArray) -> String:
