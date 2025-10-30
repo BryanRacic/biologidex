@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://b3cxkv5r1h4yp"]
 
-[ext_resource type="Script" path="res://login.gd" id="1_login"]
+[ext_resource type="Script" uid="uid://ce08ewbxhdgcw" path="res://login.gd" id="1_login"]
 
 [node name="Login" type="Control"]
 layout_mode = 3
@@ -71,6 +71,12 @@ size_flags_horizontal = 4
 size_flags_vertical = 4
 theme_override_constants/separation = 20
 
+[node name="CreateAcctButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm"]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Create Account"
+
 [node name="UsernameField" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm"]
 layout_mode = 2
 
@@ -111,3 +117,6 @@ custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
 text = "Login"
+
+[node name="BoxContainer" type="BoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm"]
+layout_mode = 2

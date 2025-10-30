@@ -1,0 +1,138 @@
+[gd_scene format=3 uid="uid://makmcpxt2lki"]
+
+[node name="CreateAccount" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+
+[node name="Header" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+alignment = 1
+
+[node name="Title" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "BiologiDex"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "Create account to continue"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Content" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ContentMargin" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="CreateAcctForm" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_constants/separation = 20
+
+[node name="EmailField" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
+
+[node name="EmailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/EmailField"]
+layout_mode = 2
+text = "Username"
+
+[node name="EmailInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/EmailField"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+placeholder_text = "Enter your username"
+
+[node name="UsernameField" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
+
+[node name="UsernameLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/UsernameField"]
+layout_mode = 2
+text = "Username"
+
+[node name="UsernameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/UsernameField"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+placeholder_text = "Enter your username"
+
+[node name="PasswordField" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
+
+[node name="PasswordLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/PasswordField"]
+layout_mode = 2
+text = "Password"
+
+[node name="PasswordInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/PasswordField"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+placeholder_text = "Enter your password"
+secret = true
+
+[node name="ConfirmPasswordField2" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
+
+[node name="ConfirmPasswordLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/ConfirmPasswordField2"]
+layout_mode = 2
+text = "Password"
+
+[node name="ConfirmPasswordInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/ConfirmPasswordField2"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+placeholder_text = "Enter your password (again)"
+secret = true
+
+[node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="LoadingSpinner" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
+text = "Loading..."
+horizontal_alignment = 1
+
+[node name="CreateAcctButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Create Account"
+
+[node name="BoxContainer" type="BoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
+layout_mode = 2
