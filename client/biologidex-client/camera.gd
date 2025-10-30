@@ -24,6 +24,7 @@ var current_job_id: String = ""
 var status_check_timer: Timer
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
+var pending_base64_data: String = ""  # For browser decoder callback
 
 
 func _ready() -> void:
@@ -102,6 +103,157 @@ func _on_select_photo_pressed() -> void:
 	file_access_web.open("image/*")
 
 
+func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
+	"""
+	Load image using browser's native decoder via JavaScriptBridge.
+	This supports ALL JPEG formats including ones with uncommon chroma subsampling.
+	Returns null if not running on Web platform - starts async decoding instead.
+	"""
+	# Only available on Web platform
+	if OS.get_name() != "Web":
+		return null
+
+	print("[Camera] Starting browser's native image decoder (async)...")
+
+	# Store base64 data for callback reference
+	pending_base64_data = base64_data
+
+	# Create data URL
+	var data_url := "data:%s;base64,%s" % [mime_type, base64_data]
+
+	# Inject helper function into global scope if not already present
+	JavaScriptBridge.eval("""
+		if (typeof window._godot_decode_image === 'undefined') {
+			window._godot_decode_image = function(dataUrl, callback) {
+				const img = new Image();
+
+				img.onload = function() {
+					try {
+						// Create canvas to extract pixel data
+						const canvas = document.createElement('canvas');
+						canvas.width = img.width;
+						canvas.height = img.height;
+
+						const ctx = canvas.getContext('2d', { willReadFrequently: true });
+						ctx.drawImage(img, 0, 0);
+
+						// Get RGBA pixel data
+						const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+						// Call Godot callback with result
+						callback(img.width, img.height, Array.from(imageData.data));
+					} catch (e) {
+						console.error('Canvas error:', e);
+						callback(0, 0, []);  // Error result
+					}
+				};
+
+				img.onerror = function() {
+					console.error('Failed to load image');
+					callback(0, 0, []);  // Error result
+				};
+
+				img.src = dataUrl;
+			};
+		}
+	""", true)
+
+	# Create callback for when image is decoded
+	var callback := JavaScriptBridge.create_callback(_on_browser_image_decoded)
+
+	# Start decoding (this is asynchronous in JavaScript)
+	var js_window = JavaScriptBridge.get_interface("window")
+	js_window._godot_decode_image(data_url, callback)
+
+	# Return null - actual processing happens in callback
+	return null
+
+
+func _on_browser_image_decoded(args: Array) -> void:
+	"""Callback when browser finishes decoding the image"""
+	if args.size() < 3:
+		print("[Camera] Browser decoder callback: invalid args")
+		return
+
+	var width: int = int(args[0])
+	var height: int = int(args[1])
+	var pixel_array = args[2]
+
+	print("[Camera] Browser decoder callback: ", width, "x", height, " pixels")
+
+	if width <= 0 or height <= 0:
+		print("[Camera] Browser decoder failed")
+		return
+
+	# Convert to PackedByteArray
+	var rgba_data := PackedByteArray()
+	rgba_data.resize(width * height * 4)
+
+	if typeof(pixel_array) == TYPE_ARRAY:
+		for i in range(min(pixel_array.size(), rgba_data.size())):
+			rgba_data[i] = int(pixel_array[i]) & 0xFF
+	else:
+		print("[Camera] Unexpected pixel data type: ", typeof(pixel_array))
+		return
+
+	# Create Godot Image from raw RGBA data
+	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, rgba_data)
+
+	if image == null:
+		print("[Camera] Failed to create Image from browser-decoded data")
+		return
+
+	print("[Camera] Successfully created Image from browser decoder!")
+
+	# Create texture and display
+	var texture := ImageTexture.create_from_image(image)
+
+	# Store image dimensions
+	current_image_width = float(width)
+	current_image_height = float(height)
+
+	# Show simple preview (no border) on initial load
+	simple_image.texture = texture
+	simple_image.visible = true
+	bordered_container.visible = false
+	record_image.visible = true
+
+	# Update status
+	status_label.text = "Photo selected: %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
+	status_label.add_theme_color_override("font_color", Color.GREEN)
+	progress_label.text = ""
+
+	print("[Camera] Browser decoder completed successfully")
+
+
+func _detect_image_format(data: PackedByteArray) -> String:
+	"""Detect image format from magic bytes (file header signature)"""
+	if data.size() < 4:
+		return "unknown"
+
+	# PNG: 89 50 4E 47 (hex) = 137 80 78 71 (decimal)
+	if data.size() >= 4 and data[0] == 0x89 and data[1] == 0x50 and data[2] == 0x4E and data[3] == 0x47:
+		return "png"
+
+	# JPEG: FF D8 FF (all JPEG variants start with these 3 bytes)
+	if data.size() >= 3 and data[0] == 0xFF and data[1] == 0xD8 and data[2] == 0xFF:
+		return "jpeg"
+
+	# WebP: RIFF ... WEBP (check for "RIFF" at start and "WEBP" at offset 8)
+	if data.size() >= 12:
+		# Check for "RIFF" (52 49 46 46)
+		if data[0] == 0x52 and data[1] == 0x49 and data[2] == 0x46 and data[3] == 0x46:
+			# Check for "WEBP" at offset 8 (57 45 42 50)
+			if data[8] == 0x57 and data[9] == 0x45 and data[10] == 0x42 and data[11] == 0x50:
+				return "webp"
+
+	# BMP: 42 4D (hex) = "BM" (ASCII)
+	if data.size() >= 2 and data[0] == 0x42 and data[1] == 0x4D:
+		return "bmp"
+
+	return "unknown"
+
+
 func _on_file_load_started(file_name: String) -> void:
 	"""Called when file starts loading"""
 	print("[Camera] File load started: ", file_name)
@@ -118,30 +270,37 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	selected_file_name = file_name
 	selected_file_type = file_type
 
-	# Load image into RecordImage - use appropriate loader based on MIME type
-	var image := Image.new()
-	var image_error := ERR_FILE_UNRECOGNIZED
+	# Try loading image using browser's native decoder (supports all JPEG formats)
+	var image := _load_image_via_browser(base64_data, file_type)
+	var image_error := OK if image != null else ERR_FILE_UNRECOGNIZED
 
-	# Determine loader based on MIME type
-	if file_type.to_lower().contains("jpeg") or file_type.to_lower().contains("jpg"):
-		print("[Camera] Loading as JPEG based on MIME type: ", file_type)
-		image_error = image.load_jpg_from_buffer(selected_file_data)
-	elif file_type.to_lower().contains("png"):
-		print("[Camera] Loading as PNG based on MIME type: ", file_type)
-		image_error = image.load_png_from_buffer(selected_file_data)
-	elif file_type.to_lower().contains("webp"):
-		print("[Camera] Loading as WebP based on MIME type: ", file_type)
-		image_error = image.load_webp_from_buffer(selected_file_data)
-	elif file_type.to_lower().contains("bmp"):
-		print("[Camera] Loading as BMP based on MIME type: ", file_type)
-		image_error = image.load_bmp_from_buffer(selected_file_data)
-	else:
-		print("[Camera] Unknown MIME type, trying PNG then JPEG: ", file_type)
-		image_error = image.load_png_from_buffer(selected_file_data)
-		if image_error != OK:
-			image_error = image.load_jpg_from_buffer(selected_file_data)
+	# If browser decoder fails, fall back to Godot's decoders
+	if image == null:
+		print("[Camera] Browser decoder unavailable, using Godot's built-in decoders...")
+		image = Image.new()
 
-	if image_error == OK:
+		# Detect format from magic bytes (file header signatures)
+		var format := _detect_image_format(selected_file_data)
+		print("[Camera] Detected image format: ", format, " (MIME type: ", file_type, ")")
+
+		# Load using detected format
+		match format:
+			"png":
+				image_error = image.load_png_from_buffer(selected_file_data)
+			"jpeg":
+				image_error = image.load_jpg_from_buffer(selected_file_data)
+			"webp":
+				image_error = image.load_webp_from_buffer(selected_file_data)
+			"bmp":
+				image_error = image.load_bmp_from_buffer(selected_file_data)
+			_:
+				# Unknown format - try common formats
+				print("[Camera] Unknown format, trying PNG then JPEG...")
+				image_error = image.load_png_from_buffer(selected_file_data)
+				if image_error != OK:
+					image_error = image.load_jpg_from_buffer(selected_file_data)
+
+	if image_error == OK and image != null:
 		var texture := ImageTexture.create_from_image(image)
 
 		# Store image dimensions
@@ -156,13 +315,26 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 		record_image.visible = true
 		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
 	else:
-		print("[Camera] ERROR: Failed to load image for preview: ", image_error)
+		# Failed to load image for preview
+		print("[Camera] WARNING: Failed to load image for preview (error code: ", image_error, ")")
+		print("[Camera] This can happen with some JPEG files that have uncommon encoding.")
+		print("[Camera] Upload will still work - the server can handle these files.")
 
-	# Update UI
-	status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
-	status_label.add_theme_color_override("font_color", Color.GREEN)
+		# Hide preview but allow upload to continue
+		record_image.visible = false
+		simple_image.visible = false
+		bordered_container.visible = false
+
+	# Update UI based on whether preview loaded
+	if image_error == OK:
+		status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.GREEN)
+	else:
+		status_label.text = "Photo selected (preview unavailable): %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.YELLOW)
+		progress_label.text = "Preview failed, but upload will work"
+
 	upload_button.disabled = false
-	progress_label.text = ""
 
 	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
 
