@@ -73,20 +73,30 @@ client/biologidex-client/
 - Security: password fields cleared on errors, passwords redacted in logs
 - Loading states: disable all inputs during API calls
 
-**Image Upload & Preview Pattern** (camera.tscn):
+**Camera Scene & CV Integration** (camera.tscn):
 - FileAccessWeb plugin for HTML5 file selection (base64 → PackedByteArray)
-- Load image with `Image.load_png/jpg_from_buffer()` → `ImageTexture.create_from_image()`
-- AspectRatioContainer maintains image proportions: dynamically set `ratio = width / height`
-- Scene hierarchy: Control (VBox sizing) → AspectRatioContainer (fills parent, anchors) → PanelContainer (border) → TextureRect (image)
-- Hide preview by default, show after image loads
-- Supports PNG/JPG format detection
+- Editor testing mode: `OS.has_feature("editor")` loads test image from `res://resources/test_img.jpeg`
+- Two-stage image display:
+  1. Simple preview (RecordImage/Image) during upload/analysis
+  2. Bordered display (RecordImage/ImageBorderAspectRatio) after identification
+- Vision API workflow: Upload → poll job status → display animal details
+- Animal response structure: `scientific_name` (single field), `common_name`, taxonomic fields
+- Display format: "Scientific name - common name" (e.g., "Hydrochoerus hydrochaeris - capybara")
+
+**RecordImage Component** (record_image.tscn):
+- Dual image display: simple TextureRect + bordered AspectRatioContainer
+- Dynamic aspect ratio: Calculate from texture, update container ratio, set custom_minimum_size.y
+- Aspect ratio sizing: `await get_tree().process_frame` then `height = width / aspect_ratio`
+- Label overlay: "Scientific name - common name" format on bordered display
+- Image stretch modes: simple (keep aspect centered), bordered (scale to fill)
 
 **Common Gotchas**:
 - GDScript type inference: `min()`, `max()`, and `Array[T].pop_back()` return Variant - always explicitly type as `float` or `String`
+- Reserved keywords: `class_name` is reserved, use `animal_class` or similar for variables
 - `layout_mode` values: 0 = uncontrolled (no positioning), 1 = anchors, 2 = container, 3 = anchors preset only
 - Children of containers need `layout_mode = 2`, not anchors
 - AspectRatioContainer must use anchors (`layout_mode = 1`) to fill its parent Control
-- Scene hierarchy: Main (Control) → Panel → AspectRatioContainer → MarginContainer → VBoxContainer
+- Dynamic sizing: Use `await get_tree().process_frame` before reading calculated sizes
 - Touch targets must be minimum 44×44 pixels for mobile
 - MSDF fonts enable crisp rendering at all scales without rasterization
 

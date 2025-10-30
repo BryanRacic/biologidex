@@ -380,7 +380,50 @@ Create a unified theme resource:
 # - Proper touch target sizes (min 44x44 dp for mobile)
 ```
 
-### 4. Authentication Pattern
+### 4. Camera/CV Integration Pattern
+
+**Editor Testing Mode:**
+```gdscript
+# Detect editor vs export
+if OS.has_feature("editor"):
+    # Load test image from resources
+    var image := Image.new()
+    image.load("res://resources/test_img.jpeg")
+    # Process normally
+```
+
+**Two-Stage Image Display:**
+```gdscript
+# Stage 1: Simple preview during upload
+simple_image.texture = texture
+simple_image.visible = true
+bordered_container.visible = false
+
+# Stage 2: After CV identification
+bordered_image.texture = simple_image.texture
+bordered_container.ratio = img_width / img_height
+simple_image.visible = false
+bordered_container.visible = true
+
+# Update parent container size
+await get_tree().process_frame
+var required_height := available_width / aspect_ratio
+parent_control.custom_minimum_size.y = required_height
+```
+
+**Animal API Response Format:**
+```json
+{
+  "scientific_name": "Hydrochoerus hydrochaeris",
+  "common_name": "capybara",
+  "kingdom": "Animalia",
+  "phylum": "Chordata",
+  "class_name": "Mammalia"
+}
+```
+Display pattern: "Scientific name - common name"
+
+### 5. Authentication Pattern
 
 Best practices from implemented login/registration:
 
@@ -510,11 +553,13 @@ func _ready():
   - [x] Registration scene with auto-login
   - [x] API integration (login, register, refresh)
   - [x] Token persistence and auto-refresh
-- [x] Camera/Photo upload scene
+- [x] Camera/Photo upload scene (✅ COMPLETED)
   - [x] FileAccessWeb integration for HTML5 file selection
-  - [x] Image preview with AspectRatioContainer
+  - [x] Editor testing mode with test image loading
+  - [x] Two-stage image display (simple → bordered after identification)
   - [x] RecordImage component with dynamic aspect ratio
   - [x] Vision API integration with async job polling
+  - [x] Animal information display (scientific name - common name)
 - [ ] Home screen with navigation
 - [ ] Basic profile view
 - [ ] Dex entry creation flow (post-CV identification)
