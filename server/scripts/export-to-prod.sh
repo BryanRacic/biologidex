@@ -127,6 +127,93 @@ export_godot_project() {
     log "Export verification passed"
 }
 
+# Post-process exported files (fix PWA issues)
+post_process_export() {
+    log "Post-processing exported files..."
+
+    cd "$EXPORT_DIR"
+
+    # Fix 1: Update service worker to cache itself (Godot bug fix)
+    if [ -f "index.service.worker.js" ]; then
+        log "Fixing service worker CACHED_FILES bug..."
+
+        # Add index.service.worker.js to CACHED_FILES array if not present
+        if ! grep -q '"index.service.worker.js"' index.service.worker.js; then
+            sed -i.bak 's/\("index.audio.position.worklet.js"\)\]/\1,"index.service.worker.js"]/' index.service.worker.js
+            log "Service worker patched: added self to CACHED_FILES"
+        else
+            info "Service worker already includes itself in cache"
+        fi
+    else
+        warning "Service worker file not found, skipping patch"
+    fi
+
+    # Fix 2: Enhance manifest.json with PWA requirements
+    if [ -f "index.manifest.json" ]; then
+        log "Enhancing PWA manifest..."
+
+        # Create improved manifest with all required fields
+        cat > index.manifest.json << 'EOF'
+{
+  "name": "BiologiDex",
+  "short_name": "BiologiDex",
+  "description": "Catch and collect real-world animals in your personal Pokedex",
+  "start_url": "./index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#4CAF50",
+  "icons": [
+    {
+      "src": "index.144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "index.180x180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "index.512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "index.512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "BiologiDex application"
+    },
+    {
+      "src": "index.512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "BiologiDex mobile view"
+    }
+  ],
+  "categories": ["games", "education"]
+}
+EOF
+        log "PWA manifest enhanced with screenshots and metadata"
+    else
+        warning "Manifest file not found, skipping enhancement"
+    fi
+
+    # Clean up backup files
+    rm -f *.bak
+
+    log "Post-processing completed"
+}
+
 # Backup current deployment
 backup_current_deployment() {
     if [ -d "$CLIENT_FILES_DIR" ]; then
@@ -313,6 +400,7 @@ main() {
     # Run export steps
     pre_export_checks
     export_godot_project
+    post_process_export
     backup_current_deployment
     deploy_client_files
     optimize_assets

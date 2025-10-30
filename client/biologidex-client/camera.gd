@@ -24,7 +24,6 @@ var current_job_id: String = ""
 var status_check_timer: Timer
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
-var pending_base64_data: String = ""  # For browser decoder callback
 
 
 func _ready() -> void:
@@ -103,253 +102,6 @@ func _on_select_photo_pressed() -> void:
 	file_access_web.open("image/*")
 
 
-func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
-	"""
-	Re-encode image as JPEG using browser's native decoder via JavaScriptBridge.
-	This converts problematic JPEG files into standard JPEG format that Godot can load reliably.
-	Also resizes large images to max 2048px to reduce data transfer overhead.
-	Returns null and starts async conversion.
-	"""
-	# Only available on Web platform
-	if OS.get_name() != "Web":
-		return null
-
-	print("[Camera] Starting browser image re-encoding (problematic JPEG → standard JPEG)...")
-
-	# Store base64 data for callback reference
-	pending_base64_data = base64_data
-
-	# Create data URL
-	var data_url := "data:%s;base64,%s" % [mime_type, base64_data]
-
-	# Inject helper function into global scope if not already present
-	JavaScriptBridge.eval("""
-		if (typeof window._godot_reencode_image === 'undefined') {
-			window._godot_reencode_image = function(dataUrl, callback) {
-				console.log('[Browser] _godot_reencode_image called');
-				console.log('[Browser] callback type:', typeof callback);
-				const img = new Image();
-
-				img.onload = function() {
-					try {
-						// Resize large images to max 2048px to reduce data transfer
-						let targetWidth = img.width;
-						let targetHeight = img.height;
-						const maxDimension = 2048;
-
-						if (targetWidth > maxDimension || targetHeight > maxDimension) {
-							const scale = maxDimension / Math.max(targetWidth, targetHeight);
-							targetWidth = Math.floor(targetWidth * scale);
-							targetHeight = Math.floor(targetHeight * scale);
-							console.log('[Browser] Resizing from', img.width, 'x', img.height, 'to', targetWidth, 'x', targetHeight);
-						}
-
-						// Create canvas to re-render the image
-						const canvas = document.createElement('canvas');
-						canvas.width = targetWidth;
-						canvas.height = targetHeight;
-
-						const ctx = canvas.getContext('2d');
-						ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-						// Convert to JPEG (much smaller than PNG, and Godot can load it)
-						// Use quality 0.92 for good quality with reasonable size
-						const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-
-						// Extract base64 from data:image/jpeg;base64,XXXXX
-						const base64 = jpegDataUrl.split(',')[1];
-
-						console.log('[Browser] Re-encoded image as JPEG:', targetWidth, 'x', targetHeight);
-						console.log('[Browser] Base64 length:', base64.length, 'chars (~', Math.round(base64.length/1024), 'KB)');
-						console.log('[Browser] Calling Godot callback...');
-						callback(base64);
-						console.log('[Browser] Callback invoked successfully');
-					} catch (e) {
-						console.error('[Browser] Canvas error:', e);
-						callback('');  // Error result
-					}
-				};
-
-				img.onerror = function() {
-					console.error('[Browser] Failed to load image');
-					callback('');  // Error result
-				};
-
-				img.src = dataUrl;
-			};
-		}
-	""", true)
-
-	# Create callback for when image is re-encoded
-	var callback := JavaScriptBridge.create_callback(_on_browser_image_reencoded)
-
-	# Start re-encoding (this is asynchronous in JavaScript)
-	var js_window = JavaScriptBridge.get_interface("window")
-	js_window._godot_reencode_image(data_url, callback)
-
-	# Return null - actual processing happens in callback
-	return null
-
-
-func _on_browser_image_reencoded(args: Array) -> void:
-	"""Callback when browser finishes re-encoding the image as JPEG"""
-	print("[Camera] === Browser callback received! ===")
-	print("[Camera] Callback args size: ", args.size())
-
-	if args.size() < 1:
-		print("[Camera] ERROR: Browser re-encoder callback has invalid args")
-		_on_browser_reencode_failed()
-		return
-
-	var jpeg_base64: String = str(args[0])
-	print("[Camera] Received JPEG base64 length: ", jpeg_base64.length(), " chars (~", jpeg_base64.length() / 1024, " KB)")
-
-	if jpeg_base64.length() == 0:
-		print("[Camera] ERROR: Browser re-encoder returned empty string")
-		_on_browser_reencode_failed()
-		return
-
-	print("[Camera] Browser re-encoded image to JPEG (", jpeg_base64.length(), " chars)")
-
-	# Convert base64 to binary
-	var jpeg_data := Marshalls.base64_to_raw(jpeg_base64)
-	print("[Camera] Converted to binary: ", jpeg_data.size(), " bytes (~", jpeg_data.size() / 1024, " KB)")
-
-	# Load with Godot's JPEG decoder (browser re-encoded to standard JPEG)
-	var image := Image.new()
-	var image_error := image.load_jpg_from_buffer(jpeg_data)
-
-	if image_error != OK:
-		print("[Camera] ERROR: Failed to load re-encoded JPEG, error code: ", image_error)
-		_on_browser_reencode_failed()
-		return
-
-	print("[Camera] ✓ Successfully loaded re-encoded JPEG!")
-	print("[Camera] Image size: ", image.get_width(), "x", image.get_height())
-
-	# Create texture and display
-	var texture := ImageTexture.create_from_image(image)
-	print("[Camera] ✓ Created texture from image")
-
-	# Store image dimensions
-	current_image_width = float(image.get_width())
-	current_image_height = float(image.get_height())
-	print("[Camera] Stored dimensions: ", current_image_width, "x", current_image_height)
-
-	# Show simple preview (no border) on initial load
-	simple_image.texture = texture
-	simple_image.visible = true
-	bordered_container.visible = false
-	record_image.visible = true
-	print("[Camera] ✓ Updated UI - simple_image visible, record_image visible")
-
-	# Update status
-	status_label.text = "Photo selected: %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
-	status_label.add_theme_color_override("font_color", Color.GREEN)
-	progress_label.text = ""
-
-	print("[Camera] === Browser re-encoding completed successfully ===")
-
-
-func _on_browser_reencode_failed() -> void:
-	"""Called when browser re-encoding fails - continue with fallback"""
-	print("[Camera] Falling back to Godot's built-in decoder...")
-	_load_image_with_godot_decoder()
-
-
-func _load_image_with_godot_decoder() -> void:
-	"""Load image using Godot's built-in decoders (fallback method)"""
-	var image := Image.new()
-	var image_error := ERR_FILE_UNRECOGNIZED
-
-	# Detect format from magic bytes (file header signatures)
-	var format := _detect_image_format(selected_file_data)
-	print("[Camera] Detected image format: ", format, " (MIME type: ", selected_file_type, ")")
-
-	# Load using detected format
-	match format:
-		"png":
-			image_error = image.load_png_from_buffer(selected_file_data)
-		"jpeg":
-			image_error = image.load_jpg_from_buffer(selected_file_data)
-		"webp":
-			image_error = image.load_webp_from_buffer(selected_file_data)
-		"bmp":
-			image_error = image.load_bmp_from_buffer(selected_file_data)
-		_:
-			# Unknown format - try common formats
-			print("[Camera] Unknown format, trying PNG then JPEG...")
-			image_error = image.load_png_from_buffer(selected_file_data)
-			if image_error != OK:
-				image_error = image.load_jpg_from_buffer(selected_file_data)
-
-	if image_error == OK and image != null:
-		var texture := ImageTexture.create_from_image(image)
-
-		# Store image dimensions
-		current_image_width = float(image.get_width())
-		current_image_height = float(image.get_height())
-
-		# Show simple preview (no border) on initial load
-		simple_image.texture = texture
-		simple_image.visible = true
-		bordered_container.visible = false
-
-		record_image.visible = true
-		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
-
-		# Update UI
-		status_label.text = "Photo selected: %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
-		status_label.add_theme_color_override("font_color", Color.GREEN)
-		progress_label.text = ""
-	else:
-		# Failed to load image for preview
-		print("[Camera] WARNING: Failed to load image for preview (error code: ", image_error, ")")
-		print("[Camera] This can happen with some JPEG files that have uncommon encoding.")
-		print("[Camera] Upload will still work - the server can handle these files.")
-
-		# Hide preview but allow upload to continue
-		record_image.visible = false
-		simple_image.visible = false
-		bordered_container.visible = false
-
-		# Update UI
-		status_label.text = "Photo selected (preview unavailable): %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
-		status_label.add_theme_color_override("font_color", Color.YELLOW)
-		progress_label.text = "Preview failed, but upload will work"
-
-	upload_button.disabled = false
-	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
-
-
-func _detect_image_format(data: PackedByteArray) -> String:
-	"""Detect image format from magic bytes (file header signature)"""
-	if data.size() < 4:
-		return "unknown"
-
-	# PNG: 89 50 4E 47 (hex) = 137 80 78 71 (decimal)
-	if data.size() >= 4 and data[0] == 0x89 and data[1] == 0x50 and data[2] == 0x4E and data[3] == 0x47:
-		return "png"
-
-	# JPEG: FF D8 FF (all JPEG variants start with these 3 bytes)
-	if data.size() >= 3 and data[0] == 0xFF and data[1] == 0xD8 and data[2] == 0xFF:
-		return "jpeg"
-
-	# WebP: RIFF ... WEBP (check for "RIFF" at start and "WEBP" at offset 8)
-	if data.size() >= 12:
-		# Check for "RIFF" (52 49 46 46)
-		if data[0] == 0x52 and data[1] == 0x49 and data[2] == 0x46 and data[3] == 0x46:
-			# Check for "WEBP" at offset 8 (57 45 42 50)
-			if data[8] == 0x57 and data[9] == 0x45 and data[10] == 0x42 and data[11] == 0x50:
-				return "webp"
-
-	# BMP: 42 4D (hex) = "BM" (ASCII)
-	if data.size() >= 2 and data[0] == 0x42 and data[1] == 0x4D:
-		return "bmp"
-
-	return "unknown"
-
-
 func _on_file_load_started(file_name: String) -> void:
 	"""Called when file starts loading"""
 	print("[Camera] File load started: ", file_name)
@@ -366,20 +118,53 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	selected_file_name = file_name
 	selected_file_type = file_type
 
-	# On Web platform, try browser re-encoding first (async)
-	if OS.get_name() == "Web":
-		print("[Camera] Web platform detected - using browser re-encoding...")
-		_load_image_via_browser(base64_data, file_type)
-		# Callback will handle the rest - don't continue here
-		# Still enable upload button so user can proceed even if preview fails
-		upload_button.disabled = false
-		status_label.text = "Loading preview..."
-		status_label.add_theme_color_override("font_color", Color.WHITE)
-		return
+	# Load image into RecordImage - use appropriate loader based on MIME type
+	var image := Image.new()
+	var image_error := ERR_FILE_UNRECOGNIZED
 
-	# Non-web platform: Use Godot's built-in decoders
-	print("[Camera] Non-web platform, using Godot's built-in decoders...")
-	_load_image_with_godot_decoder()
+	# Determine loader based on MIME type
+	if file_type.to_lower().contains("jpeg") or file_type.to_lower().contains("jpg"):
+		print("[Camera] Loading as JPEG based on MIME type: ", file_type)
+		image_error = image.load_jpg_from_buffer(selected_file_data)
+	elif file_type.to_lower().contains("png"):
+		print("[Camera] Loading as PNG based on MIME type: ", file_type)
+		image_error = image.load_png_from_buffer(selected_file_data)
+	elif file_type.to_lower().contains("webp"):
+		print("[Camera] Loading as WebP based on MIME type: ", file_type)
+		image_error = image.load_webp_from_buffer(selected_file_data)
+	elif file_type.to_lower().contains("bmp"):
+		print("[Camera] Loading as BMP based on MIME type: ", file_type)
+		image_error = image.load_bmp_from_buffer(selected_file_data)
+	else:
+		print("[Camera] Unknown MIME type, trying PNG then JPEG: ", file_type)
+		image_error = image.load_png_from_buffer(selected_file_data)
+		if image_error != OK:
+			image_error = image.load_jpg_from_buffer(selected_file_data)
+
+	if image_error == OK:
+		var texture := ImageTexture.create_from_image(image)
+
+		# Store image dimensions
+		current_image_width = float(image.get_width())
+		current_image_height = float(image.get_height())
+
+		# Show simple preview (no border) on initial load
+		simple_image.texture = texture
+		simple_image.visible = true
+		bordered_container.visible = false
+
+		record_image.visible = true
+		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
+	else:
+		print("[Camera] ERROR: Failed to load image for preview: ", image_error)
+
+	# Update UI
+	status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
+	status_label.add_theme_color_override("font_color", Color.GREEN)
+	upload_button.disabled = false
+	progress_label.text = ""
+
+	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
 
 
 func _on_file_progress(current_bytes: int, total_bytes: int) -> void:
