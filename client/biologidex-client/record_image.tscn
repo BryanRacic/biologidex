@@ -1,0 +1,65 @@
+[gd_scene load_steps=5 format=3 uid="uid://cwxkm5mw4opxq"]
+
+[ext_resource type="Texture2D" uid="uid://de58e6gkmcrfw" path="res://resources/test_img.jpeg" id="1_yeq50"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yeq50"]
+border_width_left = 20
+border_width_top = 20
+border_width_right = 20
+border_width_bottom = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_eheay"]
+bg_color = Color(0.9605384, 1.007952, 0.9881963, 0.88235295)
+expand_margin_right = 20.0
+
+[sub_resource type="LabelSettings" id="LabelSettings_yeq50"]
+font_color = Color(0, 0, 0, 1)
+
+[node name="RecordImage" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+size_flags_horizontal = 3
+
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+ratio = 1.5
+
+[node name="ImageBorder" type="PanelContainer" parent="AspectRatioContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_yeq50")
+
+[node name="Image" type="TextureRect" parent="AspectRatioContainer/ImageBorder"]
+layout_mode = 2
+texture = ExtResource("1_yeq50")
+expand_mode = 3
+stretch_mode = 5
+
+[node name="RecordMargin" type="MarginContainer" parent="AspectRatioContainer/ImageBorder"]
+layout_mode = 2
+theme_override_constants/margin_bottom = 25
+
+[node name="RecordBackground" type="PanelContainer" parent="AspectRatioContainer/ImageBorder/RecordMargin"]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 8
+theme_override_styles/panel = SubResource("StyleBoxFlat_eheay")
+
+[node name="RecordTextMargin" type="MarginContainer" parent="AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground"]
+layout_mode = 2
+theme_override_constants/margin_left = 25
+theme_override_constants/margin_top = 25
+theme_override_constants/margin_right = 25
+theme_override_constants/margin_bottom = 25
+
+[node name="RecordLabel" type="Label" parent="AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
+layout_mode = 2
+text = "common name (genus, species)
+insert cool fun fact here
+first name, last name"
+label_settings = SubResource("LabelSettings_yeq50")

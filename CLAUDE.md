@@ -3,11 +3,12 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
 
-## Current Status (Updated 2025-10-29)
+## Current Status (Updated 2025-10-30)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
 - ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
+- ✅ **Authentication**: Login and registration flows implemented in Godot client
 - ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
 - ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
 - ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
@@ -27,8 +28,13 @@ A Pokedex-style social network for sharing real-world zoological observations. U
 ```
 client/biologidex-client/
 ├── main.tscn                    # Main responsive scene
-├── responsive.gd                # Base responsive behavior script
+├── login.tscn / login.gd        # Login scene with token refresh
+├── create_acct.tscn / create_account.gd  # Registration scene
+├── home.tscn                    # Main app scene (post-auth)
+├── api_manager.gd               # Global HTTP API singleton (autoload)
+├── token_manager.gd             # JWT token persistence (autoload)
 ├── navigation_manager.gd        # Navigation singleton (autoload)
+├── responsive.gd                # Base responsive behavior script
 ├── responsive_container.gd      # Auto-margin container class
 ├── theme.tres                   # Base theme resource
 ├── project.godot                # Project configuration
@@ -55,6 +61,15 @@ client/biologidex-client/
 - Scene validation before navigation
 - Back navigation support with `go_back()`
 - Signals: `scene_changed`, `navigation_failed`
+
+**Authentication Flow**:
+- APIManager provides `login()` and `register()` methods
+- Registration endpoint: `POST /users/` (username, email, password, password_confirm)
+- Successful registration → auto-login → navigate to home with cleared history
+- Form validation pattern: client-side checks before API call
+- Error handling: parse field-specific errors from API response arrays
+- Security: password fields cleared on errors, passwords redacted in logs
+- Loading states: disable all inputs during API calls
 
 **Common Gotchas**:
 - GDScript type inference: `min()`, `max()`, and `Array[T].pop_back()` return Variant - always explicitly type as `float` or `String`
@@ -537,10 +552,11 @@ docker-compose -f docker-compose.production.yml ps        # Check status
 ## Next Steps
 
 ### Frontend - Phase 2: Core Pages
-- Login/Registration scenes (connect to `/api/v1/auth/`)
+- ✅ Login/Registration scenes (connect to `/api/v1/auth/`)
 - Home screen with tab navigation (Dex, Camera, Tree, Social)
 - Profile view with stats and badges
 - Camera integration placeholder
+- Dex entry creation flow (capture → identify → create entry)
 
 ### Backend - Future Phases
 - Enhanced CV pipeline (multiple providers)

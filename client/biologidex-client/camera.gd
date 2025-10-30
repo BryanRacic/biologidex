@@ -10,6 +10,9 @@ extends Control
 @onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/LoadingSpinner
 @onready var result_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ResultLabel
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+@onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
+@onready var aspect_ratio_container: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer
+@onready var record_texture: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer/ImageBorder/Image
 
 var file_access_web: FileAccessWeb
 var selected_file_name: String = ""
@@ -61,6 +64,7 @@ func _reset_ui() -> void:
 	"""Reset UI to initial state"""
 	upload_button.disabled = true
 	loading_spinner.visible = false
+	record_image.visible = false
 	progress_label.text = ""
 	status_label.text = "Select a photo to identify an animal"
 	status_label.add_theme_color_override("font_color", Color.WHITE)
@@ -95,6 +99,29 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	selected_file_data = Marshalls.base64_to_raw(base64_data)
 	selected_file_name = file_name
 	selected_file_type = file_type
+
+	# Load image into RecordImage
+	var image := Image.new()
+	var image_error := image.load_png_from_buffer(selected_file_data)
+	if image_error != OK:
+		image_error = image.load_jpg_from_buffer(selected_file_data)
+
+	if image_error == OK:
+		var texture := ImageTexture.create_from_image(image)
+		record_texture.texture = texture
+
+		# Update aspect ratio container to match image
+		var img_width: float = float(image.get_width())
+		var img_height: float = float(image.get_height())
+		if img_height > 0.0:
+			var aspect_ratio: float = img_width / img_height
+			aspect_ratio_container.ratio = aspect_ratio
+			print("[Camera] Image aspect ratio: ", aspect_ratio)
+
+		record_image.visible = true
+		print("[Camera] Image loaded into preview")
+	else:
+		print("[Camera] ERROR: Failed to load image for preview: ", image_error)
 
 	# Update UI
 	status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]

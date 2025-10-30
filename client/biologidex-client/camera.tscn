@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3 uid="uid://camera_scene"]
+[gd_scene load_steps=4 format=3 uid="uid://b12e8gabmy5f0"]
 
-[ext_resource type="Script" path="res://camera.gd" id="1_camera"]
+[ext_resource type="Script" uid="uid://bnhw66vr8io5a" path="res://camera.gd" id="1_camera"]
+[ext_resource type="Script" uid="uid://b3yrk8spm44x" path="res://navigation_manager.gd" id="2_diie0"]
+[ext_resource type="PackedScene" uid="uid://cwxkm5mw4opxq" path="res://record_image.tscn" id="3_qqjab"]
 
 [node name="Camera" type="Control"]
 layout_mode = 3
@@ -71,9 +73,14 @@ theme_override_constants/margin_bottom = 20
 
 [node name="ContentContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin"]
 layout_mode = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_constants/separation = 20
+script = ExtResource("2_diie0")
+
+[node name="RecordImage" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer" instance=ExtResource("3_qqjab")]
+custom_minimum_size = Vector2(0, 300)
+layout_mode = 2
 
 [node name="InstructionLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2
@@ -113,3 +120,6 @@ horizontal_alignment = 1
 layout_mode = 2
 horizontal_alignment = 1
 autowrap_mode = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+layout_mode = 2

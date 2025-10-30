@@ -29,12 +29,14 @@ Then access: http://localhost:8080/biologidex-client.html
 ## Table of Contents
 1. [Project Structure](#project-structure)
 2. [Current Implementation Analysis](#current-implementation-analysis)
-3. [Responsive Design Best Practices](#responsive-design-best-practices)
-4. [Recommended Improvements](#recommended-improvements)
-5. [Implementation Guidelines](#implementation-guidelines)
-6. [Testing Strategy](#testing-strategy)
-7. [Platform-Specific Considerations](#platform-specific-considerations)
-8. [Development Roadmap](#development-roadmap)
+3. [Authentication Implementation](#authentication-implementation--completed)
+4. [Responsive Design Best Practices](#responsive-design-best-practices)
+5. [Recommended Improvements](#recommended-improvements)
+6. [Implementation Guidelines](#implementation-guidelines)
+7. [Testing Strategy](#testing-strategy)
+8. [Platform-Specific Considerations](#platform-specific-considerations)
+9. [Development Roadmap](#development-roadmap)
+10. [Quick Reference: Using Authenticated Endpoints](#quick-reference-using-authenticated-endpoints)
 
 ## Project Structure
 
@@ -44,6 +46,17 @@ client/
 │   ├── .godot/               # Engine cache (git-ignored)
 │   ├── icon.svg              # Application icon
 │   ├── main.tscn             # Main scene file
+│   ├── login.tscn            # Login scene
+│   ├── login.gd              # Login logic with token refresh
+│   ├── create_acct.tscn      # Registration scene
+│   ├── create_account.gd     # Registration logic with auto-login
+│   ├── home.tscn             # Main app scene (post-auth)
+│   ├── api_manager.gd        # HTTP API singleton (autoload)
+│   ├── token_manager.gd      # JWT token persistence (autoload)
+│   ├── navigation_manager.gd # Navigation singleton (autoload)
+│   ├── responsive.gd         # Responsive behavior base script
+│   ├── responsive_container.gd # Auto-margin container class
+│   ├── theme.tres            # Base theme resource
 │   └── project.godot         # Project configuration
 └── README.md                 # This file
 ```
@@ -64,6 +77,52 @@ client/
 3. **Missing Scripts**: No GDScript attached for dynamic responsive behavior
 
 4. **Incomplete UI Implementation**: Only skeleton UI without actual functionality
+
+## Authentication Implementation (✅ COMPLETED)
+
+### Login Flow
+- **Scene**: `login.tscn` / `login.gd`
+- **Features**:
+  - Username/password authentication via `/api/v1/auth/login/`
+  - Automatic token refresh on app launch
+  - JWT token persistence via `TokenManager`
+  - Form validation with user feedback
+  - Loading states with disabled inputs
+  - Navigation to create account screen
+- **Security**: Passwords cleared on failed login, redacted in logs
+
+### Registration Flow
+- **Scene**: `create_acct.tscn` / `create_account.gd`
+- **Features**:
+  - Account creation via `/api/v1/users/` endpoint
+  - Required fields: username, email, password, password_confirm
+  - Client-side validation:
+    - Email format validation
+    - Username minimum length (3 chars)
+    - Password minimum length (8 chars)
+    - Password confirmation matching
+  - Server-side error handling with field-specific messages
+  - Automatic login after successful registration
+  - Navigation to home screen after auth
+- **Security**: Password fields cleared on errors, passwords redacted in logs
+
+### API Integration
+- **Singleton**: `APIManager` (autoload)
+- **Endpoints**:
+  - `login()` - POST /auth/login/
+  - `register()` - POST /users/
+  - `refresh_token()` - POST /auth/refresh/
+- **Pattern**: Callback-based async requests with response code handling
+- **Base URL**: https://biologidex.io/api/v1
+
+### Token Management
+- **Singleton**: `TokenManager` (autoload)
+- **Storage**: Browser localStorage (web), encrypted file (native)
+- **Features**:
+  - JWT access/refresh token persistence
+  - Automatic token refresh
+  - User data caching
+  - Session validation
 
 ## Responsive Design Best Practices
 
@@ -199,32 +258,41 @@ func _update_responsive_layout():
 
 For each page listed in requirements:
 
-#### 1. Create Account Page
+#### 1. Create Account Page (✅ IMPLEMENTED)
 ```
-create_account.tscn
-├── VBoxContainer
-│   ├── HeaderLabel ("Create Account")
-│   ├── ScrollContainer
-│   │   └── FormContainer
-│   │       ├── UsernameInput
-│   │       ├── EmailInput
-│   │       ├── PasswordInput
-│   │       ├── ConfirmPasswordInput
-│   │       └── CreateButton
-│   └── LinkToLogin
+create_acct.tscn
+├── Panel
+│   └── MarginContainer
+│       └── VBoxContainer
+│           ├── Header (Title + Subtitle)
+│           ├── HSeparator
+│           └── Content (ScrollContainer)
+│               └── CreateAcctForm
+│                   ├── EmailField
+│                   ├── UsernameField
+│                   ├── PasswordField
+│                   ├── ConfirmPasswordField
+│                   ├── StatusLabel
+│                   ├── LoadingSpinner
+│                   └── CreateAcctButton
 ```
 
-#### 2. Login Page
+#### 2. Login Page (✅ IMPLEMENTED)
 ```
 login.tscn
-├── CenterContainer
-│   └── PanelContainer
+├── Panel
+│   └── MarginContainer
 │       └── VBoxContainer
-│           ├── Logo
-│           ├── UsernameInput
-│           ├── PasswordInput
-│           ├── LoginButton
-│           └── CreateAccountLink
+│           ├── Header (Title + Subtitle)
+│           ├── HSeparator
+│           └── Content (ScrollContainer)
+│               └── LoginForm
+│                   ├── CreateAcctButton
+│                   ├── UsernameField
+│                   ├── PasswordField
+│                   ├── StatusLabel
+│                   ├── LoadingSpinner
+│                   └── LoginButton
 ```
 
 #### 3. Home/Main Navigation
@@ -309,6 +377,64 @@ Create a unified theme resource:
 # - Proper touch target sizes (min 44x44 dp for mobile)
 ```
 
+### 4. Authentication Pattern
+
+Best practices from implemented login/registration:
+
+```gdscript
+# Form validation pattern
+func _on_submit_button_pressed() -> void:
+    if is_loading:
+        return
+
+    # 1. Get and strip input values
+    var field_value := input_field.text.strip_edges()
+
+    # 2. Validate client-side
+    if field_value.length() == 0:
+        _show_error("Field is required")
+        input_field.grab_focus()
+        return
+
+    # 3. Set loading state (disable inputs)
+    _set_loading(true, "Processing...")
+
+    # 4. Make API call with callback
+    APIManager.some_endpoint(field_value, func(response: Dictionary, code: int):
+        if code == 200:
+            # Success path
+            _handle_success(response)
+        else:
+            # Error handling with field-specific messages
+            var error_message := _parse_error_response(response, code)
+            _show_error(error_message)
+            _set_loading(false)
+    )
+
+# Error parsing pattern
+func _parse_error_response(response: Dictionary, code: int) -> String:
+    # Check for field-specific errors (arrays)
+    if response.has("field_name"):
+        var errors = response["field_name"]
+        if typeof(errors) == TYPE_ARRAY and errors.size() > 0:
+            return "Field: " + str(errors[0])
+    # Fallback to general errors
+    elif response.has("detail"):
+        return str(response["detail"])
+    elif code == 0:
+        return "Cannot connect to server"
+    return "Request failed"
+
+# Loading state pattern
+func _set_loading(loading: bool, message: String = "") -> void:
+    is_loading = loading
+    loading_spinner.visible = loading
+    submit_button.disabled = loading
+    # Disable all input fields
+    for field in input_fields:
+        field.editable = not loading
+```
+
 ## Testing Strategy
 
 ### Resolution Testing Matrix
@@ -375,11 +501,16 @@ func _ready():
 - [x] Create navigation system
 - [x] Setup theme resource
 
-### Phase 2: Core Pages
-- [ ] Login/Registration flow
+### Phase 2: Core Pages (IN PROGRESS)
+- [x] Login/Registration flow
+  - [x] Login scene with JWT token management
+  - [x] Registration scene with auto-login
+  - [x] API integration (login, register, refresh)
+  - [x] Token persistence and auto-refresh
 - [ ] Home screen with navigation
 - [ ] Basic profile view
 - [ ] Camera integration placeholder
+- [ ] Dex entry creation flow (capture → identify → create entry)
 
 ### Phase 3: Features
 - [ ] Animal dex listing
@@ -444,21 +575,103 @@ func _ready():
    # Verify on mobile preview
    ```
 
+## Quick Reference: Using Authenticated Endpoints
+
+Now that authentication is implemented, here's how to use it in new pages:
+
+### Making Authenticated API Calls
+
+```gdscript
+# Example: Fetching user's dex entries
+func fetch_my_dex_entries() -> void:
+    # Get access token from TokenManager
+    var token := TokenManager.get_access_token()
+
+    if token.length() == 0:
+        # User not logged in, redirect to login
+        NavigationManager.navigate_to("res://login.tscn")
+        return
+
+    # Make API call with token
+    var url := APIManager.BASE_URL + "/dex/entries/my_entries/"
+    var headers := ["Authorization: Bearer %s" % token]
+
+    http_request.request(url, headers, HTTPClient.METHOD_GET)
+
+# Example: Creating a new dex entry
+func create_dex_entry(animal_id: String, image_data: PackedByteArray) -> void:
+    var token := TokenManager.get_access_token()
+
+    if token.length() == 0:
+        _handle_unauthorized()
+        return
+
+    # Use APIManager pattern with token
+    # (Add method to APIManager for consistency)
+```
+
+### Handling Token Expiration
+
+```gdscript
+# In your scene's API callback:
+func _on_api_response(response: Dictionary, code: int) -> void:
+    if code == 401:
+        # Token expired, try refresh
+        TokenManager.refresh_access_token(func(success: bool, error: String):
+            if success:
+                # Retry original request
+                _retry_request()
+            else:
+                # Refresh failed, redirect to login
+                NavigationManager.navigate_to("res://login.tscn", true)
+        )
+    else:
+        # Handle normal response
+        _process_response(response)
+```
+
+### Navigation with Auth Check
+
+```gdscript
+# Create helper function in NavigationManager:
+func navigate_to_protected(scene_path: String) -> void:
+    if not TokenManager.has_access_token():
+        # Save intended destination
+        set_meta("redirect_after_login", scene_path)
+        navigate_to("res://login.tscn")
+    else:
+        navigate_to(scene_path)
+
+# After successful login in login.gd:
+if NavigationManager.has_meta("redirect_after_login"):
+    var redirect := NavigationManager.get_meta("redirect_after_login")
+    NavigationManager.remove_meta("redirect_after_login")
+    NavigationManager.navigate_to(redirect)
+else:
+    NavigationManager.navigate_to("res://home.tscn")
+```
+
 ## Conclusion
 
-The current implementation needs significant restructuring to properly support responsive design across multiple platforms. The primary issues are:
+The BiologiDex client now has a solid foundation with:
 
-1. Non-standard base resolution (1320×2868)
-2. Missing responsive layout components (AspectRatioContainer, proper anchoring)
-3. No dynamic scaling logic
-4. Incomplete scene structure
+✅ **Authentication System**: Complete login/registration flow with JWT token management
+✅ **API Integration**: RESTful API communication with the Django backend
+✅ **Responsive Design**: Foundation for multi-platform support
+✅ **Navigation System**: Scene management with history stack
 
-Following this guide's recommendations will create a robust, responsive UI that works seamlessly across mobile, tablet, and desktop platforms. The key is using Godot's container system properly, setting appropriate base resolutions, and implementing dynamic scaling based on viewport changes.
+### Current Status
+Phase 1 (Foundation) and Phase 2 (Authentication) are complete. The app is ready for:
+- Home screen implementation
+- Camera/photo capture integration
+- Dex entry creation workflow
+- Profile and social features
 
-Priority should be given to:
-1. Fixing the project settings
-2. Implementing the proper scene structure
-3. Adding responsive behavior scripts
-4. Testing across target resolutions
+### Development Priorities
+1. ✅ Authentication and API integration (COMPLETED)
+2. Home screen with tab navigation (NEXT)
+3. Camera integration and image upload
+4. Dex entry creation flow
+5. Testing across target resolutions and platforms
 
-This will provide a solid foundation for implementing all the required pages and features listed in the original requirements.
+The authentication patterns established (form validation, error handling, loading states, token management) should be followed for all future API-connected features to maintain consistency and reliability.
