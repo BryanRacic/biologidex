@@ -22,6 +22,8 @@ var selected_file_type: String = ""
 var selected_file_data: PackedByteArray = PackedByteArray()
 var current_job_id: String = ""
 var status_check_timer: Timer
+var current_image_width: float = 0.0
+var current_image_height: float = 0.0
 
 
 func _ready() -> void:
@@ -125,13 +127,17 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	if image_error == OK:
 		var texture := ImageTexture.create_from_image(image)
 
+		# Store image dimensions
+		current_image_width = float(image.get_width())
+		current_image_height = float(image.get_height())
+
 		# Show simple preview (no border) on initial load
 		simple_image.texture = texture
 		simple_image.visible = true
 		bordered_container.visible = false
 
 		record_image.visible = true
-		print("[Camera] Image loaded into simple preview")
+		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
 	else:
 		print("[Camera] ERROR: Failed to load image for preview: ", image_error)
 
@@ -192,12 +198,17 @@ func _load_test_image() -> void:
 
 	# Display in simple preview (no border) on initial load
 	var texture := ImageTexture.create_from_image(image)
+
+	# Store image dimensions
+	current_image_width = float(image.get_width())
+	current_image_height = float(image.get_height())
+
 	simple_image.texture = texture
 	simple_image.visible = true
 	bordered_container.visible = false
 
 	record_image.visible = true
-	print("[Camera] Test image loaded into simple preview")
+	print("[Camera] Test image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
 
 	# Update UI
 	status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
@@ -212,12 +223,23 @@ func _update_record_image_size() -> void:
 	# Get the available width from the parent container
 	var available_width: float = float(record_image.get_parent_control().size.x)
 
+	# Cap width at actual image width (don't upscale beyond native resolution)
+	var max_width: float = current_image_width
+	var display_width: float = min(available_width, max_width)
+
 	# Calculate required height based on aspect ratio
 	var aspect_ratio: float = bordered_container.ratio
 	if aspect_ratio > 0.0:
-		var required_height: float = available_width / aspect_ratio
-		record_image.custom_minimum_size.y = required_height
-		print("[Camera] Updated RecordImage size - Width: ", available_width, " Height: ", required_height, " Ratio: ", aspect_ratio)
+		var required_height: float = display_width / aspect_ratio
+		record_image.custom_minimum_size = Vector2(display_width, required_height)
+
+		# Center the image if it's smaller than available width
+		if display_width < available_width:
+			record_image.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		else:
+			record_image.size_flags_horizontal = Control.SIZE_FILL
+
+		print("[Camera] Updated RecordImage size - Available: ", available_width, " Display: ", display_width, " Height: ", required_height)
 
 
 func _on_upload_pressed() -> void:
