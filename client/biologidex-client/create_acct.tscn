@@ -1,4 +1,6 @@
-[gd_scene format=3 uid="uid://makmcpxt2lki"]
+[gd_scene load_steps=2 format=3 uid="uid://makmcpxt2lki"]
+
+[ext_resource type="Script" uid="uid://bw3yor6s278xw" path="res://create_account.gd" id="1_create_account"]
 
 [node name="CreateAccount" type="Control"]
 layout_mode = 3
@@ -7,6 +9,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("1_create_account")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -73,12 +76,12 @@ layout_mode = 2
 
 [node name="EmailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/EmailField"]
 layout_mode = 2
-text = "Username"
+text = "Email"
 
 [node name="EmailInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/EmailField"]
 custom_minimum_size = Vector2(400, 50)
 layout_mode = 2
-placeholder_text = "Enter your username"
+placeholder_text = "Enter your email"
 
 [node name="UsernameField" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm"]
 layout_mode = 2

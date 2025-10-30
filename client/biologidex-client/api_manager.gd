@@ -13,6 +13,7 @@ const BASE_URL = "https://biologidex.io/api/v1"
 const ENDPOINTS = {
 	"login": "/auth/login/",
 	"refresh": "/auth/refresh/",
+	"register": "/users/",
 	"vision_jobs": "/vision/jobs/",
 	"vision_job_detail": "/vision/jobs/%s/",  # Format with job ID
 }
@@ -41,6 +42,25 @@ func login(username: String, password: String, callback: Callable) -> void:
 	}
 
 	_log_request("POST", url, data)
+	request_started.emit(url, "POST")
+
+	_make_json_request(url, HTTPClient.METHOD_POST, data, callback)
+
+
+func register(username: String, email: String, password: String, password_confirm: String, callback: Callable) -> void:
+	"""
+	Register a new user account
+	Returns: User object with id, username, email, friend_code, etc.
+	"""
+	var url := BASE_URL + ENDPOINTS["register"]
+	var data := {
+		"username": username,
+		"email": email,
+		"password": password,
+		"password_confirm": password_confirm
+	}
+
+	_log_request("POST", url, {"username": username, "email": email, "password": "[REDACTED]"})
 	request_started.emit(url, "POST")
 
 	_make_json_request(url, HTTPClient.METHOD_POST, data, callback)

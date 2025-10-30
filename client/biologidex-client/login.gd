@@ -20,8 +20,9 @@ func _ready() -> void:
 	loading_spinner.visible = false
 	status_label.text = ""
 
-	# Connect button
+	# Connect buttons
 	login_button.pressed.connect(_on_login_button_pressed)
+	create_acct_button.pressed.connect(_on_create_acct_button_pressed)
 
 	# Connect Enter key in password field
 	password_input.text_submitted.connect(func(_text: String): _on_login_button_pressed())
@@ -157,3 +158,12 @@ func _show_error(message: String) -> void:
 	"""Display error message"""
 	status_label.text = message
 	status_label.add_theme_color_override("font_color", Color.RED)
+
+
+func _on_create_acct_button_pressed() -> void:
+	"""Handle create account button press"""
+	if is_loading:
+		return
+
+	print("[Login] Navigating to create account scene")
+	NavigationManager.navigate_to("res://create_acct.tscn")
