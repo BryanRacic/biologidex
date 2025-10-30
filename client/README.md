@@ -51,6 +51,9 @@ client/
 │   ├── create_acct.tscn      # Registration scene
 │   ├── create_account.gd     # Registration logic with auto-login
 │   ├── home.tscn             # Main app scene (post-auth)
+│   ├── camera.tscn           # Photo upload scene
+│   ├── camera.gd             # Photo upload with CV integration
+│   ├── record_image.tscn     # Animal record card component
 │   ├── api_manager.gd        # HTTP API singleton (autoload)
 │   ├── token_manager.gd      # JWT token persistence (autoload)
 │   ├── navigation_manager.gd # Navigation singleton (autoload)
@@ -507,10 +510,14 @@ func _ready():
   - [x] Registration scene with auto-login
   - [x] API integration (login, register, refresh)
   - [x] Token persistence and auto-refresh
+- [x] Camera/Photo upload scene
+  - [x] FileAccessWeb integration for HTML5 file selection
+  - [x] Image preview with AspectRatioContainer
+  - [x] RecordImage component with dynamic aspect ratio
+  - [x] Vision API integration with async job polling
 - [ ] Home screen with navigation
 - [ ] Basic profile view
-- [ ] Camera integration placeholder
-- [ ] Dex entry creation flow (capture → identify → create entry)
+- [ ] Dex entry creation flow (post-CV identification)
 
 ### Phase 3: Features
 - [ ] Animal dex listing
@@ -661,16 +668,20 @@ The BiologiDex client now has a solid foundation with:
 ✅ **Navigation System**: Scene management with history stack
 
 ### Current Status
-Phase 1 (Foundation) and Phase 2 (Authentication) are complete. The app is ready for:
-- Home screen implementation
-- Camera/photo capture integration
-- Dex entry creation workflow
+Phase 1 (Foundation) and Phase 2 (Core Pages) are mostly complete. Implemented features:
+- ✅ Authentication system with JWT token management
+- ✅ Camera/photo upload with CV integration
+- ✅ Image preview with dynamic aspect ratio handling
+
+Next priorities:
+- Home screen implementation with tab navigation
+- Dex entry creation workflow (post-CV identification)
 - Profile and social features
 
 ### Development Priorities
 1. ✅ Authentication and API integration (COMPLETED)
-2. Home screen with tab navigation (NEXT)
-3. Camera integration and image upload
+2. ✅ Camera integration and image upload (COMPLETED)
+3. Home screen with tab navigation (NEXT)
 4. Dex entry creation flow
 5. Testing across target resolutions and platforms
 

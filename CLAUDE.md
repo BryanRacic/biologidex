@@ -31,6 +31,8 @@ client/biologidex-client/
 ├── login.tscn / login.gd        # Login scene with token refresh
 ├── create_acct.tscn / create_account.gd  # Registration scene
 ├── home.tscn                    # Main app scene (post-auth)
+├── camera.tscn / camera.gd      # Photo upload scene with CV integration
+├── record_image.tscn            # Animal record card component
 ├── api_manager.gd               # Global HTTP API singleton (autoload)
 ├── token_manager.gd             # JWT token persistence (autoload)
 ├── navigation_manager.gd        # Navigation singleton (autoload)
@@ -71,8 +73,19 @@ client/biologidex-client/
 - Security: password fields cleared on errors, passwords redacted in logs
 - Loading states: disable all inputs during API calls
 
+**Image Upload & Preview Pattern** (camera.tscn):
+- FileAccessWeb plugin for HTML5 file selection (base64 → PackedByteArray)
+- Load image with `Image.load_png/jpg_from_buffer()` → `ImageTexture.create_from_image()`
+- AspectRatioContainer maintains image proportions: dynamically set `ratio = width / height`
+- Scene hierarchy: Control (VBox sizing) → AspectRatioContainer (fills parent, anchors) → PanelContainer (border) → TextureRect (image)
+- Hide preview by default, show after image loads
+- Supports PNG/JPG format detection
+
 **Common Gotchas**:
 - GDScript type inference: `min()`, `max()`, and `Array[T].pop_back()` return Variant - always explicitly type as `float` or `String`
+- `layout_mode` values: 0 = uncontrolled (no positioning), 1 = anchors, 2 = container, 3 = anchors preset only
+- Children of containers need `layout_mode = 2`, not anchors
+- AspectRatioContainer must use anchors (`layout_mode = 1`) to fill its parent Control
 - Scene hierarchy: Main (Control) → Panel → AspectRatioContainer → MarginContainer → VBoxContainer
 - Touch targets must be minimum 44×44 pixels for mobile
 - MSDF fonts enable crisp rendering at all scales without rasterization

@@ -79,6 +79,7 @@ theme_override_constants/separation = 20
 script = ExtResource("2_diie0")
 
 [node name="RecordImage" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer" instance=ExtResource("3_qqjab")]
+visible = false
 custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 

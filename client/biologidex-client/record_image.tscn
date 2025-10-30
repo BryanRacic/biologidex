@@ -1,6 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://cwxkm5mw4opxq"]
-
-[ext_resource type="Texture2D" uid="uid://de58e6gkmcrfw" path="res://resources/test_img.jpeg" id="1_yeq50"]
+[gd_scene load_steps=4 format=3 uid="uid://cwxkm5mw4opxq"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yeq50"]
 border_width_left = 20
@@ -36,7 +34,6 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_yeq50")
 
 [node name="Image" type="TextureRect" parent="AspectRatioContainer/ImageBorder"]
 layout_mode = 2
-texture = ExtResource("1_yeq50")
 expand_mode = 3
 stretch_mode = 5
 
@@ -59,7 +56,5 @@ theme_override_constants/margin_bottom = 25
 
 [node name="RecordLabel" type="Label" parent="AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
 layout_mode = 2
-text = "common name (genus, species)
-insert cool fun fact here
-first name, last name"
+text = "common name (genus, species)"
 label_settings = SubResource("LabelSettings_yeq50")

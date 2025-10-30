@@ -13,6 +13,7 @@ extends Control
 @onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
 @onready var aspect_ratio_container: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer
 @onready var record_texture: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer/ImageBorder/Image
+@onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/AspectRatioContainer/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
 
 var file_access_web: FileAccessWeb
 var selected_file_name: String = ""
@@ -34,8 +35,13 @@ func _ready() -> void:
 	# Initialize UI state
 	_reset_ui()
 
+	# Check if running in editor
+	if OS.has_feature("editor"):
+		print("[Camera] Running in Godot editor - using test image mode")
+		status_label.text = "Editor mode: Test image will be loaded automatically"
+		status_label.add_theme_color_override("font_color", Color.CYAN)
 	# Initialize FileAccessWeb plugin (only works on HTML5)
-	if OS.get_name() == "Web":
+	elif OS.get_name() == "Web":
 		file_access_web = FileAccessWeb.new()
 		file_access_web.load_started.connect(_on_file_load_started)
 		file_access_web.loaded.connect(_on_file_loaded)
@@ -75,7 +81,14 @@ func _reset_ui() -> void:
 
 
 func _on_select_photo_pressed() -> void:
-	"""Open file picker for photo selection"""
+	"""Open file picker for photo selection or load test image in editor"""
+	# Editor mode - load test image directly
+	if OS.has_feature("editor"):
+		print("[Camera] Editor mode - loading test image...")
+		_load_test_image()
+		return
+
+	# Web export mode - use file picker
 	if OS.get_name() != "Web":
 		return
 
@@ -152,6 +165,52 @@ func _on_file_cancelled() -> void:
 	status_label.text = "File selection cancelled"
 	status_label.add_theme_color_override("font_color", Color.ORANGE)
 	progress_label.text = ""
+
+
+func _load_test_image() -> void:
+	"""Load test image from resources (editor mode only)"""
+	const TEST_IMAGE_PATH := "res://resources/test_img.jpeg"
+
+	print("[Camera] Loading test image from: ", TEST_IMAGE_PATH)
+	status_label.text = "Loading test image..."
+
+	# Load image file
+	var image := Image.new()
+	var load_error := image.load(TEST_IMAGE_PATH)
+
+	if load_error != OK:
+		print("[Camera] ERROR: Failed to load test image: ", load_error)
+		status_label.text = "Error: Could not load test image"
+		status_label.add_theme_color_override("font_color", Color.RED)
+		return
+
+	# Convert image to PNG bytes for upload
+	selected_file_data = image.save_png_to_buffer()
+	selected_file_name = "test_img.jpeg"
+	selected_file_type = "image/jpeg"
+
+	print("[Camera] Test image loaded - Size: ", selected_file_data.size(), " bytes")
+
+	# Display in preview
+	var texture := ImageTexture.create_from_image(image)
+	record_texture.texture = texture
+
+	# Update aspect ratio container to match image
+	var img_width: float = float(image.get_width())
+	var img_height: float = float(image.get_height())
+	if img_height > 0.0:
+		var aspect_ratio: float = img_width / img_height
+		aspect_ratio_container.ratio = aspect_ratio
+		print("[Camera] Image aspect ratio: ", aspect_ratio)
+
+	record_image.visible = true
+
+	# Update UI
+	status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
+	status_label.add_theme_color_override("font_color", Color.GREEN)
+	upload_button.disabled = false
+
+	print("[Camera] Test image ready for upload")
 
 
 func _on_upload_pressed() -> void:
@@ -303,6 +362,37 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	print("[Camera] Prediction: ", prediction)
 	print("[Camera] Confidence: ", confidence)
 	print("[Camera] Animal details: ", animal_details)
+
+	# Update RecordLabel with animal information
+	if animal_details.size() > 0:
+		var common_name_value = animal_details.get("common_name")
+		var common_name: String = "" if common_name_value == null else str(common_name_value)
+
+		var genus_value = animal_details.get("genus")
+		var genus: String = "" if genus_value == null else str(genus_value)
+
+		var species_value = animal_details.get("species")
+		var species: String = "" if species_value == null else str(species_value)
+
+		# Format: "common name (genus, species)"
+		var record_text := ""
+		if common_name.length() > 0:
+			record_text = common_name
+		else:
+			record_text = "Unknown"
+
+		if genus.length() > 0 or species.length() > 0:
+			record_text += " ("
+			if genus.length() > 0:
+				record_text += genus
+			if genus.length() > 0 and species.length() > 0:
+				record_text += ", "
+			if species.length() > 0:
+				record_text += species
+			record_text += ")"
+
+		record_label.text = record_text
+		print("[Camera] Updated RecordLabel: ", record_text)
 
 	# Display results
 	var result_text := "Identified: %s" % prediction
