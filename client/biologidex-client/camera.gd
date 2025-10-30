@@ -118,11 +118,28 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	selected_file_name = file_name
 	selected_file_type = file_type
 
-	# Load image into RecordImage
+	# Load image into RecordImage - use appropriate loader based on MIME type
 	var image := Image.new()
-	var image_error := image.load_png_from_buffer(selected_file_data)
-	if image_error != OK:
+	var image_error := ERR_FILE_UNRECOGNIZED
+
+	# Determine loader based on MIME type
+	if file_type.to_lower().contains("jpeg") or file_type.to_lower().contains("jpg"):
+		print("[Camera] Loading as JPEG based on MIME type: ", file_type)
 		image_error = image.load_jpg_from_buffer(selected_file_data)
+	elif file_type.to_lower().contains("png"):
+		print("[Camera] Loading as PNG based on MIME type: ", file_type)
+		image_error = image.load_png_from_buffer(selected_file_data)
+	elif file_type.to_lower().contains("webp"):
+		print("[Camera] Loading as WebP based on MIME type: ", file_type)
+		image_error = image.load_webp_from_buffer(selected_file_data)
+	elif file_type.to_lower().contains("bmp"):
+		print("[Camera] Loading as BMP based on MIME type: ", file_type)
+		image_error = image.load_bmp_from_buffer(selected_file_data)
+	else:
+		print("[Camera] Unknown MIME type, trying PNG then JPEG: ", file_type)
+		image_error = image.load_png_from_buffer(selected_file_data)
+		if image_error != OK:
+			image_error = image.load_jpg_from_buffer(selected_file_data)
 
 	if image_error == OK:
 		var texture := ImageTexture.create_from_image(image)
