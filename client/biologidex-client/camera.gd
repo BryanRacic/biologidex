@@ -227,8 +227,73 @@ func _on_browser_image_reencoded(args: Array) -> void:
 
 func _on_browser_reencode_failed() -> void:
 	"""Called when browser re-encoding fails - continue with fallback"""
-	print("[Camera] Falling back to direct Godot decoder...")
-	# The fallback logic in _on_file_loaded will handle this
+	print("[Camera] Falling back to Godot's built-in decoder...")
+	_load_image_with_godot_decoder()
+
+
+func _load_image_with_godot_decoder() -> void:
+	"""Load image using Godot's built-in decoders (fallback method)"""
+	var image := Image.new()
+	var image_error := ERR_FILE_UNRECOGNIZED
+
+	# Detect format from magic bytes (file header signatures)
+	var format := _detect_image_format(selected_file_data)
+	print("[Camera] Detected image format: ", format, " (MIME type: ", selected_file_type, ")")
+
+	# Load using detected format
+	match format:
+		"png":
+			image_error = image.load_png_from_buffer(selected_file_data)
+		"jpeg":
+			image_error = image.load_jpg_from_buffer(selected_file_data)
+		"webp":
+			image_error = image.load_webp_from_buffer(selected_file_data)
+		"bmp":
+			image_error = image.load_bmp_from_buffer(selected_file_data)
+		_:
+			# Unknown format - try common formats
+			print("[Camera] Unknown format, trying PNG then JPEG...")
+			image_error = image.load_png_from_buffer(selected_file_data)
+			if image_error != OK:
+				image_error = image.load_jpg_from_buffer(selected_file_data)
+
+	if image_error == OK and image != null:
+		var texture := ImageTexture.create_from_image(image)
+
+		# Store image dimensions
+		current_image_width = float(image.get_width())
+		current_image_height = float(image.get_height())
+
+		# Show simple preview (no border) on initial load
+		simple_image.texture = texture
+		simple_image.visible = true
+		bordered_container.visible = false
+
+		record_image.visible = true
+		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
+
+		# Update UI
+		status_label.text = "Photo selected: %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.GREEN)
+		progress_label.text = ""
+	else:
+		# Failed to load image for preview
+		print("[Camera] WARNING: Failed to load image for preview (error code: ", image_error, ")")
+		print("[Camera] This can happen with some JPEG files that have uncommon encoding.")
+		print("[Camera] Upload will still work - the server can handle these files.")
+
+		# Hide preview but allow upload to continue
+		record_image.visible = false
+		simple_image.visible = false
+		bordered_container.visible = false
+
+		# Update UI
+		status_label.text = "Photo selected (preview unavailable): %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.YELLOW)
+		progress_label.text = "Preview failed, but upload will work"
+
+	upload_button.disabled = false
+	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
 
 
 func _detect_image_format(data: PackedByteArray) -> String:
@@ -275,73 +340,20 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	selected_file_name = file_name
 	selected_file_type = file_type
 
-	# Try loading image using browser's native decoder (supports all JPEG formats)
-	var image := _load_image_via_browser(base64_data, file_type)
-	var image_error := OK if image != null else ERR_FILE_UNRECOGNIZED
+	# On Web platform, try browser re-encoding first (async)
+	if OS.get_name() == "Web":
+		print("[Camera] Web platform detected - using browser re-encoding...")
+		_load_image_via_browser(base64_data, file_type)
+		# Callback will handle the rest - don't continue here
+		# Still enable upload button so user can proceed even if preview fails
+		upload_button.disabled = false
+		status_label.text = "Loading preview..."
+		status_label.add_theme_color_override("font_color", Color.WHITE)
+		return
 
-	# If browser decoder fails, fall back to Godot's decoders
-	if image == null:
-		print("[Camera] Browser decoder unavailable, using Godot's built-in decoders...")
-		image = Image.new()
-
-		# Detect format from magic bytes (file header signatures)
-		var format := _detect_image_format(selected_file_data)
-		print("[Camera] Detected image format: ", format, " (MIME type: ", file_type, ")")
-
-		# Load using detected format
-		match format:
-			"png":
-				image_error = image.load_png_from_buffer(selected_file_data)
-			"jpeg":
-				image_error = image.load_jpg_from_buffer(selected_file_data)
-			"webp":
-				image_error = image.load_webp_from_buffer(selected_file_data)
-			"bmp":
-				image_error = image.load_bmp_from_buffer(selected_file_data)
-			_:
-				# Unknown format - try common formats
-				print("[Camera] Unknown format, trying PNG then JPEG...")
-				image_error = image.load_png_from_buffer(selected_file_data)
-				if image_error != OK:
-					image_error = image.load_jpg_from_buffer(selected_file_data)
-
-	if image_error == OK and image != null:
-		var texture := ImageTexture.create_from_image(image)
-
-		# Store image dimensions
-		current_image_width = float(image.get_width())
-		current_image_height = float(image.get_height())
-
-		# Show simple preview (no border) on initial load
-		simple_image.texture = texture
-		simple_image.visible = true
-		bordered_container.visible = false
-
-		record_image.visible = true
-		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
-	else:
-		# Failed to load image for preview
-		print("[Camera] WARNING: Failed to load image for preview (error code: ", image_error, ")")
-		print("[Camera] This can happen with some JPEG files that have uncommon encoding.")
-		print("[Camera] Upload will still work - the server can handle these files.")
-
-		# Hide preview but allow upload to continue
-		record_image.visible = false
-		simple_image.visible = false
-		bordered_container.visible = false
-
-	# Update UI based on whether preview loaded
-	if image_error == OK:
-		status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
-		status_label.add_theme_color_override("font_color", Color.GREEN)
-	else:
-		status_label.text = "Photo selected (preview unavailable): %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
-		status_label.add_theme_color_override("font_color", Color.YELLOW)
-		progress_label.text = "Preview failed, but upload will work"
-
-	upload_button.disabled = false
-
-	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
+	# Non-web platform: Use Godot's built-in decoders
+	print("[Camera] Non-web platform, using Godot's built-in decoders...")
+	_load_image_with_godot_decoder()
 
 
 func _on_file_progress(current_bytes: int, total_bytes: int) -> void:
