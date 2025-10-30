@@ -125,6 +125,8 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 	JavaScriptBridge.eval("""
 		if (typeof window._godot_reencode_image === 'undefined') {
 			window._godot_reencode_image = function(dataUrl, callback) {
+				console.log('[Browser] _godot_reencode_image called');
+				console.log('[Browser] callback type:', typeof callback);
 				const img = new Image();
 
 				img.onload = function() {
@@ -144,15 +146,18 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 						const base64 = pngDataUrl.split(',')[1];
 
 						console.log('[Browser] Re-encoded image as PNG:', img.width, 'x', img.height);
+						console.log('[Browser] Base64 length:', base64.length);
+						console.log('[Browser] Calling Godot callback...');
 						callback(base64);
+						console.log('[Browser] Callback invoked successfully');
 					} catch (e) {
-						console.error('Canvas error:', e);
+						console.error('[Browser] Canvas error:', e);
 						callback('');  // Error result
 					}
 				};
 
 				img.onerror = function() {
-					console.error('Failed to load image');
+					console.error('[Browser] Failed to load image');
 					callback('');  // Error result
 				};
 
@@ -174,15 +179,19 @@ func _load_image_via_browser(base64_data: String, mime_type: String) -> Image:
 
 func _on_browser_image_reencoded(args: Array) -> void:
 	"""Callback when browser finishes re-encoding the image as PNG"""
+	print("[Camera] === Browser callback received! ===")
+	print("[Camera] Callback args size: ", args.size())
+
 	if args.size() < 1:
-		print("[Camera] Browser re-encoder callback: invalid args")
+		print("[Camera] ERROR: Browser re-encoder callback has invalid args")
 		_on_browser_reencode_failed()
 		return
 
 	var png_base64: String = str(args[0])
+	print("[Camera] Received PNG base64 length: ", png_base64.length())
 
 	if png_base64.length() == 0:
-		print("[Camera] Browser re-encoder failed")
+		print("[Camera] ERROR: Browser re-encoder returned empty string")
 		_on_browser_reencode_failed()
 		return
 
@@ -190,39 +199,42 @@ func _on_browser_image_reencoded(args: Array) -> void:
 
 	# Convert base64 to binary
 	var png_data := Marshalls.base64_to_raw(png_base64)
-
-	print("[Camera] PNG data size: ", png_data.size(), " bytes")
+	print("[Camera] Converted to binary: ", png_data.size(), " bytes")
 
 	# Load with Godot's PNG decoder (should always work)
 	var image := Image.new()
 	var image_error := image.load_png_from_buffer(png_data)
 
 	if image_error != OK:
-		print("[Camera] ERROR: Failed to load re-encoded PNG: ", image_error)
+		print("[Camera] ERROR: Failed to load re-encoded PNG, error code: ", image_error)
 		_on_browser_reencode_failed()
 		return
 
-	print("[Camera] Successfully loaded re-encoded PNG!")
+	print("[Camera] ✓ Successfully loaded re-encoded PNG!")
+	print("[Camera] Image size: ", image.get_width(), "x", image.get_height())
 
 	# Create texture and display
 	var texture := ImageTexture.create_from_image(image)
+	print("[Camera] ✓ Created texture from image")
 
 	# Store image dimensions
 	current_image_width = float(image.get_width())
 	current_image_height = float(image.get_height())
+	print("[Camera] Stored dimensions: ", current_image_width, "x", current_image_height)
 
 	# Show simple preview (no border) on initial load
 	simple_image.texture = texture
 	simple_image.visible = true
 	bordered_container.visible = false
 	record_image.visible = true
+	print("[Camera] ✓ Updated UI - simple_image visible, record_image visible")
 
 	# Update status
 	status_label.text = "Photo selected: %s (%d KB)" % [selected_file_name, selected_file_data.size() / 1024]
 	status_label.add_theme_color_override("font_color", Color.GREEN)
 	progress_label.text = ""
 
-	print("[Camera] Browser re-encoding completed successfully")
+	print("[Camera] === Browser re-encoding completed successfully ===")
 
 
 func _on_browser_reencode_failed() -> void:
