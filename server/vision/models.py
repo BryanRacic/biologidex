@@ -29,8 +29,26 @@ class AnalysisJob(models.Model):
 
     # Input
     image = models.ImageField(
-        upload_to='vision/analysis/%Y/%m/',
-        help_text=_('Image to be analyzed')
+        upload_to='vision/analysis/original/%Y/%m/',
+        help_text=_('Original uploaded image')
+    )
+    dex_compatible_image = models.ImageField(
+        upload_to='vision/analysis/dex_compatible/%Y/%m/',
+        null=True,
+        blank=True,
+        help_text=_('Standardized PNG image for display (max 2560x2560)')
+    )
+    image_conversion_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('processing', 'Processing'),
+            ('completed', 'Completed'),
+            ('failed', 'Failed'),
+            ('unnecessary', 'Unnecessary'),  # Original already meets criteria
+        ],
+        default='pending',
+        help_text=_('Status of image standardization')
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

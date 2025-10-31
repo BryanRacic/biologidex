@@ -24,6 +24,9 @@ var current_job_id: String = ""
 var status_check_timer: Timer
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
+var unsupported_format_warning: bool = false
+var dex_compatible_url: String = ""
+var cached_dex_image: Image = null
 
 
 func _ready() -> void:
@@ -113,58 +116,98 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	"""Called when file is fully loaded"""
 	print("[Camera] File loaded: ", file_name, " Type: ", file_type, " Size: ", base64_data.length())
 
-	# Convert base64 to binary
+	# Convert base64 to binary - store ORIGINAL data (no conversion)
 	selected_file_data = Marshalls.base64_to_raw(base64_data)
 	selected_file_name = file_name
 	selected_file_type = file_type
 
-	# Load image into RecordImage - use appropriate loader based on MIME type
-	var image := Image.new()
-	var image_error := ERR_FILE_UNRECOGNIZED
+	# Try to load image for preview using robust loading
+	var preview_result := _attempt_image_preview(selected_file_data, file_type)
 
-	# Determine loader based on MIME type
-	if file_type.to_lower().contains("jpeg") or file_type.to_lower().contains("jpg"):
-		print("[Camera] Loading as JPEG based on MIME type: ", file_type)
-		image_error = image.load_jpg_from_buffer(selected_file_data)
-	elif file_type.to_lower().contains("png"):
-		print("[Camera] Loading as PNG based on MIME type: ", file_type)
-		image_error = image.load_png_from_buffer(selected_file_data)
-	elif file_type.to_lower().contains("webp"):
-		print("[Camera] Loading as WebP based on MIME type: ", file_type)
-		image_error = image.load_webp_from_buffer(selected_file_data)
-	elif file_type.to_lower().contains("bmp"):
-		print("[Camera] Loading as BMP based on MIME type: ", file_type)
-		image_error = image.load_bmp_from_buffer(selected_file_data)
-	else:
-		print("[Camera] Unknown MIME type, trying PNG then JPEG: ", file_type)
-		image_error = image.load_png_from_buffer(selected_file_data)
-		if image_error != OK:
-			image_error = image.load_jpg_from_buffer(selected_file_data)
-
-	if image_error == OK:
-		var texture := ImageTexture.create_from_image(image)
+	if preview_result.success:
+		# Successfully loaded for preview
+		var texture := ImageTexture.create_from_image(preview_result.image)
 
 		# Store image dimensions
-		current_image_width = float(image.get_width())
-		current_image_height = float(image.get_height())
+		current_image_width = float(preview_result.image.get_width())
+		current_image_height = float(preview_result.image.get_height())
 
 		# Show simple preview (no border) on initial load
 		simple_image.texture = texture
 		simple_image.visible = true
 		bordered_container.visible = false
-
 		record_image.visible = true
+
+		unsupported_format_warning = false
+		status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.GREEN)
+
 		print("[Camera] Image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
 	else:
-		print("[Camera] ERROR: Failed to load image for preview: ", image_error)
+		# Cannot preview, but still allow upload
+		_show_format_warning()
+		unsupported_format_warning = true
 
-	# Update UI
-	status_label.text = "Photo selected: %s (%d KB)" % [file_name, selected_file_data.size() / 1024]
-	status_label.add_theme_color_override("font_color", Color.GREEN)
+		status_label.text = "⚠️ Cannot preview this format, but you can still upload it"
+		status_label.add_theme_color_override("font_color", Color.YELLOW)
+
+		print("[Camera] Cannot preview image format, but allowing upload")
+
+	# Enable upload button regardless of preview success
 	upload_button.disabled = false
+	upload_button.text = "Upload for Analysis"
 	progress_label.text = ""
 
 	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
+
+
+func _attempt_image_preview(data: PackedByteArray, mime_type: String) -> Dictionary:
+	"""Try to load image for preview. Returns {success: bool, image: Image}."""
+	var result := {"success": false, "image": null}
+
+	var image := Image.new()
+	var load_error := ERR_FILE_UNRECOGNIZED
+
+	# Try loading based on MIME type
+	if mime_type.to_lower().contains("jpeg") or mime_type.to_lower().contains("jpg"):
+		print("[Camera] Attempting JPEG load based on MIME type: ", mime_type)
+		load_error = image.load_jpg_from_buffer(data)
+	elif mime_type.to_lower().contains("png"):
+		print("[Camera] Attempting PNG load based on MIME type: ", mime_type)
+		load_error = image.load_png_from_buffer(data)
+	elif mime_type.to_lower().contains("webp"):
+		print("[Camera] Attempting WebP load based on MIME type: ", mime_type)
+		load_error = image.load_webp_from_buffer(data)
+	elif mime_type.to_lower().contains("bmp"):
+		print("[Camera] Attempting BMP load based on MIME type: ", mime_type)
+		load_error = image.load_bmp_from_buffer(data)
+	else:
+		# Unknown type - try common formats
+		print("[Camera] Unknown MIME type, trying PNG then JPEG: ", mime_type)
+		load_error = image.load_png_from_buffer(data)
+		if load_error != OK:
+			load_error = image.load_jpg_from_buffer(data)
+		if load_error != OK:
+			load_error = image.load_webp_from_buffer(data)
+
+	if load_error == OK and not image.is_empty():
+		result.success = true
+		result.image = image
+		print("[Camera] Successfully loaded image for preview")
+	else:
+		print("[Camera] Failed to load image for preview: ", load_error)
+
+	return result
+
+
+func _show_format_warning() -> void:
+	"""Display warning that image cannot be previewed."""
+	# Hide the image preview
+	simple_image.visible = false
+	bordered_container.visible = false
+	record_image.visible = false
+
+	print("[Camera] Showing format warning - image cannot be previewed")
 
 
 func _on_file_progress(current_bytes: int, total_bytes: int) -> void:
@@ -196,43 +239,49 @@ func _load_test_image() -> void:
 	print("[Camera] Loading test image from: ", TEST_IMAGE_PATH)
 	status_label.text = "Loading test image..."
 
-	# Load image file
-	var image := Image.new()
-	var load_error := image.load(TEST_IMAGE_PATH)
-
-	if load_error != OK:
-		print("[Camera] ERROR: Failed to load test image: ", load_error)
+	# Load raw file bytes - NO CONVERSION to keep original format
+	var file := FileAccess.open(TEST_IMAGE_PATH, FileAccess.READ)
+	if not file:
+		print("[Camera] ERROR: Failed to open test image file")
 		status_label.text = "Error: Could not load test image"
 		status_label.add_theme_color_override("font_color", Color.RED)
 		return
 
-	# Convert image to PNG bytes for upload
-	selected_file_data = image.save_png_to_buffer()
+	selected_file_data = file.get_buffer(file.get_length())
+	file.close()
+
 	selected_file_name = "test_img.jpeg"
 	selected_file_type = "image/jpeg"
 
-	print("[Camera] Test image loaded - Size: ", selected_file_data.size(), " bytes")
+	print("[Camera] Test image loaded - Size: ", selected_file_data.size(), " bytes (original JPEG)")
 
-	# Display in simple preview (no border) on initial load
-	var texture := ImageTexture.create_from_image(image)
+	# Load image for preview display only
+	var image := Image.new()
+	var load_error := image.load(TEST_IMAGE_PATH)
 
-	# Store image dimensions
-	current_image_width = float(image.get_width())
-	current_image_height = float(image.get_height())
+	if load_error == OK:
+		# Display in simple preview (no border) on initial load
+		var texture := ImageTexture.create_from_image(image)
 
-	simple_image.texture = texture
-	simple_image.visible = true
-	bordered_container.visible = false
+		# Store image dimensions
+		current_image_width = float(image.get_width())
+		current_image_height = float(image.get_height())
 
-	record_image.visible = true
-	print("[Camera] Test image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
+		simple_image.texture = texture
+		simple_image.visible = true
+		bordered_container.visible = false
+		record_image.visible = true
+
+		print("[Camera] Test image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
+	else:
+		print("[Camera] WARNING: Could not load test image for preview, but file data loaded")
 
 	# Update UI
 	status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
 	status_label.add_theme_color_override("font_color", Color.GREEN)
 	upload_button.disabled = false
 
-	print("[Camera] Test image ready for upload")
+	print("[Camera] Test image ready for upload (original JPEG format)")
 
 
 func _update_record_image_size() -> void:
@@ -409,15 +458,37 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	print("[Camera] Confidence: ", confidence)
 	print("[Camera] Animal details: ", animal_details)
 
+	# Download and cache dex-compatible image
+	var dex_url_value = job_data.get("dex_compatible_url")
+	if dex_url_value != null:
+		dex_compatible_url = str(dex_url_value)
+		print("[Camera] Dex-compatible URL: ", dex_compatible_url)
+
+		# Try to load from cache first
+		cached_dex_image = _load_cached_image(dex_compatible_url)
+
+		if cached_dex_image == null:
+			# Download and cache
+			await _download_and_cache_dex_image(dex_compatible_url)
+
+	# Determine which image to display
+	var display_image: Image = null
+	if cached_dex_image != null:
+		display_image = cached_dex_image
+		print("[Camera] Using dex-compatible image for display")
+	elif simple_image.texture != null:
+		# Fallback to preview image if dex image not available
+		display_image = simple_image.texture.get_image()
+		print("[Camera] Using preview image for display")
+
 	# Switch from simple preview to bordered display with label
-	if simple_image.texture != null:
-		# Get image from simple preview
-		var texture := simple_image.texture
+	if display_image != null:
+		var texture := ImageTexture.create_from_image(display_image)
 		bordered_image.texture = texture
 
-		# Calculate aspect ratio from the texture
-		var img_width: float = float(texture.get_width())
-		var img_height: float = float(texture.get_height())
+		# Calculate aspect ratio from the image
+		var img_width: float = float(display_image.get_width())
+		var img_height: float = float(display_image.get_height())
 		if img_height > 0.0:
 			var aspect_ratio: float = img_width / img_height
 			bordered_container.ratio = aspect_ratio
@@ -520,3 +591,85 @@ func _on_back_pressed() -> void:
 func _exit_tree() -> void:
 	"""Cleanup when scene exits"""
 	_stop_status_polling()
+
+
+func _download_and_cache_dex_image(url: String) -> void:
+	"""Download the dex-compatible image and cache it locally."""
+	if url.length() == 0:
+		print("[Camera] No dex-compatible URL provided")
+		return
+
+	print("[Camera] Downloading dex-compatible image: ", url)
+
+	var http := HTTPRequest.new()
+	add_child(http)
+
+	var headers := []
+	if TokenManager.has_valid_token():
+		headers.append("Authorization: Bearer " + TokenManager.get_access_token())
+
+	http.request(url, headers)
+	var response_array = await http.request_completed
+
+	# Parse response
+	var result_code: int = int(response_array[1])  # HTTP status code
+	var body: PackedByteArray = response_array[3]  # Response body
+
+	if result_code == 200 and body.size() > 0:
+		# Load the PNG image
+		var image := Image.new()
+		var error := image.load_png_from_buffer(body)
+
+		if error == OK:
+			cached_dex_image = image
+
+			# Save to user://dex_cache/ for persistence
+			_save_cached_image(url, body)
+
+			print("[Camera] Dex image cached successfully (", image.get_width(), "x", image.get_height(), ")")
+		else:
+			push_error("[Camera] Failed to load dex image: ", error)
+	else:
+		push_error("[Camera] Failed to download dex image: HTTP ", result_code)
+
+	http.queue_free()
+
+
+func _save_cached_image(url: String, data: PackedByteArray) -> void:
+	"""Save cached image to local storage."""
+	var cache_dir := "user://dex_cache/"
+	var dir := DirAccess.open("user://")
+
+	if not dir.dir_exists("dex_cache"):
+		dir.make_dir("dex_cache")
+
+	# Use URL hash as filename
+	var filename := cache_dir + url.md5_text() + ".png"
+	var file := FileAccess.open(filename, FileAccess.WRITE)
+	if file:
+		file.store_buffer(data)
+		file.close()
+		print("[Camera] Cached image saved to: ", filename)
+	else:
+		push_error("[Camera] Failed to save cached image to: ", filename)
+
+
+func _load_cached_image(url: String) -> Image:
+	"""Load previously cached image if available."""
+	if url.length() == 0:
+		return null
+
+	var filename := "user://dex_cache/" + url.md5_text() + ".png"
+
+	if FileAccess.file_exists(filename):
+		var file := FileAccess.open(filename, FileAccess.READ)
+		if file:
+			var data := file.get_buffer(file.get_length())
+			file.close()
+
+			var image := Image.new()
+			if image.load_png_from_buffer(data) == OK:
+				print("[Camera] Loaded cached image from: ", filename)
+				return image
+
+	return null

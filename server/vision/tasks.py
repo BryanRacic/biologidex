@@ -7,6 +7,7 @@ from celery import shared_task
 from django.utils import timezone
 from .models import AnalysisJob
 from .services import CVServiceFactory
+from .image_processor import ImageProcessor
 from animals.models import Animal
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,34 @@ def process_analysis_job(self, job_id: str):
     logger.info(f"Processing AnalysisJob {job_id} with {job.cv_method}")
 
     try:
+        # Process image to create dex-compatible version
+        if not job.dex_compatible_image and job.image:
+            logger.info(f"Processing image for job {job_id}")
+            processed_file, metadata = ImageProcessor.process_image(job.image)
+
+            if processed_file:
+                # Save the processed image
+                job.dex_compatible_image.save(
+                    processed_file.name,
+                    processed_file,
+                    save=False
+                )
+                job.image_conversion_status = 'completed'
+                logger.info(f"Created dex-compatible image: {metadata}")
+            elif metadata.get('error'):
+                job.image_conversion_status = 'failed'
+                logger.error(f"Image conversion failed: {metadata['error']}")
+            else:
+                # Original already meets criteria
+                job.dex_compatible_image = job.image
+                job.image_conversion_status = 'unnecessary'
+                logger.info("Original image already dex-compatible")
+
+            job.save()
+
+        # Use dex-compatible image for CV analysis (or original if conversion failed)
+        image_to_analyze = job.dex_compatible_image or job.image
+
         # Create CV service
         cv_service = CVServiceFactory.create(
             method=job.cv_method,
@@ -38,8 +67,8 @@ def process_analysis_job(self, job_id: str):
             detail=job.detail_level
         )
 
-        # Perform identification
-        result = cv_service.identify_animal(job.image.path)
+        # Perform identification with the processed image
+        result = cv_service.identify_animal(image_to_analyze.path)
 
         # Parse the prediction to extract animal information
         animal = parse_and_create_animal(

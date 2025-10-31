@@ -10,12 +10,15 @@ class AnalysisJobSerializer(serializers.ModelSerializer):
     """Full serializer for AnalysisJob model."""
     animal_details = AnimalListSerializer(source='identified_animal', read_only=True)
     duration = serializers.ReadOnlyField()
+    dex_compatible_url = serializers.SerializerMethodField()
 
     class Meta:
         model = AnalysisJob
         fields = [
             'id',
             'image',
+            'dex_compatible_url',
+            'image_conversion_status',
             'user',
             'status',
             'cv_method',
@@ -40,6 +43,8 @@ class AnalysisJobSerializer(serializers.ModelSerializer):
             'id',
             'user',
             'status',
+            'dex_compatible_url',
+            'image_conversion_status',
             'parsed_prediction',
             'identified_animal',
             'confidence_score',
@@ -53,6 +58,15 @@ class AnalysisJobSerializer(serializers.ModelSerializer):
             'started_at',
             'completed_at',
         ]
+
+    def get_dex_compatible_url(self, obj):
+        """Return URL for dex-compatible image."""
+        if obj.dex_compatible_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.dex_compatible_image.url)
+            return obj.dex_compatible_image.url
+        return None
 
 
 class AnalysisJobCreateSerializer(serializers.ModelSerializer):

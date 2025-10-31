@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from django.db import models, transaction
+from django.http import HttpResponse, Http404
+from django.views import View
 from .models import AnalysisJob
 from .serializers import (
     AnalysisJobSerializer,
@@ -139,3 +141,34 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
         }
 
         return Response(stats)
+
+
+class DexCompatibleImageView(View):
+    """
+    Serve dex-compatible images.
+
+    TODO: Add proper IAM/permission checks:
+    - Verify user owns the image OR
+    - Image is from a public dex entry OR
+    - User has friend access to the owner
+    """
+
+    def get(self, request, job_id):
+        try:
+            job = AnalysisJob.objects.get(id=job_id)
+
+            # TODO: Add permission checks here
+            # For now, all dex-compatible images are public
+
+            if not job.dex_compatible_image:
+                raise Http404("Dex-compatible image not found")
+
+            # Serve the image
+            image_file = job.dex_compatible_image
+            response = HttpResponse(image_file.read(), content_type='image/png')
+            response['Content-Disposition'] = f'inline; filename="dex_{job_id}.png"'
+            response['Cache-Control'] = 'public, max-age=31536000'  # 1 year cache
+            return response
+
+        except AnalysisJob.DoesNotExist:
+            raise Http404("Job not found")
