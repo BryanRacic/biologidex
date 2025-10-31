@@ -107,6 +107,7 @@ client/biologidex-client/
 - MSDF fonts enable crisp rendering at all scales without rasterization
 - **TokenManager**: Use `is_logged_in()` not `has_valid_token()` to check auth status
 - **Image dimensions**: Always update `current_image_width/height` when changing displayed image
+- **Web export gzip**: Set `HTTPRequest.accept_gzip = false` for web builds to avoid double decompression (browsers handle gzip automatically, causes `stream_peer_gzip.cpp` errors if Godot tries to decompress again)
 
 ### Backend Stack
 - **Framework**: Django 4.2+ with Django REST Framework

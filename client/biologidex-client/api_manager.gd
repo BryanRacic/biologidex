@@ -27,6 +27,12 @@ func _ready() -> void:
 	add_child(http_request)
 	http_request.request_completed.connect(_on_request_completed)
 
+	# Disable gzip decompression in web builds to avoid double decompression
+	# (browsers already decompress gzip responses automatically)
+	if OS.get_name() == "Web":
+		http_request.accept_gzip = false
+		print("[APIManager] Web build detected - disabled gzip decompression")
+
 	print("[APIManager] Initialized with base URL: ", BASE_URL)
 
 
