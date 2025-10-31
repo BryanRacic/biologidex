@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://home_scene"]
+[gd_scene load_steps=2 format=3 uid="uid://dr46x1xsyjpfd"]
 
-[ext_resource type="Script" path="res://home.gd" id="1_home"]
+[ext_resource type="Script" uid="uid://ciu0m4ijq3xgf" path="res://home.gd" id="1_home"]
 
 [node name="Home" type="Control"]
 layout_mode = 3
@@ -51,6 +51,7 @@ text = "BiologiDex"
 vertical_alignment = 1
 
 [node name="MenuButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
+visible = false
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 text = "☰"
@@ -88,8 +89,8 @@ autowrap_mode = 3
 [node name="InstructionLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2
 text = "Tap the Camera button below to photograph and identify an animal!"
-autowrap_mode = 3
 horizontal_alignment = 1
+autowrap_mode = 3
 
 [node name="HSeparator2" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2

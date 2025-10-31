@@ -28,6 +28,16 @@ var unsupported_format_warning: bool = false
 var dex_compatible_url: String = ""
 var cached_dex_image: Image = null
 
+# Test image cycling for editor mode
+const TEST_IMAGES: Array[String] = [
+	"res://resources/test_img.jpeg",
+	"res://resources/test_img2.jpeg",
+	"res://resources/test_img3.jpeg",
+	"res://resources/test_img4.jpeg",
+	"res://resources/test_img5.jpeg"
+]
+var current_test_image_index: int = 0
+
 
 func _ready() -> void:
 	print("[Camera] Scene loaded")
@@ -43,8 +53,8 @@ func _ready() -> void:
 
 	# Check if running in editor
 	if OS.has_feature("editor"):
-		print("[Camera] Running in Godot editor - using test image mode")
-		status_label.text = "Editor mode: Test image will be loaded automatically"
+		print("[Camera] Running in Godot editor - using test image mode (", TEST_IMAGES.size(), " images)")
+		status_label.text = "Editor mode: Test images will cycle automatically (%d total)" % TEST_IMAGES.size()
 		status_label.add_theme_color_override("font_color", Color.CYAN)
 	# Initialize FileAccessWeb plugin (only works on HTML5)
 	elif OS.get_name() == "Web":
@@ -234,15 +244,20 @@ func _on_file_cancelled() -> void:
 
 func _load_test_image() -> void:
 	"""Load test image from resources (editor mode only)"""
-	const TEST_IMAGE_PATH := "res://resources/test_img.jpeg"
+	if current_test_image_index >= TEST_IMAGES.size():
+		print("[Camera] All test images uploaded! Resetting to first image.")
+		current_test_image_index = 0
 
-	print("[Camera] Loading test image from: ", TEST_IMAGE_PATH)
-	status_label.text = "Loading test image..."
+	var test_image_path: String = TEST_IMAGES[current_test_image_index]
+	var file_name: String = test_image_path.get_file()
+
+	print("[Camera] Loading test image [", current_test_image_index + 1, "/", TEST_IMAGES.size(), "]: ", test_image_path)
+	status_label.text = "Loading test image %d/%d..." % [current_test_image_index + 1, TEST_IMAGES.size()]
 
 	# Load raw file bytes - NO CONVERSION to keep original format
-	var file := FileAccess.open(TEST_IMAGE_PATH, FileAccess.READ)
+	var file := FileAccess.open(test_image_path, FileAccess.READ)
 	if not file:
-		print("[Camera] ERROR: Failed to open test image file")
+		print("[Camera] ERROR: Failed to open test image file: ", test_image_path)
 		status_label.text = "Error: Could not load test image"
 		status_label.add_theme_color_override("font_color", Color.RED)
 		return
@@ -250,14 +265,14 @@ func _load_test_image() -> void:
 	selected_file_data = file.get_buffer(file.get_length())
 	file.close()
 
-	selected_file_name = "test_img.jpeg"
+	selected_file_name = file_name
 	selected_file_type = "image/jpeg"
 
 	print("[Camera] Test image loaded - Size: ", selected_file_data.size(), " bytes (original JPEG)")
 
 	# Load image for preview display only
 	var image := Image.new()
-	var load_error := image.load(TEST_IMAGE_PATH)
+	var load_error := image.load(test_image_path)
 
 	if load_error == OK:
 		# Display in simple preview (no border) on initial load
@@ -275,7 +290,7 @@ func _load_test_image() -> void:
 		print("[Camera] Test image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
 
 		# Update UI - success
-		status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
+		status_label.text = "Test image %d/%d loaded (%d KB)" % [current_test_image_index + 1, TEST_IMAGES.size(), selected_file_data.size() / 1024]
 		status_label.add_theme_color_override("font_color", Color.GREEN)
 	else:
 		# Show warning in UI (not just console)
@@ -616,6 +631,13 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	# Re-enable buttons for another upload
 	upload_button.disabled = false
 	select_photo_button.disabled = false
+
+	# In editor mode, automatically load the next test image
+	if OS.has_feature("editor"):
+		current_test_image_index += 1
+		print("[Camera] Editor mode: Auto-loading next test image in 1 second...")
+		await get_tree().create_timer(1.0).timeout
+		_load_test_image()
 
 
 func _stop_status_polling() -> void:
