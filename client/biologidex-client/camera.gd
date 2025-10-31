@@ -273,14 +273,17 @@ func _load_test_image() -> void:
 		record_image.visible = true
 
 		print("[Camera] Test image loaded into simple preview (", current_image_width, "x", current_image_height, ")")
+
+		# Update UI - success
+		status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.GREEN)
 	else:
+		# Show warning in UI (not just console)
 		print("[Camera] WARNING: Could not load test image for preview, but file data loaded")
+		status_label.text = "⚠️ Cannot preview image, but file loaded (%d KB)" % [selected_file_data.size() / 1024]
+		status_label.add_theme_color_override("font_color", Color.YELLOW)
 
-	# Update UI
-	status_label.text = "Test image loaded (%d KB)" % [selected_file_data.size() / 1024]
-	status_label.add_theme_color_override("font_color", Color.GREEN)
 	upload_button.disabled = false
-
 	print("[Camera] Test image ready for upload (original JPEG format)")
 
 
@@ -460,9 +463,10 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 
 	# Download and cache dex-compatible image
 	var dex_url_value = job_data.get("dex_compatible_url")
-	if dex_url_value != null:
+	if dex_url_value != null and str(dex_url_value).length() > 0:
 		dex_compatible_url = str(dex_url_value)
-		print("[Camera] Dex-compatible URL: ", dex_compatible_url)
+		print("[Camera] Dex-compatible URL found: ", dex_compatible_url)
+		status_label.text = "Downloading processed image..."
 
 		# Try to load from cache first
 		cached_dex_image = _load_cached_image(dex_compatible_url)
@@ -470,6 +474,11 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 		if cached_dex_image == null:
 			# Download and cache
 			await _download_and_cache_dex_image(dex_compatible_url)
+		else:
+			print("[Camera] Using cached dex-compatible image")
+	else:
+		print("[Camera] WARNING: No dex_compatible_url in response, using preview image")
+		status_label.text = "Analysis complete! (using preview image)"
 
 	# Determine which image to display
 	var display_image: Image = null
@@ -486,17 +495,23 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 		var texture := ImageTexture.create_from_image(display_image)
 		bordered_image.texture = texture
 
-		# Calculate aspect ratio from the image
+		# Calculate aspect ratio from the image and UPDATE current dimensions
 		var img_width: float = float(display_image.get_width())
 		var img_height: float = float(display_image.get_height())
+
+		# Update current image dimensions for sizing calculations
+		current_image_width = img_width
+		current_image_height = img_height
+
 		if img_height > 0.0:
 			var aspect_ratio: float = img_width / img_height
 			bordered_container.ratio = aspect_ratio
-			print("[Camera] Image aspect ratio: ", aspect_ratio)
+			print("[Camera] Image aspect ratio: ", aspect_ratio, " (", img_width, "x", img_height, ")")
 
 		# Hide simple preview, show bordered version
 		simple_image.visible = false
 		bordered_container.visible = true
+		record_image.visible = true  # Ensure parent is visible
 
 		# Update RecordImage's minimum size to accommodate the aspect ratio
 		await get_tree().process_frame
@@ -605,7 +620,7 @@ func _download_and_cache_dex_image(url: String) -> void:
 	add_child(http)
 
 	var headers := []
-	if TokenManager.has_valid_token():
+	if TokenManager.is_logged_in():
 		headers.append("Authorization: Bearer " + TokenManager.get_access_token())
 
 	http.request(url, headers)

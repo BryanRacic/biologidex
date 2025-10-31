@@ -382,33 +382,60 @@ Create a unified theme resource:
 
 ### 4. Camera/CV Integration Pattern
 
+**Image Processing Workflow:**
+```gdscript
+# 1. Upload original format (NO conversion)
+APIManager.create_vision_job(selected_file_data, file_name, mime_type)
+
+# 2. Server processes → returns dex_compatible_url
+# 3. Download and cache dex-compatible PNG
+if job_data.has("dex_compatible_url"):
+    var url = job_data["dex_compatible_url"]
+    cached_dex_image = _load_cached_image(url)  # Try cache first
+    if not cached_dex_image:
+        await _download_and_cache_dex_image(url)  # Download if not cached
+
+# 4. Display dex-compatible image (fallback to preview if unavailable)
+var display_image = cached_dex_image if cached_dex_image else preview_image
+```
+
 **Editor Testing Mode:**
 ```gdscript
 # Detect editor vs export
 if OS.has_feature("editor"):
-    # Load test image from resources
-    var image := Image.new()
-    image.load("res://resources/test_img.jpeg")
-    # Process normally
+    # Load RAW file bytes (no conversion)
+    var file = FileAccess.open("res://resources/test_img.jpeg", FileAccess.READ)
+    selected_file_data = file.get_buffer(file.get_length())
+    selected_file_type = "image/jpeg"  # Keep original format
 ```
 
 **Two-Stage Image Display:**
 ```gdscript
-# Stage 1: Simple preview during upload
-simple_image.texture = texture
-simple_image.visible = true
-bordered_container.visible = false
+# Stage 1: Simple preview during upload (may fail for unsupported formats)
+var result = _attempt_image_preview(file_data, mime_type)
+if result.success:
+    simple_image.texture = ImageTexture.create_from_image(result.image)
+    simple_image.visible = true
+else:
+    # Show warning but allow upload
+    status_label.text = "⚠️ Cannot preview, but can upload"
 
-# Stage 2: After CV identification
-bordered_image.texture = simple_image.texture
-bordered_container.ratio = img_width / img_height
+# Stage 2: After CV identification (uses dex-compatible image)
+var display_image = cached_dex_image  # Server-processed PNG
+bordered_image.texture = ImageTexture.create_from_image(display_image)
+
+# CRITICAL: Update dimensions with dex image
+current_image_width = float(display_image.get_width())
+current_image_height = float(display_image.get_height())
+
+bordered_container.ratio = current_image_width / current_image_height
 simple_image.visible = false
 bordered_container.visible = true
+record_image.visible = true  # Ensure parent visible
 
 # Update parent container size
 await get_tree().process_frame
-var required_height := available_width / aspect_ratio
-parent_control.custom_minimum_size.y = required_height
+_update_record_image_size()
 ```
 
 **Animal API Response Format:**
@@ -556,10 +583,13 @@ func _ready():
 - [x] Camera/Photo upload scene (✅ COMPLETED)
   - [x] FileAccessWeb integration for HTML5 file selection
   - [x] Editor testing mode with test image loading
-  - [x] Two-stage image display (simple → bordered after identification)
+  - [x] **Original format upload** - NO client-side PNG conversion
+  - [x] **Dex-compatible image caching** - Downloads server-processed PNGs, caches in `user://dex_cache/`
+  - [x] Two-stage image display (simple preview → dex-compatible bordered after identification)
   - [x] RecordImage component with dynamic aspect ratio
   - [x] Vision API integration with async job polling
   - [x] Animal information display (scientific name - common name)
+  - [x] Graceful format handling with UI warnings for unsupported preview formats
 - [ ] Home screen with navigation
 - [ ] Basic profile view
 - [ ] Dex entry creation flow (post-CV identification)
@@ -711,12 +741,18 @@ The BiologiDex client now has a solid foundation with:
 ✅ **API Integration**: RESTful API communication with the Django backend
 ✅ **Responsive Design**: Foundation for multi-platform support
 ✅ **Navigation System**: Scene management with history stack
+✅ **Image Processing Pipeline**: Server-side standardization with client caching
 
 ### Current Status
 Phase 1 (Foundation) and Phase 2 (Core Pages) are mostly complete. Implemented features:
 - ✅ Authentication system with JWT token management
 - ✅ Camera/photo upload with CV integration
 - ✅ Image preview with dynamic aspect ratio handling
+- ✅ **Image processing overhaul** (2025-10-31):
+  - Original format uploads (no client conversion)
+  - Server-side PNG conversion & resizing (max 2560x2560)
+  - Client-side dex-compatible image caching
+  - Graceful handling of unsupported preview formats
 
 Next priorities:
 - Home screen implementation with tab navigation

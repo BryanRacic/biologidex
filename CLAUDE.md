@@ -3,7 +3,7 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
 
-## Current Status (Updated 2025-10-30)
+## Current Status (Updated 2025-10-31)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
@@ -12,6 +12,7 @@ A Pokedex-style social network for sharing real-world zoological observations. U
 - ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
 - ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
 - ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
+- ✅ **Image Processing Pipeline**: Standardized dex-compatible images with server-side conversion
 
 ---
 
@@ -76,12 +77,17 @@ client/biologidex-client/
 **Camera Scene & CV Integration** (camera.tscn):
 - FileAccessWeb plugin for HTML5 file selection (base64 → PackedByteArray)
 - Editor testing mode: `OS.has_feature("editor")` loads test image from `res://resources/test_img.jpeg`
+- **Original format upload**: Images uploaded in native format (JPEG, PNG, etc.) - NO client-side conversion
+- **Format handling**: Attempts preview with fallback; shows warning for unsupported formats but allows upload
+- **Dex-compatible images**: After analysis, downloads server-processed PNG (max 2560x2560) from `dex_compatible_url`
+- **Local caching**: Stores dex images in `user://dex_cache/` using URL hash as filename
 - Two-stage image display:
-  1. Simple preview (RecordImage/Image) during upload/analysis
-  2. Bordered display (RecordImage/ImageBorderAspectRatio) after identification
-- Vision API workflow: Upload → poll job status → display animal details
-- Animal response structure: `scientific_name` (single field), `common_name`, taxonomic fields
-- Display format: "Scientific name - common name" (e.g., "Hydrochoerus hydrochaeris - capybara")
+  1. Simple preview (RecordImage/Image) during upload/analysis - may fail for unsupported formats
+  2. Bordered display (RecordImage/ImageBorderAspectRatio) after identification - uses dex-compatible image
+- Vision API workflow: Upload original → poll job status → download dex image → display with animal details
+- Animal response structure: `scientific_name`, `common_name`, taxonomic fields
+- Display format: "Scientific name - common name" (e.g., "Recurvirostra americana - American Avocet")
+- **Critical**: Update `current_image_width/height` with dex image dimensions before sizing calculations
 
 **RecordImage Component** (record_image.tscn):
 - Dual image display: simple TextureRect + bordered AspectRatioContainer
@@ -99,6 +105,8 @@ client/biologidex-client/
 - Dynamic sizing: Use `await get_tree().process_frame` before reading calculated sizes
 - Touch targets must be minimum 44×44 pixels for mobile
 - MSDF fonts enable crisp rendering at all scales without rasterization
+- **TokenManager**: Use `is_logged_in()` not `has_valid_token()` to check auth status
+- **Image dimensions**: Always update `current_image_width/height` when changing displayed image
 
 ### Backend Stack
 - **Framework**: Django 4.2+ with Django REST Framework
@@ -141,6 +149,11 @@ server/
 - `customizations`: JSONField for card styling
 - GPS coordinates optional
 - Auto-updates user profile stats via signals
+- **Image fields**:
+  - `original_image`: User's uploaded image
+  - `processed_image`: Optional cropped/edited version
+  - `source_vision_job`: FK to AnalysisJob (provides dex_compatible_image)
+  - `display_image_url` property: Smart fallback (dex_compatible → processed → original)
 
 **Friendship (social.Friendship)**
 - Bidirectional model with status (pending/accepted/rejected/blocked)
@@ -152,19 +165,33 @@ server/
 - Stores: cost, tokens, processing time, raw API response
 - Status: pending → processing → completed/failed
 - Retry logic with exponential backoff
+- **Image fields**:
+  - `image`: Original uploaded file (any format) - stored in `vision/analysis/original/%Y/%m/`
+  - `dex_compatible_image`: Standardized PNG (max 2560x2560) - stored in `vision/analysis/dex_compatible/%Y/%m/`
+  - `image_conversion_status`: pending/processing/completed/failed/unnecessary
+- **API response**: Includes `dex_compatible_url` for client to download processed image
 
 ### Animal Identification Pipeline
 
-**Flow**: Image upload → AnalysisJob created → Celery task → OpenAI Vision API → Parse response → Create/lookup Animal → Complete job
+**Flow**: Image upload → AnalysisJob created → Celery task → Image processing → OpenAI Vision API → Parse response → Create/lookup Animal → Complete job
 
 **Key Components**:
-1. **ANIMAL_ID_PROMPT** (vision/constants.py): Standardized prompt requesting binomial nomenclature format
-2. **OpenAIVisionService** (vision/services.py):
+1. **ImageProcessor** (vision/image_processor.py): Server-side image standardization
+   - Converts images to PNG format (handles RGBA/transparency → RGB with white background)
+   - Resizes images >2560px while maintaining aspect ratio (using Pillow/LANCZOS)
+   - Returns `None` if original already meets criteria (triggers `unnecessary` status)
+   - Stores metadata: original format, dimensions, resize/conversion flags
+2. **ANIMAL_ID_PROMPT** (vision/constants.py): Standardized prompt requesting binomial nomenclature format
+3. **OpenAIVisionService** (vision/services.py):
    - Handles GPT-4/5+ model differences (max_tokens vs max_completion_tokens)
    - Base64 image encoding
    - Cost calculation from token usage
-3. **process_analysis_job** (vision/tasks.py): Celery task for async processing
-4. **parse_and_create_animal**: Regex parsing of CV response, auto-creates Animal records
+   - **Uses dex-compatible image** for CV analysis (fallback to original if conversion fails)
+4. **process_analysis_job** (vision/tasks.py): Celery task for async processing
+   - **Step 1**: Process image with ImageProcessor (creates dex_compatible_image)
+   - **Step 2**: Send dex-compatible image to Vision API
+   - **Step 3**: Parse response and create/lookup Animal
+5. **parse_and_create_animal**: Regex parsing of CV response, auto-creates Animal records
 
 **Model Compatibility**:
 - GPT-4 models: Use `max_tokens` parameter
@@ -512,6 +539,19 @@ ingress:
 - Regex locations (`~*`) evaluated before prefix locations
 - Use `root` with regex, `alias` with prefix
 - `try_files` with `alias` requires careful syntax
+
+**Docker Production Code Deployment** (Critical):
+- Production uses **built Docker images**, NOT mounted volumes
+- Code changes require **rebuilding images**: `docker-compose -f docker-compose.production.yml build web celery_worker celery_beat`
+- After rebuild, **restart containers**: `docker-compose -f docker-compose.production.yml up -d`
+- Simply restarting containers (`restart`) uses OLD cached images
+- Host files at `/opt/biologidex/server` are NOT used by running containers (they use `/app` inside container)
+
+**Migration State Sync Issues**:
+- Migrations can show as applied in `django_migrations` table but columns missing in actual database
+- Fix: Fake unapply then reapply: `migrate vision 0001 --fake` then `migrate vision`
+- Always verify actual database schema with `\d table_name` in psql, not just migration status
+- Python bytecode cache can cause stale code issues - full container rebuild resolves this
 
 ### Troubleshooting
 
