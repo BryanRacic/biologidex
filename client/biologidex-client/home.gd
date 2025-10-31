@@ -41,8 +41,7 @@ func _on_camera_pressed() -> void:
 func _on_dex_pressed() -> void:
 	"""Navigate to dex collection"""
 	print("[Home] Dex button pressed")
-	# TODO: Implement dex scene
-	print("[Home] TODO: Dex scene not yet implemented")
+	NavigationManager.navigate_to("res://dex.tscn")
 
 
 func _on_tree_pressed() -> void:

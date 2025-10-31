@@ -588,6 +588,31 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	result_label.text = result_text.strip_edges()
 	result_label.add_theme_color_override("font_color", Color.GREEN)
 
+	# Save to local dex database if we have all required info
+	if animal_details.size() > 0:
+		var creation_index_value = animal_details.get("creation_index")
+		if creation_index_value != null:
+			var creation_index: int = int(creation_index_value)
+
+			# Get the cached image path
+			var cached_path := ""
+			if dex_compatible_url.length() > 0:
+				cached_path = "user://dex_cache/" + dex_compatible_url.md5_text() + ".png"
+
+			# Add to database
+			DexDatabase.add_record(
+				creation_index,
+				scientific_name,
+				common_name,
+				cached_path
+			)
+
+			print("[Camera] Saved to local dex database: #", creation_index)
+		else:
+			print("[Camera] WARNING: No creation_index in animal_details, not saving to dex")
+	else:
+		print("[Camera] WARNING: No animal_details, not saving to dex")
+
 	# Re-enable buttons for another upload
 	upload_button.disabled = false
 	select_photo_button.disabled = false

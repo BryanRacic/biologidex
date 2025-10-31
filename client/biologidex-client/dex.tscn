@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://b1ddhtmmke34x"]
 
-[ext_resource type="Script" uid="uid://b3yrk8spm44x" path="res://navigation_manager.gd" id="2_6rbv7"]
+[ext_resource type="Script" path="res://dex.gd" id="1_dex_script"]
 [ext_resource type="PackedScene" uid="uid://cwxkm5mw4opxq" path="res://record_image.tscn" id="3_6jk22"]
 
 [node name="Dex" type="Control"]
@@ -10,6 +10,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("1_dex_script")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -74,7 +75,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_constants/separation = 20
-script = ExtResource("2_6rbv7")
 
 [node name="Dex Number" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2
