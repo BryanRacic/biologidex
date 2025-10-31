@@ -1,4 +1,6 @@
-[gd_scene load_steps=4 format=3 uid="uid://cwxkm5mw4opxq"]
+[gd_scene load_steps=5 format=3 uid="uid://cwxkm5mw4opxq"]
+
+[ext_resource type="Texture2D" uid="uid://de58e6gkmcrfw" path="res://resources/test_img.jpeg" id="1_yeq50"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yeq50"]
 border_width_left = 20
@@ -34,7 +36,9 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_yeq50")
 
 [node name="Image" type="TextureRect" parent="ImageBorderAspectRatio/ImageBorder"]
 layout_mode = 2
-stretch_mode = 1
+texture = ExtResource("1_yeq50")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="RecordMargin" type="MarginContainer" parent="ImageBorderAspectRatio/ImageBorder"]
 layout_mode = 2

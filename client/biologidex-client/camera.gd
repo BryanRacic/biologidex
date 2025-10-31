@@ -292,8 +292,11 @@ func _update_record_image_size() -> void:
 	# Get the available width from the parent container
 	var available_width: float = float(record_image.get_parent_control().size.x)
 
+	# Set max width to 2/3 of available width for better card display
+	var max_card_width: float = available_width * 0.67
+
 	# Cap width at actual image width (don't upscale beyond native resolution)
-	var max_width: float = current_image_width
+	var max_width: float = min(current_image_width, max_card_width)
 	var display_width: float = min(available_width, max_width)
 
 	# Calculate required height based on aspect ratio
