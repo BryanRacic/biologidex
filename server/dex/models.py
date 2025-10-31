@@ -34,6 +34,14 @@ class DexEntry(models.Model):
         related_name='dex_entries',
         help_text=_('The animal species')
     )
+    source_vision_job = models.ForeignKey(
+        'vision.AnalysisJob',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dex_entries',
+        help_text=_('Source vision job with dex-compatible image')
+    )
 
     # Images
     original_image = models.ImageField(
@@ -124,3 +132,16 @@ class DexEntry(models.Model):
         if self.has_location:
             return (float(self.location_lat), float(self.location_lon))
         return None
+
+    @property
+    def display_image_url(self):
+        """Get URL for display image (dex-compatible or processed or original)."""
+        # Prefer dex-compatible image from vision job
+        if self.source_vision_job and self.source_vision_job.dex_compatible_image:
+            return self.source_vision_job.dex_compatible_image.url
+        # Fall back to processed image
+        elif self.processed_image:
+            return self.processed_image.url
+        # Final fallback to original
+        else:
+            return self.original_image.url
