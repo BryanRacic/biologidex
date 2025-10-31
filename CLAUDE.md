@@ -9,6 +9,8 @@ A Pokedex-style social network for sharing real-world zoological observations. U
 - ✅ **CV Integration**: OpenAI Vision API with async processing
 - ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
 - ✅ **Authentication**: Login and registration flows implemented in Godot client
+- ✅ **Local Dex Database**: Client-side animal collection with JSON persistence
+- ✅ **Dex Gallery**: Browse discovered animals with prev/next navigation
 - ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
 - ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
 - ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
@@ -31,12 +33,14 @@ client/biologidex-client/
 ├── main.tscn                    # Main responsive scene
 ├── login.tscn / login.gd        # Login scene with token refresh
 ├── create_acct.tscn / create_account.gd  # Registration scene
-├── home.tscn                    # Main app scene (post-auth)
+├── home.tscn / home.gd          # Main app scene (post-auth)
 ├── camera.tscn / camera.gd      # Photo upload scene with CV integration
+├── dex.tscn / dex.gd            # Dex gallery with prev/next navigation
 ├── record_image.tscn            # Animal record card component
 ├── api_manager.gd               # Global HTTP API singleton (autoload)
 ├── token_manager.gd             # JWT token persistence (autoload)
 ├── navigation_manager.gd        # Navigation singleton (autoload)
+├── dex_database.gd              # Local dex storage singleton (autoload)
 ├── responsive.gd                # Base responsive behavior script
 ├── responsive_container.gd      # Auto-margin container class
 ├── theme.tres                   # Base theme resource
@@ -76,18 +80,34 @@ client/biologidex-client/
 
 **Camera Scene & CV Integration** (camera.tscn):
 - FileAccessWeb plugin for HTML5 file selection (base64 → PackedByteArray)
-- Editor testing mode: `OS.has_feature("editor")` loads test image from `res://resources/test_img.jpeg`
+- **Editor test cycling**: Auto-cycles through `TEST_IMAGES` array; increments index after each upload completes
 - **Original format upload**: Images uploaded in native format (JPEG, PNG, etc.) - NO client-side conversion
 - **Format handling**: Attempts preview with fallback; shows warning for unsupported formats but allows upload
 - **Dex-compatible images**: After analysis, downloads server-processed PNG (max 2560x2560) from `dex_compatible_url`
 - **Local caching**: Stores dex images in `user://dex_cache/` using URL hash as filename
+- **Auto-save to DexDatabase**: After successful CV identification, saves record with creation_index to local database
 - Two-stage image display:
   1. Simple preview (RecordImage/Image) during upload/analysis - may fail for unsupported formats
   2. Bordered display (RecordImage/ImageBorderAspectRatio) after identification - uses dex-compatible image
-- Vision API workflow: Upload original → poll job status → download dex image → display with animal details
-- Animal response structure: `scientific_name`, `common_name`, taxonomic fields
+- Vision API workflow: Upload original → poll job status → download dex image → save to DexDatabase → display
 - Display format: "Scientific name - common name" (e.g., "Recurvirostra americana - American Avocet")
 - **Critical**: Update `current_image_width/height` with dex image dimensions before sizing calculations
+
+**DexDatabase Singleton** (dex_database.gd):
+- Manages local storage of discovered animals at `user://dex_database.json`
+- Record format: `{creation_index: int, scientific_name: String, common_name: String, cached_image_path: String}`
+- Navigation helpers: `get_next_index()`, `get_previous_index()`, `get_first_index()`
+- Auto-saves on every `add_record()` call; loads on startup
+- Maintains sorted array of creation_indices for efficient navigation
+- Emits `record_added` signal when new animals discovered
+
+**Dex Gallery Scene** (dex.tscn):
+- Browse discovered animals in creation_index order
+- Previous/Next buttons for navigation (auto-disable at boundaries)
+- Loads images from `user://dex_cache/` using cached_image_path
+- Empty state: "No animals discovered yet!" when database empty
+- Uses same RecordImage component and sizing logic as camera scene
+- Responds to DexDatabase signals for real-time updates
 
 **RecordImage Component** (record_image.tscn):
 - Dual image display: simple TextureRect + bordered AspectRatioContainer
@@ -506,6 +526,13 @@ ingress:
   - hostname: biologidex.io
     service: http://localhost:80  # nginx, not 8000
 ```
+
+**HTTPS Gotcha** (Mixed Content Prevention):
+- Cloudflare Tunnel terminates SSL externally, forwards HTTP to nginx
+- Must force `X-Forwarded-Proto: https` in nginx proxy headers (not `$scheme`)
+- Django's `build_absolute_uri()` checks this header via `SECURE_PROXY_SSL_HEADER`
+- Without this: API returns `http://` URLs causing mixed content errors in browser
+- Config: `proxy_set_header X-Forwarded-Proto https;` in `/api/` and `/admin/` locations
 
 ### Critical Learnings
 
