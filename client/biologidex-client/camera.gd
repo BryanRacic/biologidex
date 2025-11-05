@@ -16,6 +16,11 @@ extends Control
 @onready var bordered_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/Image
 @onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
 
+# Rotation controls (will be created programmatically)
+var rotation_controls_container: HBoxContainer
+var rotate_left_button: Button
+var rotate_right_button: Button
+
 var file_access_web: FileAccessWeb
 var selected_file_name: String = ""
 var selected_file_type: String = ""
@@ -27,6 +32,10 @@ var current_image_height: float = 0.0
 var unsupported_format_warning: bool = false
 var dex_compatible_url: String = ""
 var cached_dex_image: Image = null
+
+# Image rotation state
+var current_rotation: int = 0  # Track rotation angle (0, 90, 180, 270)
+var pending_transformations: Dictionary = {}  # Track all image modifications
 
 # Test image cycling for editor mode
 const TEST_IMAGES: Array[String] = [
@@ -76,6 +85,9 @@ func _ready() -> void:
 	upload_button.pressed.connect(_on_upload_pressed)
 	back_button.pressed.connect(_on_back_pressed)
 
+	# Create rotation controls programmatically
+	_create_rotation_controls()
+
 	# Create timer for status polling
 	status_check_timer = Timer.new()
 	add_child(status_check_timer)
@@ -96,6 +108,87 @@ func _reset_ui() -> void:
 	selected_file_name = ""
 	selected_file_type = ""
 	selected_file_data = PackedByteArray()
+	current_rotation = 0
+	pending_transformations = {}
+	if rotation_controls_container:
+		rotation_controls_container.visible = false
+
+
+func _create_rotation_controls() -> void:
+	"""Create rotation control buttons programmatically"""
+	# Find the ContentContainer to add rotation controls to
+	var content_container = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer
+
+	# Create HBoxContainer for rotation buttons
+	rotation_controls_container = HBoxContainer.new()
+	rotation_controls_container.name = "RotationControls"
+	rotation_controls_container.visible = false
+	rotation_controls_container.alignment = BoxContainer.ALIGNMENT_CENTER
+
+	# Add some spacing at the top
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	rotation_controls_container.add_child(spacer)
+
+	# Create Rotate Left button
+	rotate_left_button = Button.new()
+	rotate_left_button.text = "Rotate Left ⟲"
+	rotate_left_button.custom_minimum_size = Vector2(150, 44)
+	rotate_left_button.pressed.connect(_on_rotate_left)
+	rotation_controls_container.add_child(rotate_left_button)
+
+	# Add spacer between buttons
+	var button_spacer = Control.new()
+	button_spacer.custom_minimum_size = Vector2(20, 0)
+	rotation_controls_container.add_child(button_spacer)
+
+	# Create Rotate Right button
+	rotate_right_button = Button.new()
+	rotate_right_button.text = "Rotate Right ⟳"
+	rotate_right_button.custom_minimum_size = Vector2(150, 44)
+	rotate_right_button.pressed.connect(_on_rotate_right)
+	rotation_controls_container.add_child(rotate_right_button)
+
+	# Add to content container (after RecordImage)
+	content_container.add_child(rotation_controls_container)
+	content_container.move_child(rotation_controls_container, content_container.get_child_count() - 1)
+
+	print("[Camera] Rotation controls created")
+
+
+func _on_rotate_left() -> void:
+	"""Rotate image 90 degrees counter-clockwise"""
+	current_rotation = (current_rotation - 90) % 360
+	if current_rotation < 0:
+		current_rotation += 360
+	_apply_rotation_to_preview()
+	pending_transformations["rotation"] = current_rotation
+	print("[Camera] Rotated left to %d degrees" % current_rotation)
+
+
+func _on_rotate_right() -> void:
+	"""Rotate image 90 degrees clockwise"""
+	current_rotation = (current_rotation + 90) % 360
+	_apply_rotation_to_preview()
+	pending_transformations["rotation"] = current_rotation
+	print("[Camera] Rotated right to %d degrees" % current_rotation)
+
+
+func _apply_rotation_to_preview() -> void:
+	"""Apply visual rotation to the image preview"""
+	# Apply rotation to both simple and bordered images
+	simple_image.rotation_degrees = current_rotation
+	bordered_image.rotation_degrees = current_rotation
+
+	# Swap width/height for aspect ratio if rotated 90 or 270 degrees
+	if current_rotation == 90 or current_rotation == 270:
+		# Swap dimensions
+		var temp: float = current_image_width
+		current_image_width = current_image_height
+		current_image_height = temp
+
+	# Update the record image size with new dimensions
+	_update_record_image_size()
 
 
 func _on_select_photo_pressed() -> void:
@@ -167,6 +260,12 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	upload_button.disabled = false
 	upload_button.text = "Upload for Analysis"
 	progress_label.text = ""
+
+	# Show rotation controls when image is loaded successfully
+	if preview_result.success and rotation_controls_container:
+		rotation_controls_container.visible = true
+		current_rotation = 0  # Reset rotation
+		pending_transformations = {}  # Clear transformations
 
 	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
 
@@ -348,14 +447,17 @@ func _on_upload_pressed() -> void:
 	# Get access token
 	var access_token := TokenManager.get_access_token()
 
-	# Upload via API
+	# Upload via API with transformations
 	APIManager.create_vision_job(
 		selected_file_data,
 		selected_file_name,
 		selected_file_type,
 		access_token,
-		_on_upload_completed
+		_on_upload_completed,
+		pending_transformations  # Pass rotation and other transformations
 	)
+
+	print("[Camera] Uploading with transformations: ", JSON.stringify(pending_transformations))
 
 
 func _on_upload_completed(response: Dictionary, code: int) -> void:

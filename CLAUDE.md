@@ -3,7 +3,7 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
 
-## Current Status (Updated 2025-10-31)
+## Current Status (Updated 2025-11-05)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
@@ -15,6 +15,8 @@ A Pokedex-style social network for sharing real-world zoological observations. U
 - ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
 - ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
 - ✅ **Image Processing Pipeline**: Standardized dex-compatible images with server-side conversion
+- ✅ **Image Transformations**: Client-side rotation UI with server-side processing and EXIF support
+- ✅ **Dex Sync API**: Server endpoint for syncing dex entries with image checksums
 
 ---
 
@@ -221,6 +223,64 @@ server/
 
 **Pricing Tracking**: All OpenAI pricing stored in `vision/constants.py` for cost calculation
 
+### Image Transformation System
+
+**Overview**: Client-side image rotation with server-side processing, enabling users to correct image orientation before CV analysis.
+
+**Client-Side (camera.gd)**:
+- Programmatically created rotation controls (Rotate Left/Right buttons)
+- Visible when image preview loads successfully
+- Tracks rotation state (0°, 90°, 180°, 270°) in `current_rotation` variable
+- Stores transformations in `pending_transformations` dictionary
+- Visual preview applies rotation using `rotation_degrees` property
+- Swaps width/height dimensions when rotated 90° or 270° for aspect ratio calculations
+- Transformations sent with image upload via multipart form data
+
+**Server-Side Components**:
+1. **images app** (server/images/): New Django app for centralized image management
+   - **ProcessedImage model**: Tracks transformations, versioning, and checksums
+     - Fields: original_file, processed_file, thumbnail, transformations (JSONField)
+     - Metadata: original/processed dimensions, format, file size, EXIF data
+     - Versioning: parent_image FK for image history
+     - Deduplication: SHA256 checksums for original and processed files
+   - **EnhancedImageProcessor** (images/processor.py):
+     - `apply_transformations()`: Apply rotation, crop, and future transforms
+     - `auto_rotate_from_exif()`: Auto-rotate based on EXIF orientation tag
+     - `extract_exif_data()`: Extract and store EXIF metadata
+     - `process_image_with_transformations()`: Combined processing pipeline
+
+2. **Vision API Integration** (vision/views.py):
+   - `create_vision_job()` accepts optional `transformations` parameter (JSON string or dict)
+   - Parses and validates transformations before passing to Celery task
+
+3. **Async Processing** (vision/tasks.py):
+   - `process_analysis_job()` accepts `transformations` parameter
+   - Uses EnhancedImageProcessor if transformations provided
+   - Applies transformations before CV analysis
+   - Falls back to basic ImageProcessor if no transformations
+
+**Dex Sync API** (dex/views.py):
+- `GET /api/v1/dex/entries/sync_entries/`: Sync endpoint for client
+  - Query param: `last_sync` (ISO 8601 datetime) - returns entries updated after this time
+  - Returns: Array of dex entries with image metadata
+  - Includes: creation_index, scientific/common names, dex_compatible_url, image_checksum, updated_at
+- **DexEntrySyncSerializer**: Specialized serializer with image checksums for comparison
+  - Calculates SHA256 checksums of dex-compatible images
+  - Returns absolute URLs for image downloads
+  - Tracks image update timestamps for change detection
+
+**Multipart Form Data** (api_manager.gd):
+- `_build_multipart_body_with_fields()`: Handles multiple form fields
+- Supports both file uploads (with filename/content-type) and text fields
+- Used for sending image + transformations JSON in single request
+
+**Implementation Files**:
+- Server: `images/models.py`, `images/processor.py`, `images/admin.py`
+- Server: `vision/tasks.py` (updated), `vision/views.py` (updated)
+- Server: `dex/views.py` (sync endpoint), `dex/serializers.py` (DexEntrySyncSerializer)
+- Client: `camera.gd` (rotation UI), `api_manager.gd` (multipart body builder)
+- Migration: `images/migrations/0001_initial.py`
+
 ### API Endpoints
 
 **Base URL**: `/api/v1/`
@@ -244,6 +304,7 @@ server/
 - GET `/my_entries/` - User's collection
 - GET `/favorites/` - Favorite entries
 - POST `/{id}/toggle_favorite/` - Toggle favorite
+- GET `/sync_entries/` - Sync entries with image checksums (accepts `last_sync` query param)
 
 **Social** (`/social/friendships/`):
 - GET `/friends/` - Friends list
@@ -253,10 +314,10 @@ server/
 - DELETE `/{id}/unfriend/` - Remove friendship
 
 **Vision** (`/vision/jobs/`):
-- POST `/` - Submit image, triggers async processing
+- POST `/` - Submit image (accepts optional `transformations` JSON), triggers async processing
 - GET `/{id}/` - Check job status
 - GET `/completed/` - View results
-- POST `/{id}/retry/` - Retry failed job
+- POST `/{id}/retry/` - Retry failed job (accepts optional `transformations` JSON)
 
 **Graph** (`/graph/`):
 - GET `/evolutionary-tree/` - Network graph (cached)
@@ -267,10 +328,10 @@ server/
 **Migrations Order**:
 ```bash
 # Always create migrations in this order:
-python manage.py makemigrations accounts animals dex social vision
+python manage.py makemigrations accounts animals dex social vision images
 python manage.py migrate
 ```
-Reason: accounts.User is AUTH_USER_MODEL, must exist before admin/auth migrations
+Reason: accounts.User is AUTH_USER_MODEL, must exist before admin/auth migrations. images app is independent and can be added last.
 
 **Settings Configuration**:
 - Development: `biologidex.settings.development`

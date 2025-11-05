@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'social',
     'vision',
     'graph',
+    'images',
 ]
 
 MIDDLEWARE = [

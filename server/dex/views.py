@@ -12,6 +12,7 @@ from .serializers import (
     DexEntryListSerializer,
     DexEntryCreateSerializer,
     DexEntryUpdateSerializer,
+    DexEntrySyncSerializer,
 )
 
 
@@ -141,3 +142,50 @@ class DexEntryViewSet(viewsets.ModelViewSet):
         entry.save(update_fields=['is_favorite'])
         serializer = self.get_serializer(entry)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def sync_entries(self, request):
+        """
+        Sync endpoint for client to check for updated dex entries.
+        Returns entries with their image metadata for comparison.
+
+        Query params:
+            last_sync: ISO 8601 datetime string - only return entries updated after this time
+        """
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
+
+        last_sync = request.query_params.get('last_sync')
+
+        # Get user's entries
+        entries = self.queryset.filter(owner=request.user)
+
+        # Filter by last_sync timestamp if provided
+        if last_sync:
+            try:
+                last_sync_dt = parse_datetime(last_sync)
+                if last_sync_dt:
+                    entries = entries.filter(updated_at__gt=last_sync_dt)
+                else:
+                    return Response(
+                        {'error': 'Invalid last_sync format. Use ISO 8601 datetime.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as e:
+                return Response(
+                    {'error': f'Failed to parse last_sync: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Serialize entries with image metadata
+        serializer = DexEntrySyncSerializer(
+            entries,
+            many=True,
+            context={'request': request}
+        )
+
+        return Response({
+            'entries': serializer.data,
+            'server_time': timezone.now().isoformat(),
+            'count': entries.count()
+        })

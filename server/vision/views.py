@@ -1,6 +1,7 @@
 """
 Views for vision app.
 """
+import json
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -46,14 +47,28 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Create a new analysis job and start processing.
+        Accepts optional 'transformations' parameter (JSON string or dict).
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         job = serializer.save()
 
+        # Parse transformations from request
+        transformations = request.data.get('transformations', None)
+        if transformations:
+            # Handle both JSON string and dict formats
+            if isinstance(transformations, str):
+                try:
+                    transformations = json.loads(transformations)
+                except json.JSONDecodeError:
+                    return Response(
+                        {'error': 'Invalid transformations JSON'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
         # Trigger async processing AFTER transaction commits
         # This prevents race condition where Celery tries to fetch job before it's committed
-        transaction.on_commit(lambda: process_analysis_job.delay(str(job.id)))
+        transaction.on_commit(lambda: process_analysis_job.delay(str(job.id), transformations))
 
         # Return full job details
         response_serializer = AnalysisJobSerializer(job)
@@ -99,6 +114,7 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
     def retry(self, request, pk=None):
         """
         Retry a failed analysis job.
+        Accepts optional 'transformations' parameter to apply new transformations.
         """
         job = self.get_object()
 
@@ -108,13 +124,24 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Parse transformations from request (optional)
+        transformations = request.data.get('transformations', None)
+        if transformations and isinstance(transformations, str):
+            try:
+                transformations = json.loads(transformations)
+            except json.JSONDecodeError:
+                return Response(
+                    {'error': 'Invalid transformations JSON'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Reset job status
         job.status = 'pending'
         job.error_message = ''
         job.save(update_fields=['status', 'error_message'])
 
         # Trigger processing again AFTER transaction commits
-        transaction.on_commit(lambda: process_analysis_job.delay(str(job.id)))
+        transaction.on_commit(lambda: process_analysis_job.delay(str(job.id), transformations))
 
         serializer = self.get_serializer(job)
         return Response(serializer.data)

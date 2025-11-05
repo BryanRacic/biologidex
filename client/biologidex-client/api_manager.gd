@@ -89,15 +89,26 @@ func refresh_token(refresh: String, callback: Callable) -> void:
 
 
 func create_vision_job(image_data: PackedByteArray, file_name: String, file_type: String,
-	access_token: String, callback: Callable) -> void:
+	access_token: String, callback: Callable, transformations: Dictionary = {}) -> void:
 	"""
 	Upload image for CV analysis
 	Requires: Authorization Bearer token
 	Returns: AnalysisJob object
+
+	Args:
+		image_data: Raw image file data
+		file_name: Name of the file
+		file_type: MIME type (e.g., 'image/jpeg')
+		access_token: JWT authentication token
+		callback: Function to call with (response_data, status_code)
+		transformations: Optional dictionary of transformations to apply (e.g., {"rotation": 90})
 	"""
 	var url := BASE_URL + ENDPOINTS["vision_jobs"]
 
-	_log_request("POST", url, {"image": file_name, "size": image_data.size()})
+	var log_data := {"image": file_name, "size": image_data.size()}
+	if not transformations.is_empty():
+		log_data["transformations"] = transformations
+	_log_request("POST", url, log_data)
 	request_started.emit(url, "POST")
 
 	# Build multipart/form-data request
@@ -107,7 +118,18 @@ func create_vision_job(image_data: PackedByteArray, file_name: String, file_type
 		"Authorization: Bearer %s" % access_token
 	]
 
-	var body := _build_multipart_body(boundary, "image", file_name, file_type, image_data)
+	# Build body with optional transformations field
+	var body: PackedByteArray
+	if not transformations.is_empty():
+		body = _build_multipart_body_with_fields(
+			boundary,
+			[
+				{"name": "image", "filename": file_name, "type": file_type, "data": image_data},
+				{"name": "transformations", "data": JSON.stringify(transformations)}
+			]
+		)
+	else:
+		body = _build_multipart_body(boundary, "image", file_name, file_type, image_data)
 
 	# Make request
 	var error := http_request.request_raw(url, headers, HTTPClient.METHOD_POST, body)
@@ -204,7 +226,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 
 func _build_multipart_body(boundary: String, field_name: String, file_name: String,
 	file_type: String, file_data: PackedByteArray) -> PackedByteArray:
-	"""Build multipart/form-data request body"""
+	"""Build multipart/form-data request body for a single file"""
 	var packet := PackedByteArray()
 	var boundary_start := ("\r\n--%s" % boundary).to_utf8_buffer()
 	var disposition := ("\r\nContent-Disposition: form-data; name=\"%s\"; filename=\"%s\"" % [field_name, file_name]).to_utf8_buffer()
@@ -216,6 +238,65 @@ func _build_multipart_body(boundary: String, field_name: String, file_name: Stri
 	packet.append_array(content_type)
 	packet.append_array(file_data)
 	packet.append_array(boundary_end)
+
+	return packet
+
+
+func _build_multipart_body_with_fields(boundary: String, fields: Array) -> PackedByteArray:
+	"""
+	Build multipart/form-data request body with multiple fields.
+
+	Args:
+		boundary: Multipart boundary string
+		fields: Array of field dictionaries with structure:
+			{
+				"name": String,           # Required: field name
+				"data": Variant,          # Required: field data (PackedByteArray or String)
+				"filename": String,       # Optional: filename for file uploads
+				"type": String            # Optional: MIME type for file uploads
+			}
+
+	Returns:
+		PackedByteArray containing the complete multipart body
+	"""
+	var packet := PackedByteArray()
+
+	for field in fields:
+		var field_name: String = field.get("name", "")
+		var field_data = field.get("data")
+		var filename: String = field.get("filename", "")
+		var content_type: String = field.get("type", "")
+
+		# Start boundary
+		packet.append_array(("\r\n--%s\r\n" % boundary).to_utf8_buffer())
+
+		# Content-Disposition header
+		if filename:
+			# File field
+			packet.append_array(
+				("Content-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\n" % [field_name, filename]).to_utf8_buffer()
+			)
+			if content_type:
+				packet.append_array(("Content-Type: %s\r\n\r\n" % content_type).to_utf8_buffer())
+			else:
+				packet.append_array("\r\n".to_utf8_buffer())
+		else:
+			# Text field
+			packet.append_array(
+				("Content-Disposition: form-data; name=\"%s\"\r\n\r\n" % field_name).to_utf8_buffer()
+			)
+
+		# Field data
+		if field_data is PackedByteArray:
+			packet.append_array(field_data)
+		elif field_data is String:
+			packet.append_array(field_data.to_utf8_buffer())
+		else:
+			# Convert to string if needed
+			packet.append_array(str(field_data).to_utf8_buffer())
+
+	# End boundary
+	packet.append_array(("\r\n--%s--\r\n" % boundary).to_utf8_buffer())
 
 	return packet
 

@@ -14,12 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def process_analysis_job(self, job_id: str):
+def process_analysis_job(self, job_id: str, transformations: dict = None):
     """
     Process an animal identification job asynchronously.
 
     Args:
         job_id: UUID of the AnalysisJob to process
+        transformations: Optional dict of image transformations to apply
+            (e.g., {"rotation": 90, "crop": {...}})
     """
     try:
         job = AnalysisJob.objects.get(id=job_id)
@@ -34,8 +36,18 @@ def process_analysis_job(self, job_id: str):
     try:
         # Process image to create dex-compatible version
         if not job.dex_compatible_image and job.image:
-            logger.info(f"Processing image for job {job_id}")
-            processed_file, metadata = ImageProcessor.process_image(job.image)
+            logger.info(f"Processing image for job {job_id} with transformations: {transformations}")
+
+            # Use EnhancedImageProcessor if transformations provided, otherwise use basic ImageProcessor
+            if transformations:
+                from images.processor import EnhancedImageProcessor
+                processed_file, metadata = EnhancedImageProcessor.process_image_with_transformations(
+                    job.image,
+                    transformations=transformations,
+                    apply_exif_rotation=True
+                )
+            else:
+                processed_file, metadata = ImageProcessor.process_image(job.image)
 
             if processed_file:
                 # Save the processed image
@@ -50,7 +62,7 @@ def process_analysis_job(self, job_id: str):
                 job.image_conversion_status = 'failed'
                 logger.error(f"Image conversion failed: {metadata['error']}")
             else:
-                # Original already meets criteria
+                # Original already meets criteria (only possible with no transformations)
                 job.dex_compatible_image = job.image
                 job.image_conversion_status = 'unnecessary'
                 logger.info("Original image already dex-compatible")
