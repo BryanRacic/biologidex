@@ -82,6 +82,13 @@ script = ExtResource("2_diie0")
 custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 
+[node name="RotateImageButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Rotate Image"
+
 [node name="InstructionLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2
 text = "Select a photo of an animal to identify"
@@ -96,7 +103,7 @@ text = "Select Photo"
 
 [node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2
-text = "Select a photo to identify an animal"
+text = "currentstatus"
 horizontal_alignment = 1
 autowrap_mode = 3
 

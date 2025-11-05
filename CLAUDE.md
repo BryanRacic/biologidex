@@ -129,6 +129,7 @@ client/biologidex-client/
 - MSDF fonts enable crisp rendering at all scales without rasterization
 - **TokenManager**: Use `is_logged_in()` not `has_valid_token()` to check auth status
 - **Image dimensions**: Always update `current_image_width/height` when changing displayed image
+- **Image rotation sizing**: Never call `_update_record_image_size()` during rotation of simple preview - it's designed for bordered view only and causes oversized display
 - **Web export gzip**: Set `HTTPRequest.accept_gzip = false` for web builds to avoid double decompression (browsers handle gzip automatically, causes `stream_peer_gzip.cpp` errors if Godot tries to decompress again)
 
 ### Backend Stack
@@ -225,16 +226,21 @@ server/
 
 ### Image Transformation System
 
-**Overview**: Client-side image rotation with server-side processing, enabling users to correct image orientation before CV analysis.
+**Overview**: Client-side image rotation using pixel-level transformations. Users can rotate images before CV analysis, with the rotated image uploaded directly (no server-side rotation needed).
 
-**Client-Side (camera.gd)**:
-- Programmatically created rotation controls (Rotate Left/Right buttons)
-- Visible when image preview loads successfully
-- Tracks rotation state (0°, 90°, 180°, 270°) in `current_rotation` variable
-- Stores transformations in `pending_transformations` dictionary
-- Visual preview applies rotation using `rotation_degrees` property
-- Swaps width/height dimensions when rotated 90° or 270° for aspect ratio calculations
-- Transformations sent with image upload via multipart form data
+**Client-Side Implementation (camera.gd)**:
+- **Rotation UI**: RotateImageButton (from camera.tscn) appears after successful image preview
+- **UI Visibility**: On image load → hide SelectPhotoButton/InstructionLabel, show RotateImageButton
+- **Rotation Method**: Uses `Image.rotate_90(CLOCKWISE)` for pixel-level rotation (NOT visual `rotation_degrees`)
+  - Rotates actual image data, not just display transform
+  - Updates `selected_file_data` with rotated PNG: `image.save_png_to_buffer()`
+  - Changes `selected_file_type` to "image/png" after rotation
+- **Dimension Tracking**: Swaps `current_image_width/height` with each 90° rotation
+- **Aspect Ratio**: Updates `bordered_container.ratio` for future bordered display (after CV analysis)
+- **Upload**: Sends pre-rotated image as PNG (no transformation metadata needed)
+- **Critical**: Do NOT call `_update_record_image_size()` during rotation
+  - Function is for bordered view only, causes oversized display if called during simple preview
+  - Simple preview's TextureRect with `stretch_mode = 5` (Keep Aspect Centered) handles sizing automatically
 
 **Server-Side Components**:
 1. **images app** (server/images/): New Django app for centralized image management
