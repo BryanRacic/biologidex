@@ -4,7 +4,6 @@
 
 This document describes the structure and format of the **Catalogue of Life (COL) eXtended Release (XR)** dataset, version 2025-10-10. This is a comprehensive taxonomic database containing information about all known species on Earth, integrating data from 59,182 taxonomic and nomenclatural data sources.
 
-**Dataset Location:** `resources/catalogue_of_life/ac4054f8-c8a9-4a6e-ae39-8bff6c705318/`
 
 ## Dataset Statistics
 
