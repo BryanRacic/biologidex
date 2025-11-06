@@ -1,0 +1,162 @@
+[
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "kingdom",
+            "level": 10,
+            "plural": "kingdoms"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subkingdom",
+            "level": 15,
+            "plural": "subkingdoms"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "phylum",
+            "level": 20,
+            "plural": "phyla"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subphylum",
+            "level": 25,
+            "plural": "subphyla"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "class",
+            "level": 30,
+            "plural": "classes"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subclass",
+            "level": 35,
+            "plural": "subclasses"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "order",
+            "level": 40,
+            "plural": "orders"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "suborder",
+            "level": 45,
+            "plural": "suborders"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "superfamily",
+            "level": 48,
+            "plural": "superfamilies"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "family",
+            "level": 50,
+            "plural": "families"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subfamily",
+            "level": 55,
+            "plural": "subfamilies"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "tribe",
+            "level": 58,
+            "plural": "tribes"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subtribe",
+            "level": 59,
+            "plural": "subtribes"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "genus",
+            "level": 60,
+            "plural": "genera"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subgenus",
+            "level": 65,
+            "plural": "subgenera"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "section",
+            "level": 68,
+            "plural": "sections"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "species",
+            "level": 70,
+            "plural": "species"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "subspecies",
+            "level": 75,
+            "plural": "subspecies"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "variety",
+            "level": 78,
+            "plural": "varieties"
+        }
+    },
+    {
+        "model": "taxonomy.taxonomicrank",
+        "fields": {
+            "name": "form",
+            "level": 80,
+            "plural": "forms"
+        }
+    }
+]

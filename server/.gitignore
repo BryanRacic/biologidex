@@ -76,7 +76,7 @@ poetry.lock
 *.backup
 
 # Google Cloud credentials
-*.json
+#*.json
 !pyproject.json
 !package.json
 
