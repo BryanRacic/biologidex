@@ -1580,49 +1580,6 @@ def cleanup_old_imports():
     )
 ```
 
-## Phase 9: Testing
-
-```python
-# taxonomy/tests/test_services.py
-from django.test import TestCase
-from taxonomy.models import DataSource, Taxonomy
-from taxonomy.services import TaxonomyService
-
-class TaxonomyServiceTests(TestCase):
-    def setUp(self):
-        self.source = DataSource.objects.create(
-            name='Test Source',
-            short_code='test',
-            url='http://test.com'
-        )
-
-        self.taxonomy = Taxonomy.objects.create(
-            source=self.source,
-            source_taxon_id='TEST001',
-            scientific_name='Apis mellifera',
-            kingdom='Animalia',
-            phylum='Arthropoda',
-            class_name='Insecta',
-            order='Hymenoptera',
-            family='Apidae',
-            genus='Apis',
-            specific_epithet='mellifera',
-            status='accepted'
-        )
-
-    def test_lookup_by_scientific_name(self):
-        result = TaxonomyService.lookup_by_scientific_name('Apis mellifera')
-        self.assertEqual(result.id, self.taxonomy.id)
-
-    def test_lookup_binomial(self):
-        result = TaxonomyService.lookup_by_scientific_name('Apis mellifera')
-        self.assertIsNotNone(result)
-
-    def test_search_taxonomy(self):
-        results = TaxonomyService.search_taxonomy('Apis')
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].id, self.taxonomy.id)
-```
 
 ## Deployment Checklist
 

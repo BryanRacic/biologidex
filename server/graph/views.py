@@ -4,26 +4,26 @@ Views for graph app.
 from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .services import EvolutionaryGraphService
+from .services import taxonomicGraphService
 
 
-class EvolutionaryTreeView(APIView):
+class taxonomicTreeView(APIView):
     """
-    API endpoint for retrieving evolutionary/taxonomic tree data.
+    API endpoint for retrieving taxonomic/taxonomic tree data.
     Shows animals discovered by user and their friends network.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         """
-        Get evolutionary tree data for the authenticated user.
+        Get taxonomic tree data for the authenticated user.
 
         Query params:
             - use_cache: bool (default: True) - whether to use cached data
         """
         use_cache = request.query_params.get('use_cache', 'true').lower() == 'true'
 
-        service = EvolutionaryGraphService(request.user)
+        service = taxonomicGraphService(request.user)
         graph_data = service.get_graph_data(use_cache=use_cache)
 
         return Response(graph_data)
@@ -38,7 +38,7 @@ class InvalidateCacheView(APIView):
 
     def post(self, request):
         """Invalidate graph cache for the authenticated user."""
-        EvolutionaryGraphService.invalidate_cache(request.user.id)
+        taxonomicGraphService.invalidate_cache(request.user.id)
 
         return Response({
             'message': 'Graph cache invalidated successfully'

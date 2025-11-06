@@ -550,7 +550,7 @@ server/
 ├── dex/                   # User collections
 ├── social/                # Social features
 ├── vision/                # CV/AI pipeline
-├── graph/                 # Evolutionary tree
+├── graph/                 # taxonomic tree
 ├── scripts/               # Operational scripts
 │   ├── setup.sh          # Server setup
 │   ├── deploy.sh         # Deployment

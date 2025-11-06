@@ -1,5 +1,5 @@
 """
-Services for generating evolutionary/taxonomic graphs.
+Services for generating taxonomic/taxonomic graphs.
 """
 import logging
 from typing import Dict, List, Set
@@ -13,9 +13,9 @@ from social.models import Friendship
 logger = logging.getLogger(__name__)
 
 
-class EvolutionaryGraphService:
+class taxonomicGraphService:
     """
-    Service for generating evolutionary tree data structure.
+    Service for generating taxonomic tree data structure.
     Shows animals discovered by user and their friends.
     """
 

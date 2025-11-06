@@ -1,7 +1,7 @@
 # BiologiDex - Project Memory
 
 ## Project Overview
-A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative evolutionary tree shared with friends.
+A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative taxonomic tree shared with friends.
 
 ## Current Status (Updated 2025-11-05)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
@@ -150,7 +150,7 @@ server/
 ├── dex/                 # User's animal collection entries
 ├── social/              # Friendships, friend requests
 ├── vision/              # CV/AI identification pipeline
-└── graph/               # Evolutionary tree generation
+└── graph/               # taxonomic tree generation
 ```
 
 ### Key Models
@@ -326,7 +326,7 @@ server/
 - POST `/{id}/retry/` - Retry failed job (accepts optional `transformations` JSON)
 
 **Graph** (`/graph/`):
-- GET `/evolutionary-tree/` - Network graph (cached)
+- GET `/taxonomic-tree/` - Network graph (cached)
 - POST `/invalidate-cache/` - Clear cache
 
 ### Critical Implementation Details

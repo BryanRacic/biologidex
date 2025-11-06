@@ -1,12 +1,12 @@
 # BiologiDex
-A Pokedex style social network app that allows users to share pictures of their real world zoologic observations in order to collaboratively build an ever expanding "evolutionary tree" with their friends.  
+A Pokedex style social network app that allows users to share pictures of their real world zoologic observations in order to collaboratively build an ever expanding "taxonomic tree" with their friends.  
 
- This is a pokedex style app where CV is utilized to identify animals in user uploaded images which are turned into pokedex-style dex entries. In this version, friend's dex entries are counted as "seen animals" and displayed in a graph structure similar to an evolutionary tree.
+ This is a pokedex style app where CV is utilized to identify animals in user uploaded images which are turned into pokedex-style dex entries. In this version, friend's dex entries are counted as "seen animals" and displayed in a graph structure similar to an taxonomic tree.
 
-Uses computer vision services to identify biological species (animals) in images taken by users. Once identified, the user adds the animal to their local database of seen animals with additional information & flavor as provided by the BiologiDex platform. BiologiDex is a placeholder name representing the walled-garden structure of the user networks and the giant evolutionary tree of animals being created by all "friends" of the user. 
+Uses computer vision services to identify biological species (animals) in images taken by users. Once identified, the user adds the animal to their local database of seen animals with additional information & flavor as provided by the BiologiDex platform. BiologiDex is a placeholder name representing the walled-garden structure of the user networks and the giant taxonomic tree of animals being created by all "friends" of the user. 
 
-## Evolutionary Tree
-Find reference of actual evolutionary taxonomic tree which we can place animals & species on based on 
+## taxonomic Tree
+Find reference of actual taxonomic taxonomic tree which we can place animals & species on based on 
 
 # Design
 - Inspired by Biological illustration: https://en.wikipedia.org/wiki/Biological_illustration

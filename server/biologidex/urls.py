@@ -42,7 +42,7 @@ urlpatterns = [
         # Vision/Analysis
         path('vision/', include('vision.urls')),
 
-        # Graph/Evolutionary Tree
+        # Graph/taxonomic Tree
         path('graph/', include('graph.urls')),
     ])),
 ]

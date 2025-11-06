@@ -2,9 +2,9 @@
 URL routing for graph app.
 """
 from django.urls import path
-from .views import EvolutionaryTreeView, InvalidateCacheView
+from .views import taxonomicTreeView, InvalidateCacheView
 
 urlpatterns = [
-    path('evolutionary-tree/', EvolutionaryTreeView.as_view(), name='evolutionary-tree'),
+    path('taxonomic-tree/', taxonomicTreeView.as_view(), name='taxonomic-tree'),
     path('invalidate-cache/', InvalidateCacheView.as_view(), name='invalidate-cache'),
 ]

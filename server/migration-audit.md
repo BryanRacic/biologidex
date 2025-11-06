@@ -889,7 +889,7 @@ services:
 
   graph-service:
     models: []  # Read-only aggregation
-    endpoints: [graph/evolutionary-tree]
+    endpoints: [graph/taxonomic-tree]
     dependencies: [animal-service, dex-service, social-service]
     cache: Redis with 2min TTL
 ```
