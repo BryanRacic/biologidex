@@ -50,9 +50,9 @@ class CatalogueOfLifeImporter(BaseImporter):
 
         logger.info(f"Latest COL dataset: {dataset_key} (version {self.import_job.version})")
 
-        # Download dataset
-        download_url = f"{self.API_BASE}/dataset/{dataset_key}/export"
-        params = {'format': 'COLDP', 'extended': False}
+        # Download dataset (use .zip endpoint which redirects to actual file)
+        download_url = f"{self.API_BASE}/dataset/{dataset_key}/export.zip"
+        params = {'format': 'COLDP'}
 
         # Create download directory
         download_dir = os.path.join(settings.MEDIA_ROOT, 'taxonomy_imports')
