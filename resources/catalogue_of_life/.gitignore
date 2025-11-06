@@ -1,0 +1,6 @@
+# Ignore everything
+* 
+
+# Except
+!.gitignore
+!catalogue_of_life.md
