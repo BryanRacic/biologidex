@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'vision',
     'graph',
     'images',
+    'taxonomy',
 ]
 
 MIDDLEWARE = [

@@ -120,7 +120,7 @@ def process_analysis_job(self, job_id: str, transformations: dict = None):
 
 def parse_and_create_animal(prediction: str, user) -> Animal:
     """
-    Parse CV prediction and create/retrieve Animal record.
+    Parse CV prediction and create/retrieve Animal record using taxonomy system.
 
     Expected format: "Genus, species (common name)" or "Genus species (common name)"
 
@@ -163,30 +163,31 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
         species_full = match.group(2).strip()  # May include subspecies
         common_name = match.group(3).strip() if match.group(3) else ""
 
-        # Split species from subspecies if present
-        species_parts = species_full.split()
-        species = species_parts[0]
+        # Build scientific name
         scientific_name = f"{genus} {species_full}"
 
         logger.info(f"Parsed: {scientific_name} ({common_name})")
 
-        # Try to find existing animal
-        try:
-            animal = Animal.objects.get(scientific_name__iexact=scientific_name)
-            logger.info(f"Found existing animal: {animal}")
+        # Use taxonomy-aware animal service for lookup/creation
+        from animals.services import AnimalService
+
+        animal, created, message = AnimalService.lookup_or_create_from_cv(
+            scientific_name=scientific_name,
+            common_name=common_name,
+            confidence=0.0  # CV confidence will be set separately in AnalysisJob
+        )
+
+        if animal:
+            # Set created_by if this is a newly created animal
+            if created and user:
+                animal.created_by = user
+                animal.save(update_fields=['created_by'])
+
+            logger.info(f"{'Created' if created else 'Found'} animal: {animal} - {message}")
             return animal
-        except Animal.DoesNotExist:
-            # Create new animal
-            animal = Animal.objects.create(
-                scientific_name=scientific_name,
-                common_name=common_name or f"Unknown {genus}",  # Fallback if no common name
-                genus=genus,
-                species=species,
-                created_by=user,
-                verified=False,  # Needs admin verification
-            )
-            logger.info(f"Created new animal: {animal}")
-            return animal
+        else:
+            logger.warning(f"Failed to create animal: {message}")
+            return None
 
     except Exception as e:
         logger.error(f"Error parsing prediction: {e}", exc_info=True)

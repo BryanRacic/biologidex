@@ -3,6 +3,7 @@ Animal models for BiologiDex.
 """
 import uuid
 from django.db import models
+from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from django.core.cache import cache
@@ -47,8 +48,64 @@ class Animal(models.Model):
     )
     order = models.CharField(max_length=100, blank=True)
     family = models.CharField(max_length=100, blank=True)
+    subfamily = models.CharField(max_length=100, blank=True)
     genus = models.CharField(max_length=100, blank=True)
     species = models.CharField(max_length=100, blank=True)
+
+    # Conservation & Distribution
+    native_regions = ArrayField(
+        models.CharField(max_length=100),
+        default=list,
+        blank=True,
+        help_text=_('Native geographic regions')
+    )
+    establishment_means = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text=_('Native, introduced, invasive, etc.')
+    )
+
+    # Taxonomy Database Linking
+    taxonomy_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_('Link to taxonomy.Taxonomy record')
+    )
+    taxonomy_source = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text=_('Source database (e.g., "col", "gbif")')
+    )
+    taxonomy_source_url = models.URLField(
+        blank=True,
+        help_text=_('Direct link to source taxonomy record')
+    )
+    taxonomy_confidence = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Confidence score from taxonomy lookup')
+    )
+
+    # Verification tracking
+    last_verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Last time taxonomy was verified')
+    )
+    verification_method = models.CharField(
+        max_length=30,
+        choices=[
+            ('manual', 'Manual'),
+            ('taxonomy', 'Taxonomy Database'),
+            ('cv', 'Computer Vision'),
+            ('user', 'User Submitted')
+        ],
+        default='cv',
+        help_text=_('How this animal was verified')
+    )
 
     # Information
     description = models.TextField(

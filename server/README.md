@@ -65,7 +65,7 @@ Internet
 
 ## Django Apps Architecture
 
-BiologiDex is organized into 7 modular Django apps, each with a specific domain responsibility:
+BiologiDex is organized into 8 modular Django apps, each with a specific domain responsibility:
 
 ### 1. Accounts - User Management
 
@@ -380,7 +380,153 @@ Methods:
 
 ---
 
-### 7. Graph - Taxonomic Tree Generation
+### 7. Taxonomy - Authoritative Taxonomic Database
+
+**Purpose:** Centralized taxonomic data system with Catalogue of Life integration for validating CV identifications
+
+**Models:**
+
+- **DataSource** - Registry of taxonomic databases (COL, GBIF, etc.)
+  - Fields: name, short_code, url, api_endpoint, update_frequency, license, priority
+  - Tracks source authority and priority for conflict resolution
+
+- **ImportJob** - Tracks data import jobs
+  - Fields: source, version, status, records_imported/failed, error_log
+  - Status workflow: pending → downloading → processing → importing → completed/failed
+  - Async processing via Celery with retry logic
+
+- **TaxonomicRank** - Reference table for taxonomic ranks
+  - 20 standard ranks from kingdom (level=10) to form (level=80)
+  - Includes plural forms for display
+
+- **Taxonomy** - Normalized taxonomic records
+  - Full hierarchical data: kingdom → phylum → class → order → family → genus → species
+  - Extended hierarchy: subkingdom, subphylum, tribe, subspecies, variety, form
+  - Metadata: extinct status, environment (marine/terrestrial/freshwater), nomenclatural code
+  - Synonym resolution: Links to accepted_name if status='synonym'
+  - Quality metrics: completeness_score, confidence_score
+  - Unique constraint: (source, source_taxon_id)
+
+- **CommonName** - Vernacular names in multiple languages
+  - Fields: name, language (ISO 639-3), country (ISO 3166-1), is_preferred
+  - Unique constraint: (taxonomy, name, language, country)
+
+- **GeographicDistribution** - Native regions and conservation data
+  - Fields: area_code, area_name, establishment_means, occurrence_status, threat_status
+  - IUCN categories for conservation tracking
+
+- **RawCatalogueOfLife** - Staging table for COL imports
+  - Temporary storage before normalization
+  - BigAutoField for 9M+ records
+  - Processing flag: is_processed
+
+**Services: TaxonomyService**
+
+Methods:
+- `lookup_by_scientific_name(name, include_synonyms, source_code)` - Search with caching
+- `lookup_or_create_from_cv(name, common_name, confidence)` - Validate CV identifications
+- `search_taxonomy(query, rank, kingdom, limit)` - Full-text search
+- `get_hierarchy_stats()` - Database statistics (cached)
+- `get_taxonomic_lineage(taxonomy)` - Complete ancestry chain
+- `get_children(taxonomy, direct_only)` - Descendant taxa
+- `validate_scientific_name(name)` - Format validation
+
+**Integration with Animals:**
+
+Updated Animal model fields:
+- subfamily, native_regions (array), establishment_means
+- taxonomy_id (UUID link), taxonomy_source, taxonomy_source_url
+- taxonomy_confidence, last_verified_at, verification_method
+
+**Services: AnimalService**
+
+Methods:
+- `create_or_update_from_taxonomy(taxonomy, common_name, cv_confidence)` - Creates enriched animals
+- `lookup_or_create_from_cv(scientific_name, common_name, confidence)` - CV integration
+
+Workflow:
+1. CV identifies animal → Parse scientific name
+2. TaxonomyService.lookup_by_scientific_name() → Check against COL
+3. If found: Create/update Animal with full taxonomy + conservation data
+4. If not found: Create basic Animal record (requires manual review)
+
+**Import Pipeline:**
+
+Base Components:
+- `BaseImporter` - Abstract base class for all importers
+- `CatalogueOfLifeImporter` - COL-specific implementation
+
+COL Import Workflow:
+1. Download latest dataset via API (3GB+, 9.4M records)
+2. Extract NameUsage.tsv from zip
+3. Bulk import to RawCatalogueOfLife (batches of 5000)
+4. Normalize to Taxonomy model (batches of 1000)
+5. Calculate completeness scores
+6. Update caches
+
+**Management Commands:**
+
+`import_col` - Import Catalogue of Life data
+```bash
+poetry run python manage.py import_col [--async] [--force] [--file path]
+```
+Options:
+- --async: Run as Celery task (recommended for full imports)
+- --force: Skip recent import check
+- --file: Use local zip file instead of downloading
+
+**Celery Tasks:**
+
+- `run_import_job(job_id)` - Async import with retry logic
+- `sync_taxonomy_to_animals()` - Daily sync of new taxonomy → animals
+- `cleanup_old_imports()` - Delete old raw data (30 days)
+- `update_taxonomy_completeness_scores()` - Recalculate quality metrics
+- `cache_taxonomy_stats()` - Pre-cache statistics
+
+**API Endpoints:**
+
+- `GET /api/v1/taxonomy/` - List records (paginated)
+- `GET /api/v1/taxonomy/search/?q=...` - Search by name
+- `POST /api/v1/taxonomy/validate/` - Validate scientific name
+- `GET /api/v1/taxonomy/stats/` - Database statistics
+- `GET /api/v1/taxonomy/{id}/lineage/` - Complete lineage
+- `GET /api/v1/taxonomy/{id}/children/` - Child taxa
+- `GET /api/v1/sources/` - List data sources
+
+**Performance Optimizations:**
+
+- Indexes on all search fields (scientific_name, genus, species, etc.)
+- GIN index on environment array field
+- Bulk operations for imports (5000 records/batch)
+- Redis caching with 1-hour TTL
+- Connection pooling for PostgreSQL
+- Progress logging every 50k records
+
+**Vision Pipeline Integration:**
+
+Updated `parse_and_create_animal()` in vision/tasks.py:
+- Automatically validates against taxonomy database
+- Creates enriched Animal records with full hierarchy
+- Flags unverified animals for manual review
+- Logs taxonomy lookup results
+
+**Data Quality:**
+
+- Completeness score: 0-1 based on filled hierarchy fields
+- Confidence score: From source data quality
+- Synonym resolution: Automatic redirect to accepted names
+- Status tracking: accepted/synonym/provisional/doubtful
+
+**Caching Strategy:**
+
+- Individual taxonomy lookups: 1 hour TTL
+- Hierarchy statistics: 1 hour TTL
+- Automatic invalidation on new imports
+- Cache warming via scheduled tasks
+
+---
+
+### 8. Graph - Taxonomic Tree Generation
 
 **Purpose:** Generate taxonomic/evolutionary network graphs for visualization
 
@@ -534,8 +680,13 @@ docker-compose -f docker-compose.production.yml up -d
 
 5. **Run migrations (in order):**
 ```bash
-docker-compose -f docker-compose.production.yml exec web python manage.py makemigrations accounts animals dex social vision images
+docker-compose -f docker-compose.production.yml exec web python manage.py makemigrations accounts animals dex social vision images taxonomy
 docker-compose -f docker-compose.production.yml exec web python manage.py migrate
+```
+
+5a. **Load taxonomy fixtures:**
+```bash
+docker-compose -f docker-compose.production.yml exec web python manage.py loaddata taxonomy/fixtures/ranks.json
 ```
 
 6. **Create superuser:**
@@ -564,8 +715,11 @@ poetry install
 docker-compose up -d
 
 # Run migrations (IMPORTANT: Always in this order)
-python manage.py makemigrations accounts animals dex social vision images
+python manage.py makemigrations accounts animals dex social vision images taxonomy
 python manage.py migrate
+
+# Load taxonomy fixtures
+python manage.py loaddata taxonomy/fixtures/ranks.json
 
 # Create test data
 python manage.py seed_test_users
@@ -655,6 +809,21 @@ python manage.py test --parallel
 - `GET /taxonomic-tree/` - Network graph (cached)
 - `POST /invalidate-cache/` - Clear cache
 
+### Taxonomy Endpoints (`/taxonomy/`)
+- `GET /` - List taxonomy records (paginated)
+- `GET /{id}/` - Retrieve taxonomy details with full hierarchy
+- `GET /search/?q=query` - Search by scientific/common name
+- `POST /validate/` - Validate scientific name against database
+- `GET /stats/` - Database statistics
+- `GET /{id}/lineage/` - Complete taxonomic lineage
+- `GET /{id}/children/?direct=true` - Get child taxa
+- `GET /sources/` - List data sources (COL, GBIF, etc.)
+
+**Query Parameters:**
+- search: `?q=Panthera leo` - Search term
+- filters: `?rank=species&kingdom=Animalia` - Filter by rank/kingdom
+- limit: `?limit=50` - Max results (default: 20, max: 100)
+
 ### API Response Patterns
 
 **List Endpoint** (e.g., GET /animals/):
@@ -719,13 +888,20 @@ AnalysisJob (UUID pk)
 
 ### Models Table Summary
 ```
-accounts_user             - Custom user with UUID pk, friend_code
-accounts_userprofile      - Auto-created profile with stats
-animals_animal            - Species taxonomy with creation_index
-dex_dexentry              - User captures of animals
-social_friendship         - Bidirectional friend relationships
-vision_analysisjob        - CV identification jobs
-images_processedimage     - Processed images with transformations
+accounts_user                      - Custom user with UUID pk, friend_code
+accounts_userprofile               - Auto-created profile with stats
+animals_animal                     - Species taxonomy with creation_index
+dex_dexentry                       - User captures of animals
+social_friendship                  - Bidirectional friend relationships
+vision_analysisjob                 - CV identification jobs
+images_processedimage              - Processed images with transformations
+taxonomy_datasource                - Registry of taxonomic databases
+taxonomy_importjob                 - Tracks data import jobs
+taxonomy_taxonomicrank             - Reference table for ranks
+taxonomy_taxonomy                  - Normalized taxonomic records (9M+)
+taxonomy_commonname                - Vernacular names
+taxonomy_geographicdistribution    - Distribution and conservation data
+taxonomy_raw_catalogue_of_life     - Staging table for COL imports
 ```
 
 **All models use:**
@@ -1097,62 +1273,354 @@ docker-compose -f docker-compose.production.yml exec web python manage.py shell
 
 ---
 
-## Data Import Planning
+## Taxonomy Data Loading
 
-### Current Status
+### Overview
 
-Catalogue of Life dataset (v2025-10-10) downloaded but not yet integrated.
+BiologiDex now includes a complete taxonomic data system integrated with the Catalogue of Life (COL). This provides authoritative validation for all CV-identified animals and enriches animal records with full taxonomic hierarchies, conservation status, and geographic distributions.
 
-**Dataset Location:** `/resources/catalogue_of_life/`
-**Size:** 3.2 GB total, 9.4M species records
+### Prerequisites
 
-**File Structure:**
-- `NameUsage.tsv` - 9.4M records with complete taxonomy
-- `VernacularName.tsv` - 638K common name records
-- `Distribution.tsv` - 2.7M geographic records
-- `Reference.tsv` - 2M scientific references
-- Others: NameRelation, TypeMaterial, SpeciesEstimate, TaxonProperty
+Before loading taxonomy data:
 
-### Planned Architecture
+1. **Database must be running:**
+   ```bash
+   docker-compose -f docker-compose.production.yml up -d db redis
+   ```
 
-1. Create `RawCatalogueOfLife` model from NameUsage.tsv
-2. Create normalized `Taxonomy` model (combined from sources)
-3. Link animals.Animal to taxonomy via source ID
-4. Create management command for data import + update jobs
+2. **Migrations must be applied:**
+   ```bash
+   # Create migrations for taxonomy and updated animals models
+   poetry run python manage.py makemigrations taxonomy animals
 
-### Field Mapping
+   # Apply migrations (in order)
+   poetry run python manage.py migrate
+   ```
 
-**COL NameUsage → Django Animal**
+3. **Load taxonomic rank fixtures:**
+   ```bash
+   poetry run python manage.py loaddata taxonomy/fixtures/ranks.json
+   ```
+
+### Loading Catalogue of Life Data
+
+#### Option 1: Automatic Download (Recommended)
+
+Download and import the latest COL dataset automatically:
+
+```bash
+# Run in foreground (2-3 hours)
+poetry run python manage.py import_col
+
+# OR run as async Celery task (recommended for production)
+poetry run python manage.py import_col --async
 ```
-col:scientificName     → scientific_name
-col:scientificName     → (extract genus, species)
-col:rank               → (ignore if not species)
-col:status             → (filter for 'accepted')
-col:kingdom            → kingdom
-col:phylum             → phylum
-col:class              → class_name
-col:order              → order
-col:family             → family
-col:genus              → genus
-col:species            → species
+
+The command will:
+1. Fetch the latest COL dataset info via API
+2. Download the dataset (~3GB zip file)
+3. Extract NameUsage.tsv (9.4M records)
+4. Import to staging table (RawCatalogueOfLife)
+5. Normalize to Taxonomy model with validation
+6. Calculate completeness scores
+7. Update caches
+
+#### Option 2: Use Local File
+
+If you already have a COL dataset file:
+
+```bash
+# Using local zip file
+poetry run python manage.py import_col --file /path/to/col_dataset.zip
+
+# With async processing
+poetry run python manage.py import_col --file /path/to/col_dataset.zip --async
 ```
 
-**VernacularName → Animal common_name**
-- Join via col:taxonID
-- Filter for language='en', preferred=true
+#### Option 3: Using Existing Downloaded Data
+
+If COL data is in `/resources/catalogue_of_life/`:
+
+```bash
+# Point to the extracted directory's zip file
+poetry run python manage.py import_col --file /resources/catalogue_of_life/coldp.zip
+```
+
+### Monitoring Import Progress
+
+#### Console Output (Foreground)
+
+When run synchronously, you'll see:
+```
+=== Catalogue of Life Import ===
+✓ Created data source: Catalogue of Life (col)
+Created import job: 12345678-abcd-...
+Running import synchronously...
+⚠ This may take 2-3 hours for full COL dataset
+
+Fetching latest COL dataset info...
+Latest COL dataset: 1234 (version 2025-01)
+Downloading dataset to /path/to/file.zip...
+Download progress: 10.0% (100.0MB)
+...
+Download complete: 3200.00MB
+
+Extracting zip file...
+Parsing NameUsage.tsv...
+Read 50000 records...
+Read 100000 records...
+...
+Finished parsing: 9400000 records read
+
+Normalizing 9400000 raw records...
+Processed 10000/9400000 records...
+...
+
+✓ Import completed successfully!
+  Records imported: 9400000
+  Records failed: 0
+  Records read: 9400000
+```
+
+#### Async Monitoring (Background)
+
+When run with `--async`, monitor via:
+
+1. **Django Admin:**
+   - Navigate to: `http://localhost/admin/taxonomy/importjob/`
+   - View status, progress, errors in real-time
+
+2. **Log Files:**
+   ```bash
+   tail -f logs/biologidex.log | grep import
+   ```
+
+3. **Celery Inspector:**
+   ```bash
+   # Check active tasks
+   celery -A biologidex inspect active
+
+   # Check task stats
+   celery -A biologidex inspect stats
+   ```
+
+### Post-Import Verification
+
+After import completes, verify the data:
+
+```bash
+# Check taxonomy stats via API
+curl http://localhost/api/v1/taxonomy/stats/
+
+# Expected response:
+{
+  "total_taxa": 9400000,
+  "kingdoms": 5,
+  "species": 2100000,
+  "genera": 450000,
+  "families": 65000,
+  "sources": 1
+}
+
+# Search for a species
+curl "http://localhost/api/v1/taxonomy/search/?q=Panthera+leo"
+
+# Check Django admin
+# Visit: http://localhost/admin/taxonomy/taxonomy/
+```
+
+### Updating Existing Animals
+
+After loading taxonomy data, sync existing animals with taxonomy:
+
+```bash
+# Run taxonomy sync (enriches existing animals with taxonomy data)
+poetry run python manage.py shell
+
+>>> from taxonomy.tasks import sync_taxonomy_to_animals
+>>> sync_taxonomy_to_animals()
+```
+
+Or schedule it as a Celery task:
+```python
+# In biologidex/celery.py - add to beat_schedule:
+'sync-taxonomy-daily': {
+    'task': 'taxonomy.tasks.sync_taxonomy_to_animals',
+    'schedule': crontab(hour=3, minute=0),
+}
+```
+
+### Performance Considerations
+
+**Import Times:**
+- **Download**: 10-30 minutes (depends on connection)
+- **Parsing**: 30-45 minutes (9.4M records)
+- **Normalization**: 60-90 minutes (batched inserts)
+- **Total**: ~2-3 hours
+
+**Resource Usage:**
+- **Disk**: 10GB temporary (5GB after cleanup)
+- **Memory**: 2-4GB peak during processing
+- **Database**: 8-10GB for full dataset
+
+**Optimization Tips:**
+- Run during off-peak hours
+- Use `--async` flag for production
+- Ensure sufficient disk space in `/tmp` or `MEDIA_ROOT`
+- Monitor PostgreSQL memory (may need tuning for large imports)
+
+### Incremental Updates
+
+To update with latest COL data:
+
+```bash
+# Default: Blocks if import done in last 30 days
+poetry run python manage.py import_col
+
+# Force new import
+poetry run python manage.py import_col --force
+
+# Async + force
+poetry run python manage.py import_col --async --force
+```
+
+### Troubleshooting
+
+**Download fails:**
+- Check internet connection
+- Verify COL API is accessible: `curl https://api.checklistbank.org/dataset`
+- Try using `--file` with a pre-downloaded dataset
+
+**Import fails during processing:**
+- Check disk space: `df -h`
+- Check database connections: `docker-compose exec db pg_isready`
+- Review error log in ImportJob via Django admin
+- Check logs: `tail -f logs/biologidex.log`
+
+**Memory errors:**
+- Reduce batch sizes in `col_importer.py` (default: 5000)
+- Increase Docker memory limits in `docker-compose.yml`
+- Add swap space if needed
+
+**Slow performance:**
+- Disable indexes temporarily (requires code modification)
+- Use faster storage (SSD)
+- Increase PostgreSQL `work_mem` and `maintenance_work_mem`
+
+### Data Source Management
+
+View and manage taxonomy sources:
+
+```bash
+# Via Django admin
+http://localhost/admin/taxonomy/datasource/
+
+# Via API
+curl http://localhost/api/v1/sources/
+```
+
+Add additional sources (GBIF, iNaturalist) by:
+1. Creating a new importer class in `taxonomy/importers/`
+2. Registering the source in DataSource model
+3. Running import with appropriate priority
+
+### Cleanup
+
+Remove old import data:
+
+```bash
+# Manual cleanup (deletes processed raw records > 30 days old)
+poetry run python manage.py shell
+
+>>> from taxonomy.tasks import cleanup_old_imports
+>>> cleanup_old_imports()
+
+# Or schedule as Celery task
+# Runs automatically if configured in celery.py beat_schedule
+```
+
+### Validation Testing
+
+Test the taxonomy integration with CV pipeline:
+
+```bash
+# Via Django shell
+poetry run python manage.py shell
+
+>>> from taxonomy.services import TaxonomyService
+>>> from animals.services import AnimalService
+
+# Test taxonomy lookup
+>>> taxonomy = TaxonomyService.lookup_by_scientific_name("Panthera leo")
+>>> print(taxonomy.full_hierarchy)
+
+# Test animal creation from taxonomy
+>>> animal, created, message = AnimalService.lookup_or_create_from_cv(
+...     "Panthera leo", "Lion", confidence=0.95
+... )
+>>> print(f"Animal: {animal}, Created: {created}, Message: {message}")
+```
+
+### Field Mapping Reference
+
+**COL NameUsage → Taxonomy Model**
+```
+col:ID                  → source_taxon_id
+col:scientificName      → scientific_name
+col:authorship          → authorship
+col:status              → status (mapped: accepted/provisional/synonym)
+col:rank                → rank (FK to TaxonomicRank)
+col:kingdom             → kingdom
+col:phylum              → phylum
+col:class               → class_name
+col:order               → order
+col:family              → family
+col:subfamily           → subfamily
+col:genus               → genus
+col:species             → species
+col:subspecies          → subspecies
+col:genericName         → generic_name
+col:specificEpithet     → specific_epithet
+col:code                → nomenclatural_code (mapped: iczn/icn/icnp)
+col:extinct             → extinct (boolean)
+col:environment         → environment (array: marine/terrestrial/freshwater)
+```
+
+**Taxonomy → Animal Model**
+```
+taxonomy.scientific_name     → animal.scientific_name
+taxonomy.kingdom             → animal.kingdom
+taxonomy.phylum              → animal.phylum
+taxonomy.class_name          → animal.class_name
+taxonomy.order               → animal.order
+taxonomy.family              → animal.family
+taxonomy.subfamily           → animal.subfamily
+taxonomy.genus               → animal.genus
+taxonomy.specific_epithet    → animal.species
+taxonomy.id                  → animal.taxonomy_id
+taxonomy.source.short_code   → animal.taxonomy_source
+taxonomy.source_url          → animal.taxonomy_source_url
+distributions[native]        → animal.native_regions
+distributions[threat_status] → animal.conservation_status
+```
 
 ---
 
 ## Future Extensibility
 
 1. **Multiple CV Providers** - CVServiceFactory ready for new implementations
-2. **Data Sources** - Taxonomic system designed for multiple sources
+2. **Additional Taxonomy Sources** - System supports GBIF, iNaturalist, WoRMS, ITIS
+   - BaseImporter abstract class ready for new data sources
+   - DataSource model with priority-based conflict resolution
+   - Extensible importer architecture
 3. **Real-time Updates** - WebSocket support can be added
 4. **Machine Learning** - Custom animal identification model slot
 5. **Gamification** - Badge system in User.badges (JSON)
 6. **Localization** - Uses Django i18n framework
 7. **Advanced Filtering** - DjangoFilterBackend supports custom filters
 8. **Rate Limiting** - Per-endpoint throttle rates configurable
+9. **Vernacular Names** - CommonName model ready for VernacularName.tsv import
+10. **Geographic Distributions** - GeographicDistribution model ready for Distribution.tsv import
 
 ---
 
@@ -1170,12 +1638,20 @@ col:species            → species
 - `/server/social/models.py` - Friendship
 - `/server/vision/models.py` - AnalysisJob CV tracking
 - `/server/images/models.py` - ProcessedImage
+- `/server/taxonomy/models.py` - Taxonomy, DataSource, ImportJob
+- `/server/taxonomy/raw_models.py` - RawCatalogueOfLife
 
 **Services:**
 - `/server/vision/services.py` - OpenAIVisionService
 - `/server/vision/tasks.py` - Celery tasks + parse_and_create_animal()
 - `/server/graph/services.py` - EvolutionaryGraphService
 - `/server/vision/image_processor.py` - ImageProcessor, EnhancedImageProcessor
+- `/server/taxonomy/services.py` - TaxonomyService
+- `/server/animals/services.py` - AnimalService with taxonomy integration
+
+**Importers:**
+- `/server/taxonomy/importers/base.py` - BaseImporter abstract class
+- `/server/taxonomy/importers/col_importer.py` - CatalogueOfLifeImporter
 
 **Views/Serializers:**
 - `/server/{app}/views.py` - ViewSets for each app
@@ -1184,10 +1660,15 @@ col:species            → species
 
 **Management Commands:**
 - `/server/accounts/management/commands/seed_test_users.py` - Create test data
+- `/server/taxonomy/management/commands/import_col.py` - Import COL data
+
+**Fixtures:**
+- `/server/taxonomy/fixtures/ranks.json` - Taxonomic rank reference data (20 ranks)
 
 **Data:**
-- `/resources/catalogue_of_life/` - 3GB+ Catalogue of Life dataset (not yet integrated)
+- `/resources/catalogue_of_life/` - 3GB+ Catalogue of Life dataset (can be imported)
 - `/resources/catalogue_of_life/catalogue_of_life.md` - CoL documentation
+- Taxonomy data loaded via `python manage.py import_col` command
 
 **Configuration:**
 - `/server/biologidex/settings/base.py` - All settings
