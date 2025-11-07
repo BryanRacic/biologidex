@@ -80,21 +80,85 @@ class TaxonomyService:
     @classmethod
     def lookup_or_create_from_cv(
         cls,
-        scientific_name: str,
+        genus: str,
+        species: str,
+        subspecies: Optional[str] = None,
         common_name: Optional[str] = None,
         confidence: float = 0.0
     ) -> Tuple[Optional[Taxonomy], bool, str]:
         """
-        Lookup taxonomy from CV identification, create animal if found
+        Lookup taxonomy from CV identification, matching ALL fields (genus, species, subspecies, common name)
+
+        Args:
+            genus: Genus name from CV
+            species: Species epithet from CV
+            subspecies: Subspecies/infraspecific epithet from CV (optional)
+            common_name: Common name from CV (optional)
+            confidence: CV confidence score
 
         Returns:
             (taxonomy, created, message)
         """
-        # Try exact lookup first
-        taxonomy = cls.lookup_by_scientific_name(
-            scientific_name,
-            include_synonyms=True
+        # Build scientific name for logging
+        if subspecies:
+            scientific_name = f"{genus} {species} {subspecies}"
+        else:
+            scientific_name = f"{genus} {species}"
+
+        logger.info(
+            f"Looking up taxonomy: genus={genus}, species={species}, "
+            f"subspecies={subspecies}, common_name={common_name}"
         )
+
+        # Build query to match ALL fields
+        query = Q(
+            genus__iexact=genus,
+            specific_epithet__iexact=species,
+            status__in=['accepted', 'provisional', 'synonym']
+        )
+
+        # Match subspecies field (must match exactly, including None)
+        if subspecies:
+            query &= Q(infraspecific_epithet__iexact=subspecies)
+        else:
+            query &= (Q(infraspecific_epithet__isnull=True) | Q(infraspecific_epithet=''))
+
+        # Execute query with priority ordering
+        candidates = Taxonomy.objects.filter(query).select_related(
+            'source', 'rank'
+        ).order_by(
+            'source__priority',  # Higher priority sources first
+            '-completeness_score',  # More complete records first
+            '-confidence_score'
+        )
+
+        # If common name provided, filter to match common name
+        if common_name:
+            # Try to find candidates that match the common name
+            matching_common_name = []
+            for candidate in candidates:
+                # Get common names for this taxonomy
+                common_names = CommonName.objects.filter(
+                    taxonomy=candidate
+                ).values_list('name', flat=True)
+
+                # Check if any common name matches (case-insensitive)
+                if any(cn.lower() == common_name.lower() for cn in common_names):
+                    matching_common_name.append(candidate)
+
+            # If we found matches with common name, use those
+            if matching_common_name:
+                taxonomy = matching_common_name[0]
+            else:
+                # No match with common name - this might be a mismatch
+                logger.warning(
+                    f"Found taxonomy for {scientific_name} but common name '{common_name}' "
+                    f"doesn't match. Rejecting to avoid mismatch."
+                )
+                return None, False, f"Found {scientific_name} but common name mismatch"
+        else:
+            # No common name provided, use first candidate
+            taxonomy = candidates.first() if candidates else None
 
         if taxonomy:
             # Found in taxonomy database

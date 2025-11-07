@@ -147,7 +147,9 @@ class AnimalService:
     @classmethod
     def lookup_or_create_from_cv(
         cls,
-        scientific_name: str,
+        genus: str,
+        species: str,
+        subspecies: Optional[str] = None,
         common_name: Optional[str] = None,
         confidence: float = 0.0
     ) -> Tuple[Optional[Animal], bool, str]:
@@ -155,12 +157,14 @@ class AnimalService:
         Lookup or create animal from CV identification
 
         This method:
-        1. Looks up taxonomy in the taxonomy database
+        1. Looks up taxonomy in the taxonomy database matching ALL fields
         2. If found, creates/updates animal from taxonomy
         3. If not found, creates basic animal record
 
         Args:
-            scientific_name: Scientific name from CV
+            genus: Genus name from CV
+            species: Species epithet from CV
+            subspecies: Subspecies/infraspecific epithet from CV (optional)
             common_name: Common name from CV
             confidence: CV confidence score
 
@@ -169,9 +173,17 @@ class AnimalService:
         """
         from taxonomy.services import TaxonomyService
 
-        # Try taxonomy lookup first
+        # Build scientific name for logging
+        if subspecies:
+            scientific_name = f"{genus} {species} {subspecies}"
+        else:
+            scientific_name = f"{genus} {species}"
+
+        # Try taxonomy lookup with all fields
         taxonomy, created, message = TaxonomyService.lookup_or_create_from_cv(
-            scientific_name=scientific_name,
+            genus=genus,
+            species=species,
+            subspecies=subspecies,
             common_name=common_name,
             confidence=confidence
         )
@@ -184,17 +196,12 @@ class AnimalService:
         # Not found in taxonomy - create basic animal record from CV data
         logger.warning(f"Creating basic animal record for: {scientific_name}")
 
-        # Parse genus and species from scientific name
-        parts = scientific_name.split()
-        genus = parts[0] if len(parts) > 0 else ''
-        species_epithet = parts[1] if len(parts) > 1 else ''
-
         animal, created = Animal.objects.get_or_create(
             scientific_name=scientific_name,
             defaults={
                 'common_name': common_name or scientific_name,
                 'genus': genus,
-                'species': species_epithet,
+                'species': species,
                 'verified': False,  # Not verified - needs manual review
                 'verification_method': 'cv'
             }

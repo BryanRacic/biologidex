@@ -122,7 +122,7 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
     """
     Parse CV prediction and create/retrieve Animal record using taxonomy system.
 
-    Expected format: "Genus, species (common name)" or "Genus species (common name)"
+    Expected format: "Genus species [subspecies] (common name)"
 
     Args:
         prediction: Prediction string from CV service
@@ -152,7 +152,8 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
 
         # Extract scientific name and common name
         # Pattern: Genus species [subspecies] (optional common name)
-        pattern = r'([A-Z][a-z]+)[,\s]+([a-z]+(?:\s+[a-z]+)?)\s*(?:\(([^)]+)\))?'
+        # Improved pattern to capture genus, species, subspecies separately
+        pattern = r'([A-Z][a-z]+)[,\s]+([a-z]+)(?:\s+([a-z]+))?\s*(?:\(([^)]+)\))?'
         match = re.search(pattern, first_line)
 
         if not match:
@@ -160,19 +161,25 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
             return None
 
         genus = match.group(1)
-        species_full = match.group(2).strip()  # May include subspecies
-        common_name = match.group(3).strip() if match.group(3) else ""
+        species = match.group(2)
+        subspecies = match.group(3) if match.group(3) else None
+        common_name = match.group(4).strip() if match.group(4) else ""
 
         # Build scientific name
-        scientific_name = f"{genus} {species_full}"
+        if subspecies:
+            scientific_name = f"{genus} {species} {subspecies}"
+        else:
+            scientific_name = f"{genus} {species}"
 
-        logger.info(f"Parsed: {scientific_name} ({common_name})")
+        logger.info(f"Parsed: genus={genus}, species={species}, subspecies={subspecies}, common_name={common_name}")
 
         # Use taxonomy-aware animal service for lookup/creation
         from animals.services import AnimalService
 
         animal, created, message = AnimalService.lookup_or_create_from_cv(
-            scientific_name=scientific_name,
+            genus=genus,
+            species=species,
+            subspecies=subspecies,
             common_name=common_name,
             confidence=0.0  # CV confidence will be set separately in AnalysisJob
         )
