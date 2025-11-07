@@ -3,7 +3,7 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative taxonomic tree shared with friends.
 
-## Current Status (Updated 2025-11-05)
+## Current Status (Updated 2025-11-06)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
@@ -17,6 +17,7 @@ A Pokedex-style social network for sharing real-world zoological observations. U
 - ✅ **Image Processing Pipeline**: Standardized dex-compatible images with server-side conversion
 - ✅ **Image Transformations**: Client-side rotation UI with server-side processing and EXIF support
 - ✅ **Dex Sync API**: Server endpoint for syncing dex entries with image checksums
+- 📋 **Taxonomic Tree Visualization**: Complete implementation plan (client + server) - Ready to build
 
 ---
 
@@ -706,6 +707,40 @@ docker-compose -f docker-compose.production.yml ps        # Check status
 - Use Django admin panel for data inspection
 
 ---
+
+## Taxonomic Tree Implementation (Added 2025-11-06)
+
+### Overview
+Complete implementation plan created for high-performance taxonomic tree visualization supporting 100k+ nodes at 60 FPS.
+
+### Client Architecture (Godot 4.5)
+- **Rendering**: SubViewport-based 2D canvas with MultiMeshInstance2D batching
+- **Layout**: Client-side Reingold-Tilford algorithm with caching
+- **Optimization**: Spatial chunking (2048x2048), LOD system, progressive loading
+- **Interaction**: Touch gestures, pan/zoom, node selection
+- **Performance**: Targets 100k+ nodes at 60 FPS on mobile
+
+### Server Architecture (Django)
+- **Layout Algorithm**: Server-side Reingold-Tilford implementation in Python
+- **Chunking System**: Spatial grid for progressive data loading
+- **New Endpoints**:
+  - `GET /api/v1/graph/taxonomic-tree-layout/` - Precomputed positions
+  - `GET /api/v1/graph/chunk/{x}/{y}/` - Individual chunks
+  - `GET /api/v1/graph/search/` - Tree-aware search
+- **Caching**: Redis-backed with separate TTLs for layout (5m) and chunks (10m)
+- **Optimizations**: Fix N+1 queries, add database indexes, bulk operations
+
+### Implementation Status
+- ✅ Complete client specification (taxonomic_tree.md)
+- ✅ Server audit completed (found graph service, needs layout/chunking)
+- ✅ Detailed implementation plan with code examples
+- ⏳ Ready to implement (estimated 10-12 days total)
+
+### Key Technical Decisions
+- Server-side layout computation (too expensive for mobile clients)
+- 2048x2048 chunk size (optimal for network/memory tradeoff)
+- Parent-child edges based on taxonomy (not just same_family)
+- Progressive loading with breadth-first priority
 
 ## Next Steps
 
