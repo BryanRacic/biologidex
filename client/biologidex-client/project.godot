@@ -18,11 +18,10 @@ config/icon="res://icon.svg"
 [autoload]
 
 NavigationManager="*res://navigation_manager.gd"
-APIManager="*res://api_manager.gd"
 TokenManager="*res://token_manager.gd"
+APIManager="*res://api/api_manager.gd"
 DexDatabase="*res://dex_database.gd"
 TreeCache="*res://tree_cache.gd"
-TreeAPIService="*res://tree_api_service.gd"
 
 [display]
 

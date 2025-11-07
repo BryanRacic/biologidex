@@ -4,6 +4,8 @@ Coordinates data loading, rendering, and user interaction.
 """
 extends Control
 
+const APITypes = preload("res://api/core/api_types.gd")
+
 # Node references (assigned in _ready)
 @onready var back_button: Button = $VBoxContainer/Toolbar/BackButton
 @onready var search_bar: LineEdit = $VBoxContainer/Toolbar/SearchBar
@@ -20,7 +22,7 @@ extends Control
 
 # Tree data
 var current_tree_data: TreeDataModels.TreeData = null
-var current_mode: TreeAPIService.TreeMode = TreeAPIService.TreeMode.FRIENDS
+var current_mode: APITypes.TreeMode = APITypes.TreeMode.FRIENDS
 var selected_friend_ids: Array[int] = []
 
 # State
@@ -39,10 +41,10 @@ func _ready() -> void:
 	zoom_reset_button.pressed.connect(_on_zoom_reset)
 
 	# Connect API signals
-	TreeAPIService.tree_loaded.connect(_on_tree_loaded)
-	TreeAPIService.tree_load_failed.connect(_on_tree_load_failed)
-	TreeAPIService.search_results_received.connect(_on_search_results)
-	TreeAPIService.search_failed.connect(_on_search_failed)
+	APIManager.tree.tree_loaded.connect(_on_tree_loaded)
+	APIManager.tree.tree_load_failed.connect(_on_tree_load_failed)
+	APIManager.tree.search_results_received.connect(_on_search_results)
+	APIManager.tree.search_failed.connect(_on_search_failed)
 
 	# Setup mode dropdown
 	_setup_mode_dropdown()
@@ -58,11 +60,11 @@ func _ready() -> void:
 func _setup_mode_dropdown() -> void:
 	"""Setup mode selection dropdown."""
 	mode_dropdown.clear()
-	mode_dropdown.add_item("Personal", TreeAPIService.TreeMode.PERSONAL)
-	mode_dropdown.add_item("Friends", TreeAPIService.TreeMode.FRIENDS)
-	mode_dropdown.add_item("Selected", TreeAPIService.TreeMode.SELECTED)
+	mode_dropdown.add_item("Personal", APITypes.TreeMode.PERSONAL)
+	mode_dropdown.add_item("Friends", APITypes.TreeMode.FRIENDS)
+	mode_dropdown.add_item("Selected", APITypes.TreeMode.SELECTED)
 	# Don't add Global mode for non-admin users
-	mode_dropdown.select(TreeAPIService.TreeMode.FRIENDS)
+	mode_dropdown.select(APITypes.TreeMode.FRIENDS)
 
 
 func _setup_viewport() -> void:
@@ -84,10 +86,10 @@ func load_tree(use_cache: bool = true) -> void:
 	is_loading = true
 	_show_loading(true)
 
-	print("[TreeController] Loading tree (mode: ", TreeAPIService.get_mode_string(current_mode), ")")
+	print("[TreeController] Loading tree (mode: ", APITypes.get_tree_mode_string(current_mode), ")")
 
 	# Fetch from API
-	TreeAPIService.fetch_tree(current_mode, selected_friend_ids, use_cache)
+	APIManager.tree.fetch_tree(current_mode, selected_friend_ids, use_cache)
 
 
 func _on_tree_loaded(tree_data: TreeDataModels.TreeData) -> void:
@@ -158,15 +160,15 @@ func _render_tree() -> void:
 
 func _on_mode_selected(index: int) -> void:
 	"""Handle mode selection change."""
-	var new_mode = mode_dropdown.get_item_id(index) as TreeAPIService.TreeMode
+	var new_mode = mode_dropdown.get_item_id(index) as APITypes.TreeMode
 	if new_mode == current_mode:
 		return
 
-	print("[TreeController] Mode changed to: ", TreeAPIService.get_mode_string(new_mode))
+	print("[TreeController] Mode changed to: ", APITypes.get_tree_mode_string(new_mode))
 	current_mode = new_mode
 
 	# If selected mode, show friend selection UI
-	if current_mode == TreeAPIService.TreeMode.SELECTED:
+	if current_mode == APITypes.TreeMode.SELECTED:
 		_show_friend_selection()
 	else:
 		# Reload tree with new mode
@@ -187,7 +189,7 @@ func _on_search_submitted(query: String) -> void:
 		return
 
 	print("[TreeController] Searching for: ", query)
-	TreeAPIService.search_tree(query, current_mode, selected_friend_ids, 50)
+	APIManager.tree.search_tree(query, current_mode, selected_friend_ids, 50)
 
 
 func _on_search_results(results: Array) -> void:
@@ -295,7 +297,7 @@ func _exit_tree() -> void:
 	print("[TreeController] Cleaning up")
 
 	# Disconnect signals
-	if TreeAPIService.tree_loaded.is_connected(_on_tree_loaded):
-		TreeAPIService.tree_loaded.disconnect(_on_tree_loaded)
-	if TreeAPIService.tree_load_failed.is_connected(_on_tree_load_failed):
-		TreeAPIService.tree_load_failed.disconnect(_on_tree_load_failed)
+	if APIManager.tree.tree_loaded.is_connected(_on_tree_loaded):
+		APIManager.tree.tree_loaded.disconnect(_on_tree_loaded)
+	if APIManager.tree.tree_load_failed.is_connected(_on_tree_load_failed):
+		APIManager.tree.tree_load_failed.disconnect(_on_tree_load_failed)

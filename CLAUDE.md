@@ -40,7 +40,20 @@ client/biologidex-client/
 ├── camera.tscn / camera.gd      # Photo upload scene with CV integration
 ├── dex.tscn / dex.gd            # Dex gallery with prev/next navigation
 ├── record_image.tscn            # Animal record card component
-├── api_manager.gd               # Global HTTP API singleton (autoload)
+├── api/                         # API layer (4-layer architecture)
+│   ├── api_manager.gd           # Orchestrator singleton (autoload)
+│   ├── core/
+│   │   ├── http_client.gd       # Low-level HTTP (HTTPClientCore)
+│   │   ├── api_client.gd        # High-level with auth, retry, queue (APIClient)
+│   │   ├── api_config.gd        # Endpoints, timeouts, retry config (APIConfig)
+│   │   └── api_types.gd         # Shared types (APIError, RequestConfig, TreeMode)
+│   └── services/
+│       ├── base_service.gd      # Abstract base (BaseService)
+│       ├── auth_service.gd      # Authentication (AuthService)
+│       ├── vision_service.gd    # CV jobs (VisionService)
+│       ├── tree_service.gd      # Taxonomic tree (TreeService)
+│       ├── social_service.gd    # Friends (SocialService)
+│       └── dex_service.gd       # Dex entries (DexService)
 ├── token_manager.gd             # JWT token persistence (autoload)
 ├── navigation_manager.gd        # Navigation singleton (autoload)
 ├── dex_database.gd              # Local dex storage singleton (autoload)
@@ -49,7 +62,6 @@ client/biologidex-client/
 ├── theme.tres                   # Base theme resource
 ├── project.godot                # Project configuration
 ├── export_presets.cfg           # Web export configuration (single-threaded)
-├── implementation-notes.md      # Phase 1 implementation details
 └── export/web/                  # Godot web export output
     ├── index.html               # Entry point
     ├── index.wasm               # WebAssembly binary (~36MB)
@@ -72,10 +84,37 @@ client/biologidex-client/
 - Back navigation support with `go_back()`
 - Signals: `scene_changed`, `navigation_failed`
 
+**API Architecture (4-Layer)**:
+- **Core HTTP**: HTTPClientCore - raw HTTP operations, response parsing, platform configs
+- **API Client**: APIClient - high-level with auth injection, retry logic, request queue (max 3 concurrent)
+- **Service Layer**: Domain-specific services (auth, vision, tree, social, dex) extending BaseService
+- **Manager**: APIManager singleton orchestrates all services, provides backward compatibility
+
+**Usage Pattern**:
+```gdscript
+# Access via manager singleton
+APIManager.auth.login(username, password, callback)
+APIManager.tree.fetch_tree(APITypes.TreeMode.FRIENDS, [], true, callback)
+
+# Services emit signals AND invoke callbacks
+APIManager.auth.login_succeeded.connect(_on_success)
+
+# Callbacks: func(response: Dictionary, code: int) or func(error: APITypes.APIError)
+func callback(response: Dictionary, code: int):
+    if code == 200:  # Always check code, not dict keys
+        # Success
+```
+
+**Critical API Patterns**:
+- ✅ Use `APIManager.<service>.<method>()` for all API calls
+- ✅ Services use traditional callbacks with `.bind(context)`, NOT inline lambdas
+- ✅ GDScript function calls: positional arguments ONLY (no `param=value` syntax)
+- ✅ Callbacks receive `(response: Dictionary, code: int)` - check `code == 200` for success
+- ❌ Never call `api_client.post()` directly - always use service methods
+- ❌ Never use inline lambdas in service methods - causes "assignment in expression" errors
+
 **Authentication Flow**:
-- APIManager provides `login()` and `register()` methods
-- Registration endpoint: `POST /users/` (username, email, password, password_confirm)
-- Successful registration → auto-login → navigate to home with cleared history
+- Services handle auth automatically via TokenManager
 - Form validation pattern: client-side checks before API call
 - Error handling: parse field-specific errors from API response arrays
 - Security: password fields cleared on errors, passwords redacted in logs
@@ -120,18 +159,25 @@ client/biologidex-client/
 - Image stretch modes: simple (keep aspect centered), bordered (scale to fill)
 
 **Common Gotchas**:
-- GDScript type inference: `min()`, `max()`, and `Array[T].pop_back()` return Variant - always explicitly type as `float` or `String`
-- Reserved keywords: `class_name` is reserved, use `animal_class` or similar for variables
-- `layout_mode` values: 0 = uncontrolled (no positioning), 1 = anchors, 2 = container, 3 = anchors preset only
-- Children of containers need `layout_mode = 2`, not anchors
-- AspectRatioContainer must use anchors (`layout_mode = 1`) to fill its parent Control
-- Dynamic sizing: Use `await get_tree().process_frame` before reading calculated sizes
-- Touch targets must be minimum 44×44 pixels for mobile
-- MSDF fonts enable crisp rendering at all scales without rasterization
-- **TokenManager**: Use `is_logged_in()` not `has_valid_token()` to check auth status
+- **GDScript syntax**:
+  - Type inference: `min()`, `max()`, `Array[T].pop_back()` return Variant - explicitly cast to `float` or `String`
+  - Reserved: `class_name` is reserved, use `animal_class` for variables
+  - Function calls: NO named arguments (`func(arg=value)` is invalid) - use positional only
+  - Inline lambdas in service methods: FORBIDDEN - causes "assignment in expression" errors
+- **API calls**:
+  - Use `APIManager.<service>.<method>()` for all API operations
+  - Check `code == 200` in callbacks, not response dict keys
+  - Service methods use traditional callbacks with `.bind(context)`, never inline lambdas
+- **UI Layout**:
+  - `layout_mode`: 0=uncontrolled, 1=anchors, 2=container, 3=anchors preset only
+  - Container children need `layout_mode = 2`, not anchors
+  - AspectRatioContainer must use anchors (`layout_mode = 1`) to fill parent
+  - Dynamic sizing: `await get_tree().process_frame` before reading calculated sizes
+  - Touch targets: minimum 44×44 pixels for mobile
+- **TokenManager**: Use `is_logged_in()` not `has_valid_token()` to check auth
 - **Image dimensions**: Always update `current_image_width/height` when changing displayed image
-- **Image rotation sizing**: Never call `_update_record_image_size()` during rotation of simple preview - it's designed for bordered view only and causes oversized display
-- **Web export gzip**: Set `HTTPRequest.accept_gzip = false` for web builds to avoid double decompression (browsers handle gzip automatically, causes `stream_peer_gzip.cpp` errors if Godot tries to decompress again)
+- **Image rotation**: Never call `_update_record_image_size()` during rotation of simple preview
+- **Web export gzip**: Set `HTTPRequest.accept_gzip = false` to avoid double decompression
 
 ### Backend Stack
 - **Framework**: Django 4.2+ with Django REST Framework

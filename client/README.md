@@ -54,7 +54,10 @@ client/
 │   ├── camera.tscn           # Photo upload scene
 │   ├── camera.gd             # Photo upload with CV integration
 │   ├── record_image.tscn     # Animal record card component
-│   ├── api_manager.gd        # HTTP API singleton (autoload)
+│   ├── api/                  # API layer (4-layer architecture)
+│   │   ├── api_manager.gd    # Orchestrator singleton (autoload)
+│   │   ├── core/             # HTTP client, config, types
+│   │   └── services/         # Domain services (auth, vision, tree, social, dex)
 │   ├── token_manager.gd      # JWT token persistence (autoload)
 │   ├── navigation_manager.gd # Navigation singleton (autoload)
 │   ├── responsive.gd         # Responsive behavior base script
@@ -109,14 +112,59 @@ client/
   - Navigation to home screen after auth
 - **Security**: Password fields cleared on errors, passwords redacted in logs
 
-### API Integration
-- **Singleton**: `APIManager` (autoload)
-- **Endpoints**:
-  - `login()` - POST /auth/login/
-  - `register()` - POST /users/
-  - `refresh_token()` - POST /auth/refresh/
-- **Pattern**: Callback-based async requests with response code handling
+### API Integration (4-Layer Architecture)
+
+**Structure**: Core HTTP → API Client → Service Layer → Manager Singleton
+
+```
+api/
+├── api_manager.gd          # Orchestrator (APIManager.auth.login, APIManager.tree.fetch_tree)
+├── core/
+│   ├── http_client.gd      # Low-level HTTP (HTTPClientCore)
+│   ├── api_client.gd       # High-level API client with auth, retry, queue (APIClient)
+│   ├── api_config.gd       # Endpoints, timeouts, retry config (APIConfig)
+│   └── api_types.gd        # Shared types (APIError, RequestConfig, TreeMode enum)
+└── services/
+    ├── base_service.gd     # Abstract base with common functionality (BaseService)
+    ├── auth_service.gd     # Authentication (AuthService)
+    ├── vision_service.gd   # Computer vision jobs (VisionService)
+    ├── tree_service.gd     # Taxonomic tree (TreeService)
+    ├── social_service.gd   # Friends management (SocialService)
+    └── dex_service.gd      # Dex entries (DexService)
+```
+
+**Usage Pattern**:
+```gdscript
+# Access services via APIManager singleton
+APIManager.auth.login(username, password, callback)
+APIManager.tree.fetch_tree(mode, friend_ids, use_cache, callback)
+APIManager.vision.get_vision_job(job_id, callback)
+
+# Services emit signals AND invoke callbacks
+APIManager.auth.login_succeeded.connect(_on_login_success)
+APIManager.tree.tree_loaded.connect(_on_tree_loaded)
+
+# Callbacks receive (response: Dictionary, code: int) or (error: APITypes.APIError)
+func my_callback(response: Dictionary, code: int):
+    if code == 200:
+        # Success
+    else:
+        # Error - response contains error details
+```
+
+**Key Features**:
+- **Authentication**: Automatic token injection via TokenManager
+- **Request Queue**: Max 3 concurrent requests with priority ordering
+- **Retry Logic**: Exponential backoff for failed requests
+- **Error Handling**: Standardized APIError with field-specific errors
 - **Base URL**: https://biologidex.io/api/v1
+
+**Critical Patterns**:
+- ✅ Use `APIManager.<service>.<method>()` for all API calls
+- ✅ Services use traditional callback functions with `.bind()`, NOT inline lambdas
+- ✅ GDScript doesn't support named arguments in calls - use positional only
+- ✅ Always check `code == 200` in callbacks, not response dict keys
+- ❌ Never use `APIManager.make_request()` directly (doesn't exist)
 
 ### Token Management
 - **Singleton**: `TokenManager` (autoload)
@@ -657,39 +705,67 @@ func _ready():
    # Verify on mobile preview
    ```
 
-## Quick Reference: Using Authenticated Endpoints
+## Quick Reference: Using API Services
 
-Now that authentication is implemented, here's how to use it in new pages:
-
-### Making Authenticated API Calls
+### Making API Calls
 
 ```gdscript
-# Example: Fetching user's dex entries
-func fetch_my_dex_entries() -> void:
-    # Get access token from TokenManager
-    var token := TokenManager.get_access_token()
+# Authentication
+APIManager.auth.login("username", "password", func(response: Dictionary, code: int):
+    if code == 200:
+        print("Logged in! Access token:", response["access"])
+    else:
+        print("Login failed:", response.get("error", "Unknown error"))
+)
 
-    if token.length() == 0:
-        # User not logged in, redirect to login
-        NavigationManager.navigate_to("res://login.tscn")
-        return
+# Dex entries (automatically authenticated)
+APIManager.dex.get_my_entries(func(response: Dictionary, code: int):
+    if code == 200:
+        var entries = response.get("results", [])
+        for entry in entries:
+            print(entry["animal"]["scientific_name"])
+)
 
-    # Make API call with token
-    var url := APIManager.BASE_URL + "/dex/entries/my_entries/"
-    var headers := ["Authorization: Bearer %s" % token]
+# Vision jobs (image upload)
+APIManager.vision.create_vision_job(
+    image_data,           # PackedByteArray
+    "photo.jpg",          # filename
+    "image/jpeg",         # mime type
+    func(response: Dictionary, code: int):
+        if code == 200:
+            var job_id = response["id"]
+            _poll_job_status(job_id)
+)
 
-    http_request.request(url, headers, HTTPClient.METHOD_GET)
+# Tree data
+APIManager.tree.fetch_tree(
+    APITypes.TreeMode.FRIENDS,  # mode
+    [],                          # friend_ids (empty for all friends)
+    true,                        # use_cache
+    func(response: Dictionary, code: int):
+        if code == 200:
+            var nodes = response.get("nodes", [])
+            var edges = response.get("edges", [])
+)
+```
 
-# Example: Creating a new dex entry
-func create_dex_entry(animal_id: String, image_data: PackedByteArray) -> void:
-    var token := TokenManager.get_access_token()
+### Connecting to Signals
 
-    if token.length() == 0:
-        _handle_unauthorized()
-        return
+```gdscript
+func _ready():
+    # Connect to service signals for real-time updates
+    APIManager.auth.login_succeeded.connect(_on_login_success)
+    APIManager.auth.login_failed.connect(_on_login_failed)
+    APIManager.dex.dex_entry_created.connect(_on_entry_created)
 
-    # Use APIManager pattern with token
-    # (Add method to APIManager for consistency)
+func _on_login_success(user_data: Dictionary):
+    print("User logged in:", user_data["username"])
+
+func _on_login_failed(error: APITypes.APIError):
+    print("Login error:", error.format())
+    # Check field-specific errors
+    for field in error.field_errors:
+        print(field, ":", error.field_errors[field])
 ```
 
 ### Handling Token Expiration
