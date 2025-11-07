@@ -1,6 +1,7 @@
 # taxonomy/importers/col_importer.py
 import csv
 import os
+import sys
 import requests
 import logging
 from datetime import datetime
@@ -19,40 +20,84 @@ class CatalogueOfLifeImporter(BaseImporter):
 
     def download_data(self) -> str:
         """Download COL dataset"""
-        logger.info("Fetching latest COL dataset info...")
+        logger.info("=" * 80)
+        logger.info("STEP 1: Fetching latest COL base release info...")
+        logger.info("=" * 80)
 
-        # Get latest dataset info
+        # Get multiple recent base releases (not XR/extended releases)
+        # Release types by origin:
+        #   - 'release': Base releases (curated, expert-verified)
+        #   - 'xrelease': XR/eXtended releases (base + programmatic additions)
+        # Note: API sorting is inverted - reverse=False gives newest first
+        # Note: Newest releases may not have exports ready yet, so we check top 5
+        logger.info("Querying ChecklistBank API for recent base releases...")
         response = requests.get(
             f"{self.API_BASE}/dataset",
             params={
                 'offset': 0,
-                'limit': 1,
-                'origin': 'RELEASE',
+                'limit': 5,  # Get top 5 to find one with available export
+                'origin': 'release',  # lowercase 'release' for base releases
                 'sortBy': 'CREATED',
-                'reverse': True
+                'reverse': False  # False gives newest first (API quirk)
             }
         )
         response.raise_for_status()
         datasets = response.json()
 
         if not datasets.get('result'):
-            raise ValueError("No COL datasets available")
+            raise ValueError("No COL base release datasets available")
 
-        latest = datasets['result'][0]
-        dataset_key = latest['key']
-        self.import_job.version = latest.get('version', dataset_key)
+        logger.info(f"Found {len(datasets['result'])} recent base releases")
+
+        # Find the latest dataset with an available export
+        dataset_key = None
+        dataset_meta = None
+        params = {
+            'format': 'ColDP',      # Case-sensitive! Must be 'ColDP' not 'COLDP'
+            'extended': 'true'      # Required for full ColDP format with NameUsage.tsv
+        }
+
+        for i, dataset in enumerate(datasets['result'], 1):
+            key = dataset['key']
+            version = dataset.get('version', 'unknown')
+            logger.info(f"Checking dataset {i}/5: {key} (version {version})")
+
+            # Check if export is available (HEAD request)
+            check_url = f"{self.API_BASE}/dataset/{key}/export.zip"
+            try:
+                check_response = requests.head(check_url, params=params, allow_redirects=True, timeout=10)
+                if check_response.status_code == 200:
+                    dataset_key = key
+                    dataset_meta = dataset
+                    logger.info(f"✓ Found dataset with available export: {key} (version {version})")
+                    break
+                else:
+                    logger.warning(f"✗ Dataset {key} export not available (HTTP {check_response.status_code})")
+            except requests.RequestException as e:
+                logger.warning(f"✗ Failed to check export for dataset {key}: {e}")
+                continue
+
+        if not dataset_key:
+            raise ValueError("No COL base release with available export found in recent releases")
+
+        self.import_job.version = dataset_meta.get('version', str(dataset_key))
         self.import_job.metadata = {
             'dataset_key': dataset_key,
-            'created': latest.get('created'),
-            'title': latest.get('title')
+            'created': dataset_meta.get('created'),
+            'title': dataset_meta.get('title'),
+            'version': dataset_meta.get('version'),
+            'doi': dataset_meta.get('doi'),
+            'size': dataset_meta.get('size'),
+            'origin': dataset_meta.get('origin')
         }
         self.import_job.save()
 
-        logger.info(f"Latest COL dataset: {dataset_key} (version {self.import_job.version})")
+        logger.info(f"Selected dataset: {dataset_meta.get('title', 'Unknown')}")
+        logger.info(f"Version: {self.import_job.version}")
+        logger.info(f"DOI: {dataset_meta.get('doi', 'N/A')}")
 
         # Download dataset (use .zip endpoint which redirects to actual file)
         download_url = f"{self.API_BASE}/dataset/{dataset_key}/export.zip"
-        params = {'format': 'COLDP'}
 
         # Create download directory
         download_dir = os.path.join(settings.MEDIA_ROOT, 'taxonomy_imports')
@@ -63,115 +108,295 @@ class CatalogueOfLifeImporter(BaseImporter):
             f'col_{dataset_key}_{datetime.now().strftime("%Y%m%d")}.zip'
         )
 
-        logger.info(f"Downloading dataset to {file_path}...")
+        # Check if file already exists locally
+        if os.path.exists(file_path):
+            logger.info(f"Found existing file: {file_path}")
+            logger.info(f"File size: {os.path.getsize(file_path) / (1024*1024):.2f}MB")
+            logger.info("Validating existing file...")
 
-        with requests.get(download_url, params=params, stream=True) as r:
+            # Try to validate existing file
+            import zipfile
+            try:
+                with zipfile.ZipFile(file_path, 'r') as zf:
+                    bad_file = zf.testzip()
+                    if bad_file:
+                        logger.warning(f"Existing file is corrupted (bad file: {bad_file}), will re-download")
+                        os.remove(file_path)
+                    else:
+                        logger.info("✓ Existing file validated successfully, reusing it")
+                        self.import_job.file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                        self.import_job.save()
+                        return file_path
+            except zipfile.BadZipFile as e:
+                logger.warning(f"Existing file is not a valid zip ({e}), will re-download")
+                os.remove(file_path)
+
+        # Download the file
+        logger.info("=" * 80)
+        logger.info("STEP 2: Downloading dataset...")
+        logger.info("=" * 80)
+        logger.info(f"URL: {download_url}")
+        logger.info(f"Destination: {file_path}")
+
+        with requests.get(download_url, params=params, stream=True, allow_redirects=True) as r:
             r.raise_for_status()
             total_size = int(r.headers.get('content-length', 0))
             downloaded = 0
+            last_log_mb = 0
+
+            logger.info(f"Total size: {total_size / (1024*1024):.2f}MB")
+            logger.info("Starting download...")
 
             with open(file_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
                     downloaded += len(chunk)
 
-                    # Log progress every 100MB
-                    if downloaded % (100 * 1024 * 1024) == 0:
+                    # Log progress every 50MB
+                    downloaded_mb = downloaded / (1024 * 1024)
+                    if downloaded_mb - last_log_mb >= 50:
                         progress = (downloaded / total_size * 100) if total_size > 0 else 0
-                        logger.info(f"Download progress: {progress:.1f}% ({downloaded / (1024*1024):.1f}MB)")
+                        logger.info(f"Progress: {progress:.1f}% ({downloaded_mb:.1f}MB / {total_size/(1024*1024):.1f}MB)")
+                        last_log_mb = downloaded_mb
 
         self.import_job.file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         self.import_job.save()
 
-        logger.info(f"Download complete: {self.import_job.file_size_mb:.2f}MB")
+        logger.info(f"✓ Download complete: {self.import_job.file_size_mb:.2f}MB")
+
+        # Verify zip integrity
+        logger.info("=" * 80)
+        logger.info("STEP 3: Verifying zip integrity...")
+        logger.info("=" * 80)
+        import zipfile
+        try:
+            with zipfile.ZipFile(file_path, 'r') as zf:
+                bad_file = zf.testzip()
+                if bad_file:
+                    raise ValueError(f"Corrupted file in archive: {bad_file}")
+                logger.info(f"Archive contains {len(zf.namelist())} files")
+        except zipfile.BadZipFile as e:
+            raise ValueError(f"Downloaded file is not a valid zip: {e}")
+
+        logger.info("✓ Zip integrity verified successfully")
         return file_path
 
     def parse_file(self, file_path: str):
         """Parse COL TSV files from zip"""
         import zipfile
 
-        logger.info(f"Extracting zip file: {file_path}")
+        logger.info("=" * 80)
+        logger.info("STEP 4: Extracting archive...")
+        logger.info("=" * 80)
+        logger.info(f"Source: {file_path}")
 
-        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-            # Extract to temp directory
-            extract_path = file_path.replace('.zip', '_extracted')
-            os.makedirs(extract_path, exist_ok=True)
-            zip_ref.extractall(extract_path)
+        extract_path = file_path.replace('.zip', '_extracted')
 
-            logger.info(f"Extracted to: {extract_path}")
+        # Check if already extracted
+        if os.path.exists(extract_path):
+            logger.info(f"Found existing extracted directory: {extract_path}")
+            logger.info("Reusing existing extraction")
+        else:
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                file_list = zip_ref.namelist()
+                logger.info(f"Archive contains {len(file_list)} files")
+                logger.info("Extracting files...")
 
-            # Parse NameUsage.tsv
-            nameusage_file = os.path.join(extract_path, 'NameUsage.tsv')
-            if os.path.exists(nameusage_file):
-                self._parse_nameusage(nameusage_file)
-            else:
-                logger.warning(f"NameUsage.tsv not found in {extract_path}")
+                os.makedirs(extract_path, exist_ok=True)
+                zip_ref.extractall(extract_path)
 
-            # TODO: Parse VernacularName.tsv and Distribution.tsv in future iterations
+            logger.info(f"✓ Extracted to: {extract_path}")
+
+        # Validate ColDP structure
+        logger.info("=" * 80)
+        logger.info("STEP 5: Validating ColDP structure...")
+        logger.info("=" * 80)
+        self._validate_coldp_structure(extract_path)
+        logger.info("✓ ColDP structure validated successfully")
+
+        # Parse NameUsage.tsv
+        logger.info("=" * 80)
+        logger.info("STEP 6: Parsing taxonomic data...")
+        logger.info("=" * 80)
+        nameusage_file = os.path.join(extract_path, 'NameUsage.tsv')
+        if os.path.exists(nameusage_file):
+            file_size_mb = os.path.getsize(nameusage_file) / (1024 * 1024)
+            logger.info(f"NameUsage.tsv size: {file_size_mb:.2f}MB")
+            self._parse_nameusage(nameusage_file)
+        else:
+            raise ValueError(f"NameUsage.tsv not found in {extract_path}")
+
+        # TODO: Parse VernacularName.tsv and Distribution.tsv in future iterations
+
+    def _validate_coldp_structure(self, extract_path: str):
+        """Validate that extracted directory has required ColDP files"""
+        required_files = ['metadata.yaml', 'NameUsage.tsv']
+
+        for filename in required_files:
+            filepath = os.path.join(extract_path, filename)
+            if not os.path.exists(filepath):
+                raise ValueError(f"Missing required ColDP file: {filename}")
+
+        logger.info(f"Found all required files: {', '.join(required_files)}")
 
     def _parse_nameusage(self, file_path: str):
         """Parse NameUsage.tsv file"""
         logger.info(f"Parsing NameUsage.tsv from {file_path}...")
 
+        # Increase CSV field size limit to handle large text fields
+        # Some COL records have very large remarks/descriptions that exceed the default 131072 byte limit
+        maxInt = sys.maxsize
+        while True:
+            try:
+                csv.field_size_limit(maxInt)
+                break
+            except OverflowError:
+                maxInt = int(maxInt / 10)
+
+        logger.info(f"Set CSV field size limit to {maxInt} bytes")
+
         batch_size = 5000
         batch = []
+
+        # Initialize error tracking
+        if 'records_errored' not in self.stats:
+            self.stats['records_errored'] = 0
+        if 'records_skipped_status' not in self.stats:
+            self.stats['records_skipped_status'] = 0
+
+        error_log = []  # Store errors for summary
+        accepted_count = 0
+        last_log_count = 0
+
+        logger.info("Starting to read NameUsage.tsv...")
+        logger.info("Filter: Only importing 'accepted' and 'provisionally accepted' names")
 
         with open(file_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f, delimiter='\t')
 
-            for row in reader:
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
                 self.stats['records_read'] += 1
 
-                # Skip non-accepted names in initial import (reduces dataset size)
-                status = row.get('col:status', '').lower()
-                if status not in ['accepted', 'provisionally accepted']:
+                try:
+                    # Skip non-accepted names in initial import (reduces dataset size)
+                    status = row.get('col:status', '').lower()
+                    if status not in ['accepted', 'provisionally accepted']:
+                        self.stats['records_skipped_status'] += 1
+                        continue
+
+                    # Get ID for error logging
+                    col_id = row.get('col:ID', 'UNKNOWN')
+
+                    # Create raw record
+                    raw = RawCatalogueOfLife(
+                        import_job=self.import_job,
+                        col_id=col_id,
+                        parent_id=row.get('col:parentID', ''),
+                        status=row.get('col:status', ''),
+                        rank=row.get('col:rank', ''),
+                        scientific_name=row.get('col:scientificName', ''),
+                        authorship=row.get('col:authorship', ''),
+                        kingdom=row.get('col:kingdom', ''),
+                        phylum=row.get('col:phylum', ''),
+                        class_name=row.get('col:class', ''),
+                        order=row.get('col:order', ''),
+                        family=row.get('col:family', ''),
+                        subfamily=row.get('col:subfamily', ''),
+                        tribe=row.get('col:tribe', ''),
+                        genus=row.get('col:genus', ''),
+                        subgenus=row.get('col:subgenus', ''),
+                        species=row.get('col:species', ''),
+                        subspecies=row.get('col:subspecies', ''),
+                        variety=row.get('col:variety', ''),
+                        form=row.get('col:form', ''),
+                        generic_name=row.get('col:genericName', ''),
+                        specific_epithet=row.get('col:specificEpithet', ''),
+                        infraspecific_epithet=row.get('col:infraspecificEpithet', ''),
+                        code=row.get('col:code', ''),
+                        extinct=row.get('col:extinct', ''),
+                        environment=row.get('col:environment', '')
+                    )
+                    batch.append(raw)
+                    accepted_count += 1
+
+                    # Bulk create when batch is full
+                    if len(batch) >= batch_size:
+                        try:
+                            RawCatalogueOfLife.objects.bulk_create(batch)
+                        except Exception as e:
+                            # If bulk create fails, try one by one to identify problematic record
+                            logger.warning(f"Bulk create failed, attempting individual inserts for batch...")
+                            for individual_raw in batch:
+                                try:
+                                    individual_raw.save()
+                                except Exception as individual_e:
+                                    self.stats['records_errored'] += 1
+                                    error_msg = f"Row {row_num}, ID {individual_raw.col_id}: {str(individual_e)[:100]}"
+                                    error_log.append(error_msg)
+                                    logger.error(f"Failed to save record: {error_msg}")
+
+                        batch = []
+
+                        # Log progress every 10k accepted records
+                        if accepted_count - last_log_count >= 10000:
+                            logger.info(
+                                f"Progress: Read {self.stats['records_read']:,} rows, "
+                                f"Accepted {accepted_count:,} records, "
+                                f"Skipped {self.stats['records_skipped_status']:,} (status filter), "
+                                f"Errors {self.stats['records_errored']}"
+                            )
+                            last_log_count = accepted_count
+
+                except Exception as e:
+                    # Log error but continue processing
+                    self.stats['records_errored'] += 1
+                    col_id = row.get('col:ID', 'UNKNOWN')
+                    error_msg = f"Row {row_num}, ID {col_id}: {str(e)[:100]}"
+                    error_log.append(error_msg)
+                    logger.error(f"Error processing record: {error_msg}")
                     continue
-
-                # Create raw record
-                raw = RawCatalogueOfLife(
-                    import_job=self.import_job,
-                    col_id=row.get('col:ID', ''),
-                    parent_id=row.get('col:parentID', ''),
-                    status=row.get('col:status', ''),
-                    rank=row.get('col:rank', ''),
-                    scientific_name=row.get('col:scientificName', ''),
-                    authorship=row.get('col:authorship', ''),
-                    kingdom=row.get('col:kingdom', ''),
-                    phylum=row.get('col:phylum', ''),
-                    class_name=row.get('col:class', ''),
-                    order=row.get('col:order', ''),
-                    family=row.get('col:family', ''),
-                    subfamily=row.get('col:subfamily', ''),
-                    tribe=row.get('col:tribe', ''),
-                    genus=row.get('col:genus', ''),
-                    subgenus=row.get('col:subgenus', ''),
-                    species=row.get('col:species', ''),
-                    subspecies=row.get('col:subspecies', ''),
-                    variety=row.get('col:variety', ''),
-                    form=row.get('col:form', ''),
-                    generic_name=row.get('col:genericName', ''),
-                    specific_epithet=row.get('col:specificEpithet', ''),
-                    infraspecific_epithet=row.get('col:infraspecificEpithet', ''),
-                    code=row.get('col:code', ''),
-                    extinct=row.get('col:extinct', ''),
-                    environment=row.get('col:environment', '')
-                )
-                batch.append(raw)
-
-                # Bulk create when batch is full
-                if len(batch) >= batch_size:
-                    RawCatalogueOfLife.objects.bulk_create(batch)
-                    batch = []
-
-                    # Log progress every 50k records
-                    if self.stats['records_read'] % 50000 == 0:
-                        logger.info(f"Read {self.stats['records_read']} records...")
 
             # Create remaining records
             if batch:
-                RawCatalogueOfLife.objects.bulk_create(batch)
+                try:
+                    RawCatalogueOfLife.objects.bulk_create(batch)
+                except Exception as e:
+                    logger.warning(f"Final bulk create failed, attempting individual inserts...")
+                    for individual_raw in batch:
+                        try:
+                            individual_raw.save()
+                        except Exception as individual_e:
+                            self.stats['records_errored'] += 1
+                            error_msg = f"ID {individual_raw.col_id}: {str(individual_e)[:100]}"
+                            error_log.append(error_msg)
+                            logger.error(f"Failed to save record: {error_msg}")
 
-        logger.info(f"Finished parsing: {self.stats['records_read']} records read, {RawCatalogueOfLife.objects.filter(import_job=self.import_job).count()} records imported to staging")
+        # Final statistics
+        imported_count = RawCatalogueOfLife.objects.filter(import_job=self.import_job).count()
+
+        logger.info("=" * 80)
+        logger.info("PARSING COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Total rows read:           {self.stats['records_read']:,}")
+        logger.info(f"Accepted records:          {accepted_count:,}")
+        logger.info(f"Skipped (status filter):   {self.stats['records_skipped_status']:,}")
+        logger.info(f"Errored records:           {self.stats['records_errored']}")
+        logger.info(f"Successfully imported:     {imported_count:,}")
+
+        if error_log:
+            logger.warning("=" * 80)
+            logger.warning(f"ERRORS ENCOUNTERED: {len(error_log)}")
+            logger.warning("=" * 80)
+            if len(error_log) <= 20:
+                for error in error_log:
+                    logger.warning(f"  - {error}")
+            else:
+                logger.warning(f"Showing first 20 errors (total: {len(error_log)}):")
+                for error in error_log[:20]:
+                    logger.warning(f"  - {error}")
+                logger.warning(f"... and {len(error_log) - 20} more errors")
+
+        logger.info("✓ Parsing completed successfully")
 
     def validate_record(self, record):
         """Validate COL record"""

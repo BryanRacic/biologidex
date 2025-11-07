@@ -1,3 +1,46 @@
-why is docker-compose -f docker-compose.production.yml run web python manage.py import_col not working?
+bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
+Creating server_web_run ... done
+Email configured with SMTP backend
+Sentry not configured - error tracking disabled
+=== Catalogue of Life Import ===
+Using existing data source: Catalogue of Life (col)
+Created import job: a21ae5ae-c1c1-4b4a-a538-4022378686a6
+Running import synchronously...
+This may take 2-3 hours for full COL dataset
+WARNING 2025-11-06 21:25:49 col_importer 7 138993397652352 ✗ Dataset 312898 export not available (HTTP 404)
+ERROR 2025-11-06 21:59:27 base 7 138993397652352 Failed to normalize record CJPZG: value too long for type character varying(200)
 
-Tell claude to try to download the dataset using just regular python scripts first, then update django implementation
+ERROR 2025-11-06 22:01:49 base 7 138993397652352 Failed to normalize record CJN48: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:05:23 base 7 138993397652352 Failed to normalize record CJPYJ: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:10:42 base 7 138993397652352 Failed to normalize record 9B2QT: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:10:53 base 7 138993397652352 Failed to normalize record CJPZP: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:16:22 base 7 138993397652352 Failed to normalize record CJPY9: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:18:34 base 7 138993397652352 Failed to normalize record CJN4X: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:18:38 base 7 138993397652352 Failed to normalize record CJN49: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:19:14 base 7 138993397652352 Failed to normalize record 99Z4W: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:21:21 base 7 138993397652352 Failed to normalize record CJPZG: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:21:21 base 7 138993397652352 Failed to normalize record CJN48: value too long for type character varying(200)
+
+ERROR 2025-11-06 22:21:21 base 7 138993397652352 Failed to normalize record CJPYJ: value too long for type character varying(200)
+
+
+✓ Import completed successfully!
+  Records imported: 1338841
+  Records failed: 12
+  Records read: 5357236
+
+  First errors (12 total):
+    - {'record_id': 'CJPZG', 'error': 'value too long for type character varying(200)\n'}
+    - {'record_id': 'CJN48', 'error': 'value too long for type character varying(200)\n'}
+    - {'record_id': 'CJPYJ', 'error': 'value too long for type character varying(200)\n'}
+    - {'record_id': '9B2QT', 'error': 'value too long for type character varying(200)\n'}
+    - {'record_id': 'CJPZP', 'error': 'value too long for type character varying(200)\n'}

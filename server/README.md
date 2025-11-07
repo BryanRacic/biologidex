@@ -1304,9 +1304,23 @@ Before loading taxonomy data:
 
 ### Loading Catalogue of Life Data
 
+#### Understanding COL Release Types
+
+Catalogue of Life provides two types of releases:
+
+- **Base Release** (`origin='release'`): ~5.4M curated, expert-verified records (~962 MB)
+  - Higher quality, all entries reviewed by taxonomists
+  - **Current default** for the importer
+
+- **XR / eXtended Release** (`origin='xrelease'`): ~9.4M records including programmatic additions (~1.3 GB)
+  - Better coverage including molecular identifiers and automated sources
+  - Recommended for maximum species coverage in CV systems
+
+The importer automatically selects the latest **base release** with an available export.
+
 #### Option 1: Automatic Download (Recommended)
 
-Download and import the latest COL dataset automatically:
+Download and import the latest COL base release automatically:
 
 ```bash
 # Run in foreground (2-3 hours)
@@ -1317,13 +1331,17 @@ poetry run python manage.py import_col --async
 ```
 
 The command will:
-1. Fetch the latest COL dataset info via API
-2. Download the dataset (~3GB zip file)
-3. Extract NameUsage.tsv (9.4M records)
-4. Import to staging table (RawCatalogueOfLife)
-5. Normalize to Taxonomy model with validation
-6. Calculate completeness scores
-7. Update caches
+1. Query API for latest base release (`origin='release'`)
+2. Check top 5 candidates for export availability
+3. Download the dataset (~1GB zip file with `extended=true` format)
+4. Verify zip integrity and ColDP structure
+5. Extract NameUsage.tsv (~5.4M records for base release)
+6. Import to staging table (RawCatalogueOfLife)
+7. Normalize to Taxonomy model with validation
+8. Calculate completeness scores
+9. Update caches
+
+**Note**: The importer uses `extended=true` parameter to get the full ColDP format with `NameUsage.tsv` and all optional files, not the simplified export format.
 
 #### Option 2: Use Local File
 
