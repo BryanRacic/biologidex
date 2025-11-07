@@ -1,0 +1,5 @@
+- The "dex" system represents all the animals ever photographed by an individual user
+    - Users can view their own "dex" or the "dex" of their friends
+- Future additions
+    - Users can make custom "dex" collections with friends by combining entries into a shared collaborative "dex"
+    - 
