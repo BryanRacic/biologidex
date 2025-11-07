@@ -194,43 +194,35 @@ This checklist outlines all files that need to be created or modified to impleme
 
 ## Implementation Order
 
-### Phase 1: Backend Foundation (8-10 hours)
+### Phase 1: Backend Foundation
 1. ✅ Create `services_dynamic.py` with DynamicTaxonomicTreeService
 2. ✅ Create layout algorithm classes
 3. ✅ Update models with indexes
 4. ✅ Add cache invalidation signals
 
-### Phase 2: API Layer (4-6 hours)
+### Phase 2: API Layer
 1. ✅ Create new view classes
 2. ✅ Update URL patterns
 3. ✅ Add permission checks
 4. ✅ Test endpoints manually
 
-### Phase 3: Testing (4-6 hours)
-1. ✅ Write service unit tests
-2. ✅ Write API integration tests
-3. ✅ Performance testing with large datasets
-4. ✅ Cache invalidation testing
-
-### Phase 4: Client Integration (6-8 hours)
+### Phase 3: Client Integration
 1. ✅ Update tree_controller.gd
 2. ✅ Update api_manager.gd
 3. ✅ Add UI mode selector
 4. ✅ Test all modes
 
-### Phase 5: Optimization (4-6 hours)
+### Phase 4: Optimization
 1. ✅ Query optimization
 2. ✅ Cache warming strategies
 3. ✅ Memory profiling
 4. ✅ Performance tuning
 
-### Phase 6: Documentation & Deployment (2-3 hours)
+### Phase 5: Documentation & Deployment 
 1. ✅ API documentation
 2. ✅ Migration guide
 3. ✅ Deployment scripts
 4. ✅ Monitoring setup
-
-## Total Estimated Time: 28-39 hours
 
 ## Critical Success Factors
 
@@ -252,50 +244,6 @@ This checklist outlines all files that need to be created or modified to impleme
 - ✅ Intuitive friend selection
 - ✅ Responsive interactions
 
-## Testing Checklist
-
-### Unit Tests
-- [ ] Service initialization with different modes
-- [ ] Scope computation for each mode
-- [ ] Cache key generation
-- [ ] Animal filtering by user scope
-- [ ] Hierarchy building
-- [ ] Edge generation (parent-child)
-- [ ] Cache invalidation cascading
-
-### Integration Tests
-- [ ] API endpoint responses
-- [ ] Permission checks (admin mode)
-- [ ] Friend ID validation
-- [ ] Chunk loading boundaries
-- [ ] Search within scope
-- [ ] Cache hit/miss scenarios
-
-### Performance Tests
-- [ ] 10,000 animals across 100 users
-- [ ] 100,000 nodes rendering
-- [ ] Cache memory usage
-- [ ] Query execution time
-- [ ] Network payload size
-
-### User Acceptance Tests
-- [ ] Personal mode shows only user's animals
-- [ ] Friends mode includes all friends
-- [ ] Selected mode filters correctly
-- [ ] Admin sees all users' data
-- [ ] Mode switching preserves state
-- [ ] Friend selection UI works
-
-## Rollback Plan
-
-If issues arise during deployment:
-
-1. **Keep legacy endpoints active** during transition
-2. **Feature flag** for new tree system
-3. **Gradual rollout** to subset of users
-4. **Cache clearing** procedure ready
-5. **Database backup** before migration
-6. **Monitoring alerts** for performance degradation
 
 ## Notes
 

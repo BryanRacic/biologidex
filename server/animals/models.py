@@ -160,12 +160,25 @@ class Animal(models.Model):
         verbose_name_plural = _('Animals')
         ordering = ['creation_index', 'scientific_name']
         indexes = [
+            # Existing indexes
             models.Index(fields=['scientific_name']),
             models.Index(fields=['common_name']),
             models.Index(fields=['genus', 'species']),
             models.Index(fields=['creation_index']),
             models.Index(fields=['verified']),
             models.Index(fields=['created_at']),
+
+            # New composite indexes for taxonomic tree queries
+            models.Index(fields=['kingdom', 'phylum', 'class_name'], name='animals_taxonomy_kpc_idx'),
+            models.Index(fields=['family', 'genus', 'species'], name='animals_taxonomy_fgs_idx'),
+            models.Index(fields=['created_by'], name='animals_created_by_idx'),
+
+            # Additional single-field indexes for taxonomic hierarchy
+            models.Index(fields=['kingdom'], name='animals_kingdom_idx'),
+            models.Index(fields=['phylum'], name='animals_phylum_idx'),
+            models.Index(fields=['class_name'], name='animals_class_idx'),
+            models.Index(fields=['order'], name='animals_order_idx'),
+            models.Index(fields=['family'], name='animals_family_idx'),
         ]
 
     def __str__(self):

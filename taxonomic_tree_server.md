@@ -975,36 +975,6 @@ func _on_mode_changed(index: int):
 - ✅ Use values/values_list for read-only data
 - ✅ Implement query result caching
 
-## Testing Strategy
-
-### Unit Tests
-```python
-# tests/test_dynamic_tree_service.py
-class DynamicTreeServiceTests(TestCase):
-    def test_personal_mode_shows_only_user_animals(self):
-        # Test that personal mode filters correctly
-
-    def test_friend_mode_includes_all_friends(self):
-        # Test friend inclusion
-
-    def test_selected_mode_filters_friends(self):
-        # Test friend selection
-
-    def test_admin_global_mode_requires_permission(self):
-        # Test permission check
-
-    def test_cache_invalidation_cascades(self):
-        # Test cache invalidation
-```
-
-### Performance Tests
-```python
-def test_large_tree_performance(self):
-    # Create 10,000 animals across 100 users
-    # Assert response time < 2 seconds
-    # Assert memory usage < 500MB
-```
-
 ## Deployment Notes
 
 1. **Database migrations**: Run after deploying new code

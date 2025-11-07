@@ -209,8 +209,15 @@ CACHES = {
 }
 
 # Cache TTL Settings
-GRAPH_CACHE_TTL = int(os.getenv('GRAPH_CACHE_TTL', '120'))
-ANIMAL_CACHE_TTL = int(os.getenv('ANIMAL_CACHE_TTL', '3600'))
+GRAPH_CACHE_TTL = int(os.getenv('GRAPH_CACHE_TTL', '120'))  # Legacy setting (2 minutes)
+ANIMAL_CACHE_TTL = int(os.getenv('ANIMAL_CACHE_TTL', '3600'))  # 1 hour
+
+# Dynamic Taxonomic Tree Cache TTL Settings (in seconds)
+TREE_CACHE_TTL_PERSONAL = int(os.getenv('TREE_CACHE_TTL_PERSONAL', '300'))  # 5 minutes
+TREE_CACHE_TTL_FRIENDS = int(os.getenv('TREE_CACHE_TTL_FRIENDS', '120'))    # 2 minutes
+TREE_CACHE_TTL_SELECTED = int(os.getenv('TREE_CACHE_TTL_SELECTED', '60'))   # 1 minute
+TREE_CACHE_TTL_GLOBAL = int(os.getenv('TREE_CACHE_TTL_GLOBAL', '300'))      # 5 minutes
+TREE_MAX_CHUNK_SIZE = int(os.getenv('TREE_MAX_CHUNK_SIZE', '2048'))         # 2048 world units
 
 # Google Cloud Storage Settings
 GCS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
