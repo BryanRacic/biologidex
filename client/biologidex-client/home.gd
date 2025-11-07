@@ -47,8 +47,7 @@ func _on_dex_pressed() -> void:
 func _on_tree_pressed() -> void:
 	"""Navigate to taxonomic tree"""
 	print("[Home] Tree button pressed")
-	# TODO: Implement tree scene
-	print("[Home] TODO: Tree scene not yet implemented")
+	NavigationManager.navigate_to("res://tree.tscn")
 
 
 func _on_social_pressed() -> void:

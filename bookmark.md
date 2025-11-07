@@ -1,3 +1,10 @@
+# TODO 
+- always download/view dex if it doesn't exist locally
+ - download first 5 in the background on login (if possible)
+- refactor api manager & tree_api_service
+  - combine them all then split them into diff files based on endpoint?
+
+
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
 Email configured with SMTP backend
