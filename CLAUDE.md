@@ -3,20 +3,20 @@
 ## Project Overview
 A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative taxonomic tree shared with friends.
 
-## Current Status (Updated 2025-11-06)
+## Current Status (Updated 2025-11-11)
 - ✅ **Backend API**: Django REST Framework - Phase 1 Complete
 - ✅ **Database**: PostgreSQL with full schema implemented
 - ✅ **CV Integration**: OpenAI Vision API with async processing
 - ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
 - ✅ **Authentication**: Login and registration flows implemented in Godot client
-- ✅ **Local Dex Database**: Client-side animal collection with JSON persistence
-- ✅ **Dex Gallery**: Browse discovered animals with prev/next navigation
+- ✅ **Multi-User Dex System**: View own + friends' dex with incremental sync - Complete
+- ✅ **Dex Gallery**: Browse discovered animals with prev/next navigation (multi-user support)
 - ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
 - ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
 - ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
 - ✅ **Image Processing Pipeline**: Standardized dex-compatible images with server-side conversion
 - ✅ **Image Transformations**: Client-side rotation UI with server-side processing and EXIF support
-- ✅ **Dex Sync API**: Server endpoint for syncing dex entries with image checksums
+- ✅ **Dex Sync System**: Incremental sync, image deduplication, caching, retry logic - Complete
 - 📋 **Taxonomic Tree Visualization**: Complete implementation plan (client + server) - Ready to build
 
 ---
@@ -56,7 +56,8 @@ client/biologidex-client/
 │       └── dex_service.gd       # Dex entries (DexService)
 ├── token_manager.gd             # JWT token persistence (autoload)
 ├── navigation_manager.gd        # Navigation singleton (autoload)
-├── dex_database.gd              # Local dex storage singleton (autoload)
+├── dex_database.gd              # Multi-user local dex storage v2 (autoload)
+├── sync_manager.gd              # Sync state tracking (autoload)
 ├── responsive.gd                # Base responsive behavior script
 ├── responsive_container.gd      # Auto-margin container class
 ├── theme.tres                   # Base theme resource
@@ -135,21 +136,32 @@ func callback(response: Dictionary, code: int):
 - Display format: "Scientific name - common name" (e.g., "Recurvirostra americana - American Avocet")
 - **Critical**: Update `current_image_width/height` with dex image dimensions before sizing calculations
 
-**DexDatabase Singleton** (dex_database.gd):
-- Manages local storage of discovered animals at `user://dex_database.json`
-- Record format: `{creation_index: int, scientific_name: String, common_name: String, cached_image_path: String}`
-- Navigation helpers: `get_next_index()`, `get_previous_index()`, `get_first_index()`
-- Auto-saves on every `add_record()` call; loads on startup
-- Maintains sorted array of creation_indices for efficient navigation
-- Emits `record_added` signal when new animals discovered
-
-**Dex Gallery Scene** (dex.tscn):
-- Browse discovered animals in creation_index order
-- Previous/Next buttons for navigation (auto-disable at boundaries)
-- Loads images from `user://dex_cache/` using cached_image_path
-- Empty state: "No animals discovered yet!" when database empty
-- Uses same RecordImage component and sizing logic as camera scene
-- Responds to DexDatabase signals for real-time updates
+**Multi-User Dex System** (v2.0 - Added 2025-11-11):
+- **DexDatabase** (`dex_database.gd`): Multi-user local storage singleton
+  - Storage: `user://dex_data/{user_id}_dex.json` per user
+  - Cache: `user://dex_cache/{user_id}/` with cross-user deduplication
+  - Record format: `{creation_index, scientific_name, common_name, cached_image_path, image_checksum, dex_compatible_url, updated_at}`
+  - Backwards compatible: Legacy methods still work, auto-migrates v1 → v2
+  - New methods: `get_record_for_user()`, `get_all_records_for_user()`, `get_sorted_indices_for_user()`, etc.
+  - Image deduplication: Checks all users' caches before downloading
+  - Signals: `record_added(record, user_id)`, `database_switched(user_id)`
+- **SyncManager** (`sync_manager.gd`): Tracks last sync timestamp per user
+  - Storage: `user://sync_state.json`
+  - Methods: `get_last_sync(user_id)`, `update_last_sync(user_id, timestamp)`
+  - Used for incremental sync (only download changed entries)
+- **DexService** (`api/services/dex_service.gd`): Enhanced with multi-user sync
+  - `sync_user_dex(user_id)`: Sync specific user with progress tracking
+  - `sync_user_dex_with_retry(user_id, max_retries)`: Auto-retry with exponential backoff
+  - `get_friends_overview()`: Get summary of all friends' collections
+  - `sync_all_friends()`: Batch sync own + all friends' dex
+  - Signals: `sync_started`, `sync_progress`, `sync_user_completed`, `sync_user_failed`
+  - Automatic image download and caching during sync
+- **Dex Gallery** (`dex.gd`): Multi-user viewing support
+  - Browse own dex or any friend's dex
+  - User switching: `switch_user(user_id)`, `trigger_sync()`
+  - Integrated sync progress tracking
+  - Fetches friend names via `friends_overview` API
+  - TODO: Add UI elements (user selector, sync button, progress bar)
 
 **RecordImage Component** (record_image.tscn):
 - Dual image display: simple TextureRect + bordered AspectRatioContainer
@@ -312,15 +324,24 @@ server/
    - Applies transformations before CV analysis
    - Falls back to basic ImageProcessor if no transformations
 
-**Dex Sync API** (dex/views.py):
-- `GET /api/v1/dex/entries/sync_entries/`: Sync endpoint for client
+**Dex Sync API** (dex/views.py - Enhanced 2025-11-11):
+- `GET /api/v1/dex/entries/sync_entries/`: Sync own dex (cached 5 min for full sync)
   - Query param: `last_sync` (ISO 8601 datetime) - returns entries updated after this time
-  - Returns: Array of dex entries with image metadata
-  - Includes: creation_index, scientific/common names, dex_compatible_url, image_checksum, updated_at
-- **DexEntrySyncSerializer**: Specialized serializer with image checksums for comparison
+  - Returns: `{entries: [...], server_time: ISO string, count: int}`
+- `GET /api/v1/dex/entries/user/{user_id}/entries/`: Sync any user's dex (respects permissions)
+  - Permission: Own entries (all), friend entries (friends+public), stranger entries (public only)
+  - Query param: `last_sync` - incremental sync support
+  - Returns: `{entries: [...], server_time: ISO string, user_id: UUID, total_count: int}`
+- `GET /api/v1/dex/entries/friends_overview/`: Get summary of all friends' dex (cached 2 min)
+  - Returns: `{friends: [{user_id, username, friend_code, total_entries, latest_update}, ...]}`
+- `POST /api/v1/dex/entries/batch_sync/`: Sync multiple users in one request
+  - Body: `{sync_requests: [{user_id: str, last_sync: str}, ...]}`
+  - Returns: `{results: {user_id: {entries: [...], count: int}}, server_time: ISO string}`
+- **DexEntrySyncSerializer**: Specialized serializer with image checksums
   - Calculates SHA256 checksums of dex-compatible images
   - Returns absolute URLs for image downloads
-  - Tracks image update timestamps for change detection
+- **Caching**: 5 min for full syncs, 2 min for friends overview, no cache for incremental syncs
+- **Performance**: Database indexes on `(owner, updated_at)`, `(visibility, updated_at)`, `(updated_at)`
 
 **Multipart Form Data** (api_manager.gd):
 - `_build_multipart_body_with_fields()`: Handles multiple form fields
@@ -357,7 +378,10 @@ server/
 - GET `/my_entries/` - User's collection
 - GET `/favorites/` - Favorite entries
 - POST `/{id}/toggle_favorite/` - Toggle favorite
-- GET `/sync_entries/` - Sync entries with image checksums (accepts `last_sync` query param)
+- GET `/sync_entries/` - Sync own dex (cached 5 min, accepts `last_sync` query param)
+- GET `/user/{user_id}/entries/` - Sync any user's dex with permission checks (accepts `last_sync`)
+- GET `/friends_overview/` - Summary of all friends' dex collections (cached 2 min)
+- POST `/batch_sync/` - Sync multiple users in one request
 
 **Social** (`/social/friendships/`):
 - GET `/friends/` - Friends list
@@ -787,6 +811,52 @@ Complete implementation plan created for high-performance taxonomic tree visuali
 - 2048x2048 chunk size (optimal for network/memory tradeoff)
 - Parent-child edges based on taxonomy (not just same_family)
 - Progressive loading with breadth-first priority
+
+## Dex System Future Enhancements (Post-MVP)
+
+### Phase 6: Advanced Image Management
+- **Multiple Images per Entry**: Allow users to replace/add alternate photos
+  - `DexEntryImage` model with `is_primary` flag
+  - Image history/versioning
+  - User selects best photo for dex card
+- **Image Gallery**: Swipeable gallery view for entries with multiple photos
+
+### Phase 7: Collaborative Collections
+- **Shared Collections**: Groups of users contribute to themed collections
+  - `DexCollection` model with collaborators M2M relationship
+  - Custom ordering and notes per collection
+  - Public/private visibility settings
+- **Collection Templates**: Pre-made themes (Birds of North America, Endangered Species, etc.)
+
+### Phase 8: Dex Pages (Scrapbook Feature)
+- **Rich Journaling**: Transform entries into scrapbook-style pages
+  - `DexPage` model with custom layouts and content blocks
+  - Multiple layout templates (field notes, photo essay, comparison grid)
+  - Text blocks, audio notes, additional photos, weather/location metadata
+- **Page Editor**: Visual drag-and-drop editor in Godot
+  - Content blocks: title, observation, companions, habitat notes
+  - Customizable styling (CSS-in-JS)
+- **Sharing**: Export pages as images/PDFs, share to social media
+
+### Phase 9: Offline & Sync Enhancements
+- **Offline Queue**: Queue API calls when offline, sync when reconnected
+  - Conflict resolution for concurrent edits
+  - Local-first architecture with eventual consistency
+- **Background Sync**: Automatic periodic syncing in background
+- **Smart Caching**: Predictive prefetching based on usage patterns
+- **Cloud Backup**: Optional backup of local database to cloud storage
+
+### Phase 10: Social Features
+- **Activity Feed**: See friends' recent discoveries
+- **Achievement System**: Badges for collection milestones (taxonomic diversity, rare species, etc.)
+- **Leaderboards**: Compete with friends on discovery counts
+- **Dex Challenges**: Themed challenges (find 10 birds this week, complete a family)
+
+### Phase 11: Data Management
+- **Export/Import**: CSV, JSON, PDF formats
+- **Data Portability**: Import from other wildlife tracking apps
+- **Backup Management**: Scheduled backups, restore from backup
+- **Storage Quotas**: Limit cache size, LRU eviction policies
 
 ## Next Steps
 

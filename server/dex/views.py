@@ -6,6 +6,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from django.core.cache import cache
+from django.utils import timezone
 from .models import DexEntry
 from .serializers import (
     DexEntrySerializer,
@@ -14,6 +16,27 @@ from .serializers import (
     DexEntryUpdateSerializer,
     DexEntrySyncSerializer,
 )
+
+
+## Cache helper functions
+
+def get_user_dex_cache_key(user_id, last_sync=None):
+    """Generate cache key for user dex sync"""
+    if last_sync:
+        return f"dex:user:{user_id}:since:{last_sync}"
+    return f"dex:user:{user_id}:all"
+
+
+def get_friends_overview_cache_key(user_id):
+    """Generate cache key for friends overview"""
+    return f"dex:friends_overview:{user_id}"
+
+
+def invalidate_user_dex_cache(user_id):
+    """Invalidate all cache entries for a user's dex"""
+    # Clear all possible cache keys for this user
+    cache.delete_pattern(f"dex:user:{user_id}:*")
+    print(f"[DexCache] Invalidated cache for user {user_id}")
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -149,6 +172,8 @@ class DexEntryViewSet(viewsets.ModelViewSet):
         Sync endpoint for client to check for updated dex entries.
         Returns entries with their image metadata for comparison.
 
+        Caching: 5 minute TTL for full syncs, no caching for incremental syncs
+
         Query params:
             last_sync: ISO 8601 datetime string - only return entries updated after this time
         """
@@ -156,6 +181,14 @@ class DexEntryViewSet(viewsets.ModelViewSet):
         from django.utils.dateparse import parse_datetime
 
         last_sync = request.query_params.get('last_sync')
+
+        # Try cache for full syncs (no last_sync parameter)
+        if not last_sync:
+            cache_key = get_user_dex_cache_key(str(request.user.id))
+            cached_response = cache.get(cache_key)
+            if cached_response:
+                print(f"[DexCache] Hit for user {request.user.id}")
+                return Response(cached_response)
 
         # Get user's entries
         entries = self.queryset.filter(owner=request.user)
@@ -184,8 +217,246 @@ class DexEntryViewSet(viewsets.ModelViewSet):
             context={'request': request}
         )
 
-        return Response({
+        response_data = {
             'entries': serializer.data,
             'server_time': timezone.now().isoformat(),
             'count': entries.count()
+        }
+
+        # Cache full syncs for 5 minutes
+        if not last_sync:
+            cache_key = get_user_dex_cache_key(str(request.user.id))
+            cache.set(cache_key, response_data, 300)  # 5 minutes
+            print(f"[DexCache] Set for user {request.user.id}")
+
+        return Response(response_data)
+
+    @action(detail=False, methods=['get'], url_path='user/(?P<user_id>[^/.]+)/entries')
+    def user_entries(self, request, user_id=None):
+        """
+        Get dex entries for a specific user (respecting permissions).
+
+        Permission rules:
+        - Own entries: All entries visible
+        - Friend's entries: Friends and public entries visible
+        - Stranger's entries: Public entries only
+
+        Query params:
+            last_sync: ISO 8601 datetime string - incremental sync support
+        """
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
+        from accounts.models import User
+        from social.models import Friendship
+
+        # Get target user
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Determine visibility filter based on relationship
+        if target_user == request.user:
+            # Own entries - see everything
+            visibility_filter = Q()
+        elif Friendship.are_friends(request.user, target_user):
+            # Friend's entries - see friends and public
+            visibility_filter = Q(visibility__in=['friends', 'public'])
+        else:
+            # Stranger's entries - see public only
+            visibility_filter = Q(visibility='public')
+
+        # Get entries
+        entries = self.queryset.filter(
+            owner=target_user
+        ).filter(visibility_filter).order_by('animal__creation_index')
+
+        # Support incremental sync
+        last_sync = request.query_params.get('last_sync')
+        if last_sync:
+            try:
+                last_sync_dt = parse_datetime(last_sync)
+                if last_sync_dt:
+                    entries = entries.filter(updated_at__gt=last_sync_dt)
+                else:
+                    return Response(
+                        {'error': 'Invalid last_sync format. Use ISO 8601 datetime.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as e:
+                return Response(
+                    {'error': f'Failed to parse last_sync: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Serialize with image metadata
+        serializer = DexEntrySyncSerializer(
+            entries,
+            many=True,
+            context={'request': request}
+        )
+
+        return Response({
+            'entries': serializer.data,
+            'server_time': timezone.now().isoformat(),
+            'user_id': str(target_user.id),
+            'total_count': entries.count()
         })
+
+    @action(detail=False, methods=['get'])
+    def friends_overview(self, request):
+        """
+        Get summary of all friends' dex collections for discovery.
+        Returns user info and entry counts for each friend.
+
+        Caching: 2 minute TTL
+        """
+        from social.models import Friendship
+
+        # Try cache first
+        cache_key = get_friends_overview_cache_key(str(request.user.id))
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            print(f"[DexCache] Friends overview hit for user {request.user.id}")
+            return Response(cached_response)
+
+        friends = Friendship.get_friends(request.user)
+        overview = []
+
+        for friend in friends:
+            # Count entries visible to current user
+            entry_count = self.queryset.filter(
+                owner=friend,
+                visibility__in=['friends', 'public']
+            ).count()
+
+            # Get latest entry
+            latest_entry = self.queryset.filter(
+                owner=friend,
+                visibility__in=['friends', 'public']
+            ).order_by('-updated_at').first()
+
+            overview.append({
+                'user_id': str(friend.id),
+                'username': friend.username,
+                'friend_code': friend.friend_code,
+                'total_entries': entry_count,
+                'latest_update': latest_entry.updated_at.isoformat() if latest_entry else None
+            })
+
+        response_data = {'friends': overview}
+
+        # Cache for 2 minutes
+        cache.set(cache_key, response_data, 120)
+        print(f"[DexCache] Friends overview set for user {request.user.id}")
+
+        return Response(response_data)
+
+    @action(detail=False, methods=['post'])
+    def batch_sync(self, request):
+        """
+        Sync multiple users' dex collections in a single request.
+        Optimizes network requests for syncing own dex + multiple friends.
+
+        Request body:
+        {
+            "sync_requests": [
+                {"user_id": "self", "last_sync": "2024-01-01T00:00:00Z"},
+                {"user_id": "<uuid>", "last_sync": "2024-01-01T00:00:00Z"}
+            ]
+        }
+
+        Response:
+        {
+            "results": {
+                "self": {"entries": [...], "count": 5},
+                "<uuid>": {"entries": [...], "count": 3}
+            },
+            "server_time": "2024-01-02T00:00:00Z"
+        }
+        """
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
+        from accounts.models import User
+        from social.models import Friendship
+
+        sync_requests = request.data.get('sync_requests', [])
+        results = {}
+
+        for sync_req in sync_requests:
+            user_id = sync_req.get('user_id', 'self')
+            last_sync = sync_req.get('last_sync')
+
+            # Determine target user
+            if user_id == 'self':
+                target_user = request.user
+            else:
+                try:
+                    target_user = User.objects.get(id=user_id)
+                    # Check permissions
+                    if not Friendship.are_friends(request.user, target_user):
+                        results[user_id] = {'error': 'Not friends with this user'}
+                        continue
+                except User.DoesNotExist:
+                    results[user_id] = {'error': 'User not found'}
+                    continue
+
+            # Get entries
+            try:
+                entries = self._get_sync_entries(
+                    target_user,
+                    request.user,
+                    last_sync
+                )
+
+                serializer = DexEntrySyncSerializer(
+                    entries,
+                    many=True,
+                    context={'request': request}
+                )
+
+                results[user_id] = {
+                    'entries': serializer.data,
+                    'count': entries.count()
+                }
+            except Exception as e:
+                results[user_id] = {'error': str(e)}
+
+        return Response({
+            'results': results,
+            'server_time': timezone.now().isoformat()
+        })
+
+    def _get_sync_entries(self, target_user, requesting_user, last_sync=None):
+        """
+        Helper method to get entries for sync with proper filtering.
+        """
+        from django.utils.dateparse import parse_datetime
+
+        # Determine visibility
+        if target_user == requesting_user:
+            visibility_filter = Q()
+        elif hasattr(self, '_are_friends_cached'):
+            # Use cached friendship check if available
+            visibility_filter = Q(visibility__in=['friends', 'public'])
+        else:
+            from social.models import Friendship
+            if Friendship.are_friends(requesting_user, target_user):
+                visibility_filter = Q(visibility__in=['friends', 'public'])
+            else:
+                visibility_filter = Q(visibility='public')
+
+        entries = self.queryset.filter(
+            owner=target_user
+        ).filter(visibility_filter).order_by('animal__creation_index')
+
+        # Filter by last_sync if provided
+        if last_sync:
+            last_sync_dt = parse_datetime(last_sync)
+            if last_sync_dt:
+                entries = entries.filter(updated_at__gt=last_sync_dt)
+
+        return entries

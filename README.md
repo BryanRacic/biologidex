@@ -1,12 +1,70 @@
 # BiologiDex
-A Pokedex style social network app that allows users to share pictures of their real world zoologic observations in order to collaboratively build an ever expanding "taxonomic tree" with their friends.  
 
- This is a pokedex style app where CV is utilized to identify animals in user uploaded images which are turned into pokedex-style dex entries. In this version, friend's dex entries are counted as "seen animals" and displayed in a graph structure similar to an taxonomic tree.
+A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative taxonomic tree shared with friends.
 
-Uses computer vision services to identify biological species (animals) in images taken by users. Once identified, the user adds the animal to their local database of seen animals with additional information & flavor as provided by the BiologiDex platform. BiologiDex is a placeholder name representing the walled-garden structure of the user networks and the giant taxonomic tree of animals being created by all "friends" of the user. 
+## Recent Updates (2025-11-11)
 
-## taxonomic Tree
-Find reference of actual taxonomic taxonomic tree which we can place animals & species on based on 
+### Multi-User Dex System v2.0 ✨
+Complete overhaul enabling friend dex viewing with production-ready performance:
+- **Incremental Sync**: Only downloads changed entries using timestamps
+- **Multi-User Storage**: View own + friends' dex with user-partitioned local storage
+- **Image Deduplication**: Cross-user cache sharing reduces bandwidth/storage
+- **Smart Caching**: HTTP caching (5 min full sync, 2 min friends overview)
+- **Retry Logic**: Exponential backoff for network resilience (1s → 2s → 4s)
+- **Database Optimization**: Composite indexes on `(owner, updated_at)`, `(visibility, updated_at)`
+
+#### API Enhancements
+- `GET /dex/entries/user/{user_id}/entries/` - Sync any user's dex with permission checks
+- `GET /dex/entries/friends_overview/` - Summary of all friends' collections
+- `POST /dex/entries/batch_sync/` - Sync multiple users in one request
+
+#### Migration Notes
+- **Auto-Migration**: v1 → v2 database migration on first launch (backs up old DB)
+- **Backwards Compatible**: Legacy single-user methods still work
+- **New Storage**: `user://dex_data/{user_id}_dex.json` + `user://sync_state.json`
+
+## Overview
+
+Uses computer vision services to identify biological species in images taken by users. Once identified, the user adds the animal to their local database of discovered animals with additional metadata. Friends' dex entries appear in a shared taxonomic tree visualization. 
+
+## Future Enhancements
+
+### Phase 6: Advanced Image Management
+- Multiple images per dex entry with image history
+- User-selectable primary photo for dex cards
+- Swipeable image gallery view
+
+### Phase 7: Collaborative Collections
+- Shared themed collections (Birds of North America, Endangered Species, etc.)
+- Collaborator permissions and custom ordering
+- Public/private collection visibility
+
+### Phase 8: Dex Pages (Scrapbook Feature)
+- Transform entries into rich journal pages with custom layouts
+- Multiple layout templates (field notes, photo essay, comparison grid)
+- Additional content blocks: audio notes, weather data, companions, habitat notes
+- Export as images/PDFs, share to social media
+
+### Phase 9: Offline & Sync Enhancements
+- Offline queue with conflict resolution
+- Background automatic syncing
+- Predictive prefetching based on usage patterns
+- Cloud backup for local database
+
+### Phase 10: Social Features
+- Activity feed showing friends' recent discoveries
+- Achievement system for collection milestones
+- Leaderboards and discovery counts
+- Themed challenges (find 10 birds this week, complete a family)
+
+### Phase 11: Data Management
+- Export/import in CSV, JSON, PDF formats
+- Data portability (import from other wildlife tracking apps)
+- Scheduled backups and restore functionality
+- Storage quotas with LRU eviction
+
+## Taxonomic Tree
+Find reference of actual taxonomic tree which we can place animals & species on based on 
 
 # Design
 - Inspired by Biological illustration: https://en.wikipedia.org/wiki/Biological_illustration

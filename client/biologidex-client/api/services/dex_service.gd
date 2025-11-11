@@ -14,6 +14,14 @@ signal favorite_toggle_failed(error: APITypes.APIError)
 signal sync_completed(entries: Array)
 signal sync_failed(error: APITypes.APIError)
 
+## New multi-user sync signals
+signal sync_started(user_id: String)
+signal sync_progress(user_id: String, current: int, total: int)
+signal sync_user_completed(user_id: String, entries_updated: int)
+signal sync_user_failed(user_id: String, error_message: String)
+signal friends_overview_received(friends: Array)
+signal friends_overview_failed(error: APITypes.APIError)
+
 ## Create a new dex entry
 func create_entry(
 	animal_id: int,
@@ -179,3 +187,311 @@ func _on_sync_entries_error(error: APITypes.APIError, context: Dictionary) -> vo
 	sync_failed.emit(error)
 	if context.callback:
 		context.callback.call({"error": error.message}, error.code)
+
+## Sync a specific user's dex (self or friend)
+func sync_user_dex(user_id: String = "self", callback: Callable = Callable()) -> void:
+	_log("Syncing dex for user: %s" % user_id)
+	sync_started.emit(user_id)
+
+	# Get last sync timestamp from SyncManager
+	var last_sync := SyncManager.get_last_sync(user_id)
+
+	# Determine endpoint
+	var endpoint := ""
+	if user_id == "self":
+		endpoint = config.ENDPOINTS_DEX["sync"]
+	else:
+		endpoint = "/dex/entries/user/" + user_id + "/entries/"
+
+	# Build URL with query params
+	var params := {}
+	if not last_sync.is_empty():
+		params["last_sync"] = last_sync
+
+	var url := _build_url_with_params(endpoint, params)
+	var req_config := _create_request_config()
+
+	var context := {
+		"user_id": user_id,
+		"callback": callback
+	}
+
+	api_client.request_get(
+		url,
+		_on_sync_user_success.bind(context),
+		_on_sync_user_error.bind(context),
+		req_config
+	)
+
+func _on_sync_user_success(response: Dictionary, context: Dictionary) -> void:
+	var user_id: String = context.user_id
+	var entries: Array = response.get("entries", [])
+	var server_time: String = response.get("server_time", "")
+
+	_log("Sync completed for '%s': %d entries" % [user_id, entries.size()])
+
+	if entries.is_empty():
+		sync_user_completed.emit(user_id, 0)
+		if not server_time.is_empty():
+			SyncManager.update_last_sync(user_id, server_time)
+		if context.callback:
+			context.callback.call(response, 200)
+		return
+
+	# Process entries with progress tracking
+	_process_sync_entries(entries, user_id, server_time, context.callback)
+
+func _on_sync_user_error(error: APITypes.APIError, context: Dictionary) -> void:
+	var user_id: String = context.user_id
+	_handle_error(error, "sync_user_dex")
+	sync_user_failed.emit(user_id, error.message)
+	if context.callback:
+		context.callback.call({"error": error.message}, error.code)
+
+func _process_sync_entries(entries: Array, user_id: String, server_time: String, callback: Callable) -> void:
+	"""Process synced entries and update local database with progress tracking"""
+	var total := entries.size()
+	var processed := 0
+
+	for entry in entries:
+		# Update local database with expanded record format
+		var record := {
+			"creation_index": entry.get("creation_index", -1),
+			"scientific_name": entry.get("scientific_name", ""),
+			"common_name": entry.get("common_name", ""),
+			"image_checksum": entry.get("image_checksum", ""),
+			"dex_compatible_url": entry.get("dex_compatible_url", ""),
+			"updated_at": entry.get("updated_at", ""),
+			"cached_image_path": ""  # Will be set after download
+		}
+
+		# Check if image needs downloading
+		var needs_download := _needs_image_download(record, user_id)
+
+		if needs_download and not record["dex_compatible_url"].is_empty():
+			# Download image asynchronously
+			await _download_and_cache_image(record, user_id)
+
+		# Add to database (with updated cached_image_path)
+		DexDatabase.add_record_from_dict(record, user_id)
+
+		processed += 1
+		sync_progress.emit(user_id, processed, total)
+
+	# Update sync timestamp
+	if not server_time.is_empty():
+		SyncManager.update_last_sync(user_id, server_time)
+
+	sync_user_completed.emit(user_id, total)
+
+	if callback:
+		callback.call({"entries": entries, "count": total}, 200)
+
+func _needs_image_download(record: Dictionary, user_id: String) -> bool:
+	"""Check if image needs to be downloaded"""
+	var creation_index: int = record.get("creation_index", -1)
+	if creation_index < 0:
+		return false
+
+	var existing_record := DexDatabase.get_record_for_user(creation_index, user_id)
+	if existing_record.is_empty():
+		return true
+
+	# Check if checksum changed
+	var old_checksum: String = existing_record.get("image_checksum", "")
+	var new_checksum: String = record.get("image_checksum", "")
+
+	return old_checksum != new_checksum
+
+func _download_and_cache_image(record: Dictionary, user_id: String) -> void:
+	"""Download and cache image, update record with local path"""
+	var image_url: String = record.get("dex_compatible_url", "")
+	if image_url.is_empty():
+		return
+
+	_log("Downloading image for user '%s': %s" % [user_id, image_url])
+
+	# Create HTTP request
+	var http := HTTPRequest.new()
+	add_child(http)
+
+	# Download image
+	var error := http.request(image_url)
+	if error != OK:
+		push_error("[DexService] Failed to start image download: ", error)
+		http.queue_free()
+		return
+
+	# Wait for completion
+	var result = await http.request_completed
+	var response_code: int = result[1]
+	var body: PackedByteArray = result[3]
+
+	http.queue_free()
+
+	if response_code != 200:
+		push_error("[DexService] Image download failed with code: ", response_code)
+		return
+
+	# Cache image with deduplication
+	var cached_path := DexDatabase.cache_image(image_url, body, user_id)
+	record["cached_image_path"] = cached_path
+
+	_log("Image cached for user '%s': %s" % [user_id, cached_path])
+
+## Get friends overview
+func get_friends_overview(callback: Callable = Callable()) -> void:
+	_log("Getting friends overview")
+
+	var req_config := _create_request_config()
+	var context := {"callback": callback}
+
+	api_client.request_get(
+		"/dex/entries/friends_overview/",
+		_on_friends_overview_success.bind(context),
+		_on_friends_overview_error.bind(context),
+		req_config
+	)
+
+func _on_friends_overview_success(response: Dictionary, context: Dictionary) -> void:
+	var friends: Array = response.get("friends", [])
+	_log("Received friends overview: %d friends" % friends.size())
+	friends_overview_received.emit(friends)
+	if context.callback:
+		context.callback.call(response, 200)
+
+func _on_friends_overview_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "get_friends_overview")
+	friends_overview_failed.emit(error)
+	if context.callback:
+		context.callback.call({"error": error.message}, error.code)
+
+## Sync all friends' dex in one operation
+func sync_all_friends(callback: Callable = Callable()) -> void:
+	"""Sync own dex and all friends' dex"""
+	_log("Starting batch sync for all friends")
+
+	# First get friends overview
+	get_friends_overview(_on_friends_overview_for_batch_sync.bind(callback))
+
+func _on_friends_overview_for_batch_sync(response: Dictionary, code: int, callback: Callable) -> void:
+	if code != 200:
+		_log("Failed to get friends overview for batch sync")
+		if callback:
+			callback.call(response, code)
+		return
+
+	var friends: Array = response.get("friends", [])
+
+	# Build batch sync request
+	var sync_requests := []
+
+	# Add self
+	sync_requests.append({
+		"user_id": "self",
+		"last_sync": SyncManager.get_last_sync("self")
+	})
+
+	# Add all friends
+	for friend in friends:
+		var friend_id: String = friend.get("user_id", "")
+		if not friend_id.is_empty():
+			sync_requests.append({
+				"user_id": friend_id,
+				"last_sync": SyncManager.get_last_sync(friend_id)
+			})
+
+	# Execute batch sync
+	_execute_batch_sync(sync_requests, callback)
+
+func _execute_batch_sync(sync_requests: Array, callback: Callable) -> void:
+	"""Execute batch sync request"""
+	_log("Executing batch sync for %d users" % sync_requests.size())
+
+	var req_config := _create_request_config()
+	var context := {"callback": callback}
+
+	api_client.post(
+		"/dex/entries/batch_sync/",
+		{"sync_requests": sync_requests},
+		_on_batch_sync_success.bind(context),
+		_on_batch_sync_error.bind(context),
+		req_config
+	)
+
+func _on_batch_sync_success(response: Dictionary, context: Dictionary) -> void:
+	var results: Dictionary = response.get("results", {})
+	var server_time: String = response.get("server_time", "")
+
+	_log("Batch sync completed: %d users" % results.size())
+
+	# Process each user's results
+	for user_id in results.keys():
+		var user_result = results[user_id]
+
+		if user_result.has("error"):
+			sync_user_failed.emit(user_id, user_result["error"])
+			continue
+
+		var entries: Array = user_result.get("entries", [])
+		_process_sync_entries(entries, user_id, server_time, Callable())
+
+	if context.callback:
+		context.callback.call(response, 200)
+
+func _on_batch_sync_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "batch_sync")
+	if context.callback:
+		context.callback.call({"error": error.message}, error.code)
+
+## Retry logic with exponential backoff
+
+func sync_user_dex_with_retry(user_id: String = "self", max_retries: int = 3, callback: Callable = Callable()) -> void:
+	"""Sync a user's dex with automatic retry on failure"""
+	_log("Starting sync with retry for user: %s (max retries: %d)" % [user_id, max_retries])
+	_retry_sync(user_id, 0, max_retries, 1000, callback)
+
+func _retry_sync(user_id: String, attempt: int, max_retries: int, backoff_ms: int, callback: Callable) -> void:
+	"""Internal retry logic with exponential backoff"""
+	# Attempt sync
+	sync_user_dex(user_id, _on_retry_sync_complete.bind({
+		"user_id": user_id,
+		"attempt": attempt,
+		"max_retries": max_retries,
+		"backoff_ms": backoff_ms,
+		"callback": callback
+	}))
+
+func _on_retry_sync_complete(response: Dictionary, code: int, context: Dictionary) -> void:
+	"""Handle retry sync completion"""
+	var user_id: String = context.user_id
+	var attempt: int = context.attempt
+	var max_retries: int = context.max_retries
+	var backoff_ms: int = context.backoff_ms
+	var callback: Callable = context.callback
+
+	if code == 200:
+		# Success!
+		_log("Sync succeeded for user '%s' on attempt %d" % [user_id, attempt + 1])
+		if callback:
+			callback.call(response, code)
+		return
+
+	# Check if we should retry
+	if attempt < max_retries:
+		var next_attempt := attempt + 1
+		_log("Sync failed for user '%s' (attempt %d/%d), retrying in %dms..." % [
+			user_id, next_attempt, max_retries + 1, backoff_ms
+		])
+
+		# Wait with exponential backoff
+		await get_tree().create_timer(backoff_ms / 1000.0).timeout
+
+		# Retry with doubled backoff
+		_retry_sync(user_id, next_attempt, max_retries, backoff_ms * 2, callback)
+	else:
+		# Max retries exceeded
+		_log("Sync failed for user '%s' after %d attempts" % [user_id, max_retries + 1])
+		sync_user_failed.emit(user_id, "Max retries exceeded")
+		if callback:
+			callback.call(response, code)

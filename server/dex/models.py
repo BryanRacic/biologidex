@@ -111,12 +111,17 @@ class DexEntry(models.Model):
         ordering = ['-catch_date']
         unique_together = [['owner', 'animal', 'catch_date']]
         indexes = [
+            # Original indexes
             models.Index(fields=['owner', 'animal']),
             models.Index(fields=['owner', 'catch_date']),
             models.Index(fields=['owner', 'visibility']),
             models.Index(fields=['animal', 'visibility']),
             models.Index(fields=['catch_date']),
             models.Index(fields=['is_favorite']),
+            # New indexes for sync optimization (Phase 5)
+            models.Index(fields=['owner', 'updated_at'], name='dex_owner_updated_idx'),
+            models.Index(fields=['visibility', 'updated_at'], name='dex_visibility_updated_idx'),
+            models.Index(fields=['updated_at'], name='dex_updated_at_idx'),
         ]
 
     def __str__(self):

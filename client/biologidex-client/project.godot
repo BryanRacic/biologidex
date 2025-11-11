@@ -22,6 +22,7 @@ TokenManager="*res://token_manager.gd"
 APIManager="*res://api/api_manager.gd"
 DexDatabase="*res://dex_database.gd"
 TreeCache="*res://tree_cache.gd"
+SyncManager="*res://sync_manager.gd"
 
 [display]
 

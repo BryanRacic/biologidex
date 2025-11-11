@@ -1,6 +1,5 @@
 extends Control
-
-# Dex Gallery - Browse through discovered animals in creation_index order
+## Dex Gallery - Browse through discovered animals with multi-user support
 
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var dex_number_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/"Dex Number"
@@ -12,13 +11,21 @@ extends Control
 @onready var previous_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer/PreviousButton
 @onready var next_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer/NextButton
 
+# TODO: Add these UI elements to dex.tscn:
+# @onready var user_selector: OptionButton = $Panel/MarginContainer/VBoxContainer/Header/UserSelector
+# @onready var sync_button: Button = $Panel/MarginContainer/VBoxContainer/Header/SyncButton
+# @onready var sync_progress: ProgressBar = $Panel/MarginContainer/VBoxContainer/Header/SyncProgress
+
 var current_index: int = -1
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
+var current_user_id: String = "self"  # Currently viewing user's dex
+var is_syncing: bool = false
+var available_users: Dictionary = {}  # user_id -> username mapping
 
 
 func _ready() -> void:
-	print("[Dex] Scene loaded")
+	print("[Dex] Scene loaded (Multi-user mode)")
 
 	# Check authentication
 	if not TokenManager.is_logged_in():
@@ -32,15 +39,43 @@ func _ready() -> void:
 	next_button.pressed.connect(_on_next_pressed)
 
 	# Connect to database signals
-	DexDatabase.record_added.connect(_on_record_added)
+	DexDatabase.record_added.connect(_on_record_added_multi_user)
+	DexDatabase.database_switched.connect(_on_database_switched)
 
-	# Load first record
+	# Connect to sync signals
+	APIManager.dex.sync_started.connect(_on_sync_started)
+	APIManager.dex.sync_progress.connect(_on_sync_progress)
+	APIManager.dex.sync_user_completed.connect(_on_sync_user_completed)
+	APIManager.dex.sync_user_failed.connect(_on_sync_user_failed)
+	APIManager.dex.friends_overview_received.connect(_on_friends_overview_received)
+
+	# Initialize user list
+	_populate_user_list()
+
+	# Load first record for current user
 	_load_first_record()
 
 
+func _populate_user_list() -> void:
+	"""Initialize the list of available users (self + cached friends)"""
+	available_users.clear()
+	available_users["self"] = "My Dex"
+
+	# Add any friends whose dex we have cached
+	var tracked_users := DexDatabase.get_tracked_users()
+	for user_id in tracked_users:
+		if user_id != "self":
+			available_users[user_id] = "Friend (%s)" % user_id.substr(0, 8)
+
+	print("[Dex] Available users: ", available_users.keys())
+
+	# Fetch friends overview to update names
+	APIManager.dex.get_friends_overview()
+
+
 func _load_first_record() -> void:
-	"""Load the first record (lowest creation_index)"""
-	var first_index := DexDatabase.get_first_index()
+	"""Load the first record (lowest creation_index) for current user"""
+	var first_index := DexDatabase.get_first_index_for_user(current_user_id)
 
 	if first_index >= 0:
 		_display_record(first_index)
@@ -51,16 +86,17 @@ func _load_first_record() -> void:
 func _show_empty_state() -> void:
 	"""Show UI when no records exist"""
 	current_index = -1
-	dex_number_label.text = "No animals discovered yet!"
+	var user_label := available_users.get(current_user_id, current_user_id)
+	dex_number_label.text = "%s - No animals discovered yet!" % user_label
 	record_image.visible = false
 	previous_button.disabled = true
 	next_button.disabled = true
-	print("[Dex] No records in database")
+	print("[Dex] No records in database for user: ", current_user_id)
 
 
 func _display_record(creation_index: int) -> void:
-	"""Display a specific record"""
-	var record := DexDatabase.get_record(creation_index)
+	"""Display a specific record for current user"""
+	var record := DexDatabase.get_record_for_user(creation_index, current_user_id)
 
 	if record.is_empty():
 		print("[Dex] ERROR: Record not found: ", creation_index)
@@ -174,13 +210,34 @@ func _update_navigation_buttons() -> void:
 		next_button.disabled = true
 		return
 
-	# Check if there's a previous record
-	var prev_index := DexDatabase.get_previous_index(current_index)
+	# Check if there's a previous record for current user
+	var prev_index := DexDatabase.get_previous_index_for_user(current_index, current_user_id)
 	previous_button.disabled = (prev_index < 0)
 
-	# Check if there's a next record
-	var next_index := DexDatabase.get_next_index(current_index)
+	# Check if there's a next record for current user
+	var next_index := DexDatabase.get_next_index_for_user(current_index, current_user_id)
 	next_button.disabled = (next_index < 0)
+
+
+func switch_user(user_id: String) -> void:
+	"""Switch to viewing a different user's dex"""
+	if user_id == current_user_id:
+		return
+
+	print("[Dex] Switching to user: ", user_id)
+	current_user_id = user_id
+	DexDatabase.switch_user(user_id)
+	_load_first_record()
+
+
+func trigger_sync() -> void:
+	"""Trigger sync for current user"""
+	if is_syncing:
+		print("[Dex] Sync already in progress")
+		return
+
+	print("[Dex] Triggering sync for user: ", current_user_id)
+	APIManager.dex.sync_user_dex(current_user_id)
 
 
 func _on_previous_pressed() -> void:
@@ -188,7 +245,7 @@ func _on_previous_pressed() -> void:
 	if current_index < 0:
 		return
 
-	var prev_index := DexDatabase.get_previous_index(current_index)
+	var prev_index := DexDatabase.get_previous_index_for_user(current_index, current_user_id)
 	if prev_index >= 0:
 		print("[Dex] Navigating to previous: #", prev_index)
 		_display_record(prev_index)
@@ -201,7 +258,7 @@ func _on_next_pressed() -> void:
 	if current_index < 0:
 		return
 
-	var next_index := DexDatabase.get_next_index(current_index)
+	var next_index := DexDatabase.get_next_index_for_user(current_index, current_user_id)
 	if next_index >= 0:
 		print("[Dex] Navigating to next: #", next_index)
 		_display_record(next_index)
@@ -215,13 +272,80 @@ func _on_back_pressed() -> void:
 	NavigationManager.go_back()
 
 
-func _on_record_added(creation_index: int) -> void:
-	"""Handle new record added to database"""
-	print("[Dex] New record added: #", creation_index)
+## Multi-user signal handlers
+
+func _on_record_added_multi_user(record: Dictionary, user_id: String) -> void:
+	"""Handle new record added to database (multi-user)"""
+	print("[Dex] New record added for user '%s': #%d" % [user_id, record.get("creation_index", -1)])
+
+	# Only update if this record is for the currently viewing user
+	if user_id != current_user_id:
+		return
 
 	# If we're currently showing empty state, load the new record
 	if current_index < 0:
-		_display_record(creation_index)
+		var creation_index: int = record.get("creation_index", -1)
+		if creation_index >= 0:
+			_display_record(creation_index)
 	else:
 		# Update navigation buttons in case new record affects them
 		_update_navigation_buttons()
+
+
+func _on_database_switched(user_id: String) -> void:
+	"""Handle database switch event"""
+	print("[Dex] Database switched to user: ", user_id)
+	current_user_id = user_id
+	_load_first_record()
+
+
+## Sync signal handlers
+
+func _on_sync_started(user_id: String) -> void:
+	"""Handle sync started"""
+	if user_id == current_user_id:
+		is_syncing = true
+		print("[Dex] Sync started for current user")
+		# TODO: Disable sync button, show progress bar
+
+
+func _on_sync_progress(user_id: String, current: int, total: int) -> void:
+	"""Handle sync progress update"""
+	if user_id == current_user_id:
+		var progress := (float(current) / float(total)) * 100.0
+		print("[Dex] Sync progress: %d/%d (%.1f%%)" % [current, total, progress])
+		# TODO: Update progress bar value
+
+
+func _on_sync_user_completed(user_id: String, entries_updated: int) -> void:
+	"""Handle sync completed"""
+	if user_id == current_user_id:
+		is_syncing = false
+		print("[Dex] Sync completed: %d entries updated" % entries_updated)
+		# TODO: Hide progress bar, enable sync button, show success message
+
+		# Refresh display if we were showing empty state
+		if current_index < 0 and entries_updated > 0:
+			_load_first_record()
+
+
+func _on_sync_user_failed(user_id: String, error_message: String) -> void:
+	"""Handle sync failed"""
+	if user_id == current_user_id:
+		is_syncing = false
+		push_error("[Dex] Sync failed: %s" % error_message)
+		# TODO: Hide progress bar, enable sync button, show error message
+
+
+func _on_friends_overview_received(friends: Array) -> void:
+	"""Handle friends overview received"""
+	print("[Dex] Friends overview received: %d friends" % friends.size())
+
+	# Update available_users with real friend names
+	for friend in friends:
+		var friend_id: String = friend.get("user_id", "")
+		var username: String = friend.get("username", "")
+		if not friend_id.is_empty() and not username.is_empty():
+			available_users[friend_id] = username + "'s Dex"
+
+	# TODO: Update user selector dropdown with updated names

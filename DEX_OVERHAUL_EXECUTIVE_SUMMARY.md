@@ -66,60 +66,40 @@ user://dex_cache/
 
 ## 5-Phase Implementation Roadmap
 
-### Phase 1: Foundation (Days 1-2) 🚨 START HERE
-**Owner: Frontend Team**
-- [ ] Fix sync response bug (1 min)
-- [ ] Implement SyncManager singleton (2 hrs)
-- [ ] Add to autoload (10 min)
-- [ ] Test sync with timestamps (1 hr)
+### Phase 1: Foundation 🚨 START HERE
+- [ ] Fix sync response bug
+- [ ] Implement SyncManager singleton 
+- [ ] Add to autoload 
+- [ ] Test sync with timestamps 
 **Deliverable**: Working incremental sync for own dex
 
-### Phase 2: Multi-User Storage (Days 3-5)
-**Owner: Frontend Team**
-- [ ] Refactor DexDatabase for multi-user (1 day)
-- [ ] Implement migration from v1 (2 hrs)
-- [ ] Add image cache deduplication (4 hrs)
-- [ ] Update UI for user switching (4 hrs)
+### Phase 2: Multi-User Storage 
+- [ ] Refactor DexDatabase for multi-user 
+- [ ] Implement migration from v1 
+- [ ] Add image cache deduplication
+- [ ] Update UI for user switching 
 **Deliverable**: Can store multiple users' data locally
 
-### Phase 3: Backend API (Days 6-8)
-**Owner: Backend Team**
-- [ ] Add `/dex/user/{id}/entries/` endpoint (4 hrs)
-- [ ] Implement permission checks (2 hrs)
-- [ ] Add friends_overview endpoint (2 hrs)
-- [ ] Optional: batch_sync endpoint (4 hrs)
+### Phase 3: Backend API 
+- [ ] Add `/dex/user/{id}/entries/` endpoint 
+- [ ] Implement permission checks
+- [ ] Add friends_overview endpoint 
+- [ ] Optional: batch_sync endpoint
 **Deliverable**: API supports friend dex viewing
 
-### Phase 4: Frontend Integration (Days 9-11)
-**Owner: Frontend Team**
-- [ ] Update DexService for friend sync (1 day)
-- [ ] Add user selector to UI (4 hrs)
-- [ ] Implement progress tracking (4 hrs)
-- [ ] Add retry logic (4 hrs)
+### Phase 4: Frontend Integration 
+- [ ] Update DexService for friend sync 
+- [ ] Add user selector to UI
+- [ ] Implement progress tracking 
+- [ ] Add retry logic 
 **Deliverable**: Complete friend dex viewing
 
-### Phase 5: Polish (Days 12-14)
-**Owner: Both Teams**
-- [ ] Add database indexes (Backend - 1 hr)
-- [ ] Implement caching (Backend - 4 hrs)
-- [ ] Add lazy loading (Frontend - 4 hrs)
-- [ ] Error handling improvements (Both - 4 hrs)
+### Phase 5: Polish
+- [ ] Add database indexes 
+- [ ] Implement caching
+- [ ] Add lazy loading
+- [ ] Error handling improvements 
 **Deliverable**: Production-ready system
-
-## Resource Requirements
-
-### Frontend Team
-- 1 senior developer (lead)
-- 1 junior developer (support)
-- ~8 days of effort
-
-### Backend Team
-- 1 backend developer
-- ~3 days of effort
-
-### Testing
-- 2 days QA after Phase 4
-- Focus on sync accuracy and permissions
 
 ## Risk Assessment
 
@@ -157,18 +137,10 @@ user://dex_cache/
 - Data export
 
 ## Immediate Action Items
-
-### Today (Day 1)
 1. **Frontend Lead**: Fix sync bug (5 min)
 2. **Frontend**: Start SyncManager implementation
 3. **Backend**: Review friend permissions logic
 4. **PM**: Schedule daily standup for sync
-
-### This Week
-1. Complete Phase 1-2
-2. Backend starts Phase 3 in parallel
-3. Document API changes
-4. Update CLAUDE.md with progress
 
 ### Key Decisions Needed
 1. **Sync frequency**: Manual only vs auto-sync?
@@ -190,17 +162,17 @@ user://dex_cache/
 
 ## Future Enhancements (Post-MVP)
 
-### Phase 6: Image Management (3 days)
+### Phase 6: Image Management 
 - Multiple images per dex entry
 - User can choose primary image
 - Image history/versioning
 
-### Phase 7: Collaborative Collections (5 days)
+### Phase 7: Collaborative Collections
 - Shared dex collections
 - Combine entries from multiple users
 - Custom sorting/filtering
 
-### Phase 8: Dex Pages (7 days)
+### Phase 8: Dex Pages 
 - Scrapbook-style customization
 - Rich text notes
 - Layout templates
@@ -240,14 +212,3 @@ user://dex_cache/
 3. Add telemetry/monitoring
 4. Create integration tests
 
-## Questions for Product Owner
-
-1. **Priority**: Is viewing friends' dex more important than performance optimization?
-2. **Privacy**: Should users be notified when friends view their dex?
-3. **Limits**: Max number of friends to sync?
-4. **Offline**: Should the app work fully offline or read-only?
-5. **Permissions**: Can users hide specific entries from friends?
-
----
-
-**Bottom Line**: The dex overhaul is achievable in 10-14 days with the current team. The architecture is sound and scalable. Fix the critical bug today, then follow the phases sequentially. The system will support all planned future features without major refactoring.
