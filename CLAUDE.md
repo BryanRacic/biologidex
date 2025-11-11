@@ -1,879 +1,190 @@
-# BiologiDex - Project Memory
+# BiologiDex - Claude Context
 
 ## Project Overview
-A Pokedex-style social network for sharing real-world zoological observations. Users photograph animals, which are identified via CV/LLM, then added to personal collections and a collaborative taxonomic tree shared with friends.
+Pokedex-style social network for wildlife observations. Users photograph animals → CV/LLM identifies → add to personal dex → view in collaborative taxonomic tree with friends.
 
-## Current Status (Updated 2025-11-11)
-- ✅ **Backend API**: Django REST Framework - Phase 1 Complete
-- ✅ **Database**: PostgreSQL with full schema implemented
-- ✅ **CV Integration**: OpenAI Vision API with async processing
-- ✅ **Frontend**: Godot 4.5 Client - Phase 1 Foundation Complete
-- ✅ **Authentication**: Login and registration flows implemented in Godot client
-- ✅ **Multi-User Dex System**: View own + friends' dex with incremental sync - Complete
-- ✅ **Dex Gallery**: Browse discovered animals with prev/next navigation (multi-user support)
-- ✅ **Production Infrastructure**: Docker Compose, Nginx, Gunicorn, Monitoring - Complete
-- ✅ **Health & Metrics**: Prometheus integration, health checks, operational monitoring
-- ✅ **Web Client Deployment**: Godot web export served via nginx at root path - Complete
-- ✅ **Image Processing Pipeline**: Standardized dex-compatible images with server-side conversion
-- ✅ **Image Transformations**: Client-side rotation UI with server-side processing and EXIF support
-- ✅ **Dex Sync System**: Incremental sync, image deduplication, caching, retry logic - Complete
-- 📋 **Taxonomic Tree Visualization**: Complete implementation plan (client + server) - Ready to build
+## Stack
+- **Backend**: Django 4.2+ REST Framework, PostgreSQL 15, Redis, Celery, OpenAI Vision API
+- **Frontend**: Godot 4.5 (web-primary), JWT auth, multi-user local storage
+- **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
+- **Storage**: Google Cloud Storage (media), local dex cache with deduplication
+
+## Status (2025-11-11)
+- ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
+- ✅ Incremental sync, image deduplication, HTTP caching, retry logic
+- 📋 Taxonomic tree visualization (planned, ready to build)
 
 ---
 
-## Technical Architecture
-
-### Frontend Stack (Godot 4.5)
-- **Engine**: Godot 4.5 (GL Compatibility renderer)
-- **Target Platforms**: Web (primary), Mobile, Desktop
-- **Base Resolution**: 1280×720 (16:9)
-- **Stretch Mode**: canvas_items with expand aspect
-- **Font Rendering**: MSDF (Multichannel Signed Distance Field)
-
-### Client Structure
-```
-client/biologidex-client/
-├── main.tscn                    # Main responsive scene
-├── login.tscn / login.gd        # Login scene with token refresh
-├── create_acct.tscn / create_account.gd  # Registration scene
-├── home.tscn / home.gd          # Main app scene (post-auth)
-├── camera.tscn / camera.gd      # Photo upload scene with CV integration
-├── dex.tscn / dex.gd            # Dex gallery with prev/next navigation
-├── record_image.tscn            # Animal record card component
-├── api/                         # API layer (4-layer architecture)
-│   ├── api_manager.gd           # Orchestrator singleton (autoload)
-│   ├── core/
-│   │   ├── http_client.gd       # Low-level HTTP (HTTPClientCore)
-│   │   ├── api_client.gd        # High-level with auth, retry, queue (APIClient)
-│   │   ├── api_config.gd        # Endpoints, timeouts, retry config (APIConfig)
-│   │   └── api_types.gd         # Shared types (APIError, RequestConfig, TreeMode)
-│   └── services/
-│       ├── base_service.gd      # Abstract base (BaseService)
-│       ├── auth_service.gd      # Authentication (AuthService)
-│       ├── vision_service.gd    # CV jobs (VisionService)
-│       ├── tree_service.gd      # Taxonomic tree (TreeService)
-│       ├── social_service.gd    # Friends (SocialService)
-│       └── dex_service.gd       # Dex entries (DexService)
-├── token_manager.gd             # JWT token persistence (autoload)
-├── navigation_manager.gd        # Navigation singleton (autoload)
-├── dex_database.gd              # Multi-user local dex storage v2 (autoload)
-├── sync_manager.gd              # Sync state tracking (autoload)
-├── responsive.gd                # Base responsive behavior script
-├── responsive_container.gd      # Auto-margin container class
-├── theme.tres                   # Base theme resource
-├── project.godot                # Project configuration
-├── export_presets.cfg           # Web export configuration (single-threaded)
-└── export/web/                  # Godot web export output
-    ├── index.html               # Entry point
-    ├── index.wasm               # WebAssembly binary (~36MB)
-    ├── index.pck                # Game data package
-    ├── index.js                 # JavaScript loader
-    └── [PWA assets]             # Manifest, service worker, icons
-```
-
-### Key Godot Patterns
-
-**Responsive Design System**:
-- AspectRatioContainer maintains 16:9 proportions
-- Dynamic margin adjustment per device class (mobile: 16px, tablet: 32px, desktop: 48px)
-- Viewport size monitoring with automatic layout updates
-- Device class detection: mobile (<800px), tablet (800-1280px), desktop (>1280px)
-
-**Navigation System**:
-- Global NavigationManager singleton with history stack (max 10 scenes)
-- Scene validation before navigation
-- Back navigation support with `go_back()`
-- Signals: `scene_changed`, `navigation_failed`
-
-**API Architecture (4-Layer)**:
-- **Core HTTP**: HTTPClientCore - raw HTTP operations, response parsing, platform configs
-- **API Client**: APIClient - high-level with auth injection, retry logic, request queue (max 3 concurrent)
-- **Service Layer**: Domain-specific services (auth, vision, tree, social, dex) extending BaseService
-- **Manager**: APIManager singleton orchestrates all services, provides backward compatibility
-
-**Usage Pattern**:
-```gdscript
-# Access via manager singleton
-APIManager.auth.login(username, password, callback)
-APIManager.tree.fetch_tree(APITypes.TreeMode.FRIENDS, [], true, callback)
-
-# Services emit signals AND invoke callbacks
-APIManager.auth.login_succeeded.connect(_on_success)
-
-# Callbacks: func(response: Dictionary, code: int) or func(error: APITypes.APIError)
-func callback(response: Dictionary, code: int):
-    if code == 200:  # Always check code, not dict keys
-        # Success
-```
-
-**Critical API Patterns**:
-- ✅ Use `APIManager.<service>.<method>()` for all API calls
-- ✅ Services use traditional callbacks with `.bind(context)`, NOT inline lambdas
-- ✅ GDScript function calls: positional arguments ONLY (no `param=value` syntax)
-- ✅ Callbacks receive `(response: Dictionary, code: int)` - check `code == 200` for success
-- ❌ Never call `api_client.post()` directly - always use service methods
-- ❌ Never use inline lambdas in service methods - causes "assignment in expression" errors
-
-**Authentication Flow**:
-- Services handle auth automatically via TokenManager
-- Form validation pattern: client-side checks before API call
-- Error handling: parse field-specific errors from API response arrays
-- Security: password fields cleared on errors, passwords redacted in logs
-- Loading states: disable all inputs during API calls
-
-**Camera Scene & CV Integration** (camera.tscn):
-- FileAccessWeb plugin for HTML5 file selection (base64 → PackedByteArray)
-- **Editor test cycling**: Auto-cycles through `TEST_IMAGES` array; increments index after each upload completes
-- **Original format upload**: Images uploaded in native format (JPEG, PNG, etc.) - NO client-side conversion
-- **Format handling**: Attempts preview with fallback; shows warning for unsupported formats but allows upload
-- **Dex-compatible images**: After analysis, downloads server-processed PNG (max 2560x2560) from `dex_compatible_url`
-- **Local caching**: Stores dex images in `user://dex_cache/` using URL hash as filename
-- **Auto-save to DexDatabase**: After successful CV identification, saves record with creation_index to local database
-- Two-stage image display:
-  1. Simple preview (RecordImage/Image) during upload/analysis - may fail for unsupported formats
-  2. Bordered display (RecordImage/ImageBorderAspectRatio) after identification - uses dex-compatible image
-- Vision API workflow: Upload original → poll job status → download dex image → save to DexDatabase → display
-- Display format: "Scientific name - common name" (e.g., "Recurvirostra americana - American Avocet")
-- **Critical**: Update `current_image_width/height` with dex image dimensions before sizing calculations
-
-**Multi-User Dex System** (v2.0 - Added 2025-11-11):
-- **DexDatabase** (`dex_database.gd`): Multi-user local storage singleton
-  - Storage: `user://dex_data/{user_id}_dex.json` per user
-  - Cache: `user://dex_cache/{user_id}/` with cross-user deduplication
-  - Record format: `{creation_index, scientific_name, common_name, cached_image_path, image_checksum, dex_compatible_url, updated_at}`
-  - Backwards compatible: Legacy methods still work, auto-migrates v1 → v2
-  - New methods: `get_record_for_user()`, `get_all_records_for_user()`, `get_sorted_indices_for_user()`, etc.
-  - Image deduplication: Checks all users' caches before downloading
-  - Signals: `record_added(record, user_id)`, `database_switched(user_id)`
-- **SyncManager** (`sync_manager.gd`): Tracks last sync timestamp per user
-  - Storage: `user://sync_state.json`
-  - Methods: `get_last_sync(user_id)`, `update_last_sync(user_id, timestamp)`
-  - Used for incremental sync (only download changed entries)
-- **DexService** (`api/services/dex_service.gd`): Enhanced with multi-user sync
-  - `sync_user_dex(user_id)`: Sync specific user with progress tracking
-  - `sync_user_dex_with_retry(user_id, max_retries)`: Auto-retry with exponential backoff
-  - `get_friends_overview()`: Get summary of all friends' collections
-  - `sync_all_friends()`: Batch sync own + all friends' dex
-  - Signals: `sync_started`, `sync_progress`, `sync_user_completed`, `sync_user_failed`
-  - Automatic image download and caching during sync
-- **Dex Gallery** (`dex.gd`): Multi-user viewing support
-  - Browse own dex or any friend's dex
-  - User switching: `switch_user(user_id)`, `trigger_sync()`
-  - Integrated sync progress tracking
-  - Fetches friend names via `friends_overview` API
-  - TODO: Add UI elements (user selector, sync button, progress bar)
-
-**RecordImage Component** (record_image.tscn):
-- Dual image display: simple TextureRect + bordered AspectRatioContainer
-- Dynamic aspect ratio: Calculate from texture, update container ratio, set custom_minimum_size.y
-- Aspect ratio sizing: `await get_tree().process_frame` then `height = width / aspect_ratio`
-- Label overlay: "Scientific name - common name" format on bordered display
-- Image stretch modes: simple (keep aspect centered), bordered (scale to fill)
-
-**Common Gotchas**:
-- **GDScript syntax**:
-  - Type inference: `min()`, `max()`, `Array[T].pop_back()` return Variant - explicitly cast to `float` or `String`
-  - Reserved: `class_name` is reserved, use `animal_class` for variables
-  - Function calls: NO named arguments (`func(arg=value)` is invalid) - use positional only
-  - Inline lambdas in service methods: FORBIDDEN - causes "assignment in expression" errors
-- **API calls**:
-  - Use `APIManager.<service>.<method>()` for all API operations
-  - Check `code == 200` in callbacks, not response dict keys
-  - Service methods use traditional callbacks with `.bind(context)`, never inline lambdas
-- **UI Layout**:
-  - `layout_mode`: 0=uncontrolled, 1=anchors, 2=container, 3=anchors preset only
-  - Container children need `layout_mode = 2`, not anchors
-  - AspectRatioContainer must use anchors (`layout_mode = 1`) to fill parent
-  - Dynamic sizing: `await get_tree().process_frame` before reading calculated sizes
-  - Touch targets: minimum 44×44 pixels for mobile
-- **TokenManager**: Use `is_logged_in()` not `has_valid_token()` to check auth
-- **Image dimensions**: Always update `current_image_width/height` when changing displayed image
-- **Image rotation**: Never call `_update_record_image_size()` during rotation of simple preview
-- **Web export gzip**: Set `HTTPRequest.accept_gzip = false` to avoid double decompression
-
-### Backend Stack
-- **Framework**: Django 4.2+ with Django REST Framework
-- **Database**: PostgreSQL 15 (development via Docker)
-- **Caching**: Redis (shared with Celery)
-- **Task Queue**: Celery with Redis backend
-- **Storage**: Google Cloud Storage (media files)
-- **Authentication**: JWT via djangorestframework-simplejwt
-- **API Docs**: drf-spectacular (OpenAPI/Swagger)
-
-### Project Structure
-```
-server/
-├── biologidex/          # Main config (settings split: base/dev/prod)
-├── accounts/            # Custom User, profiles, friend codes
-├── animals/             # Canonical animal species database
-├── dex/                 # User's animal collection entries
-├── social/              # Friendships, friend requests
-├── vision/              # CV/AI identification pipeline
-└── graph/               # taxonomic tree generation
-```
-
-### Key Models
-
-**User (accounts.User)**
-- Extends AbstractUser with UUID primary key
-- `friend_code`: 8-char unique code for friend discovery
-- `badges`: JSONField for achievements
-- Auto-creates UserProfile via signals
-
-**Animal (animals.Animal)**
-- Full taxonomic hierarchy (kingdom → species)
-- `creation_index`: Sequential discovery number (Pokedex-style)
-- `verified`: Admin approval flag
-- Auto-parsed genus/species from scientific_name
-
-**DexEntry (dex.DexEntry)**
-- Links User ↔ Animal with images and metadata
-- `visibility`: private/friends/public
-- `customizations`: JSONField for card styling
-- GPS coordinates optional
-- Auto-updates user profile stats via signals
-- **Image fields**:
-  - `original_image`: User's uploaded image
-  - `processed_image`: Optional cropped/edited version
-  - `source_vision_job`: FK to AnalysisJob (provides dex_compatible_image)
-  - `display_image_url` property: Smart fallback (dex_compatible → processed → original)
-
-**Friendship (social.Friendship)**
-- Bidirectional model with status (pending/accepted/rejected/blocked)
-- Helper methods: `are_friends()`, `get_friends()`, `get_friend_ids()`
-- Prevents self-friendship
-
-**AnalysisJob (vision.AnalysisJob)**
-- Tracks CV identification requests
-- Stores: cost, tokens, processing time, raw API response
-- Status: pending → processing → completed/failed
-- Retry logic with exponential backoff
-- **Image fields**:
-  - `image`: Original uploaded file (any format) - stored in `vision/analysis/original/%Y/%m/`
-  - `dex_compatible_image`: Standardized PNG (max 2560x2560) - stored in `vision/analysis/dex_compatible/%Y/%m/`
-  - `image_conversion_status`: pending/processing/completed/failed/unnecessary
-- **API response**: Includes `dex_compatible_url` for client to download processed image
-
-### Animal Identification Pipeline
-
-**Flow**: Image upload → AnalysisJob created → Celery task → Image processing → OpenAI Vision API → Parse response → Create/lookup Animal → Complete job
-
-**Key Components**:
-1. **ImageProcessor** (vision/image_processor.py): Server-side image standardization
-   - Converts images to PNG format (handles RGBA/transparency → RGB with white background)
-   - Resizes images >2560px while maintaining aspect ratio (using Pillow/LANCZOS)
-   - Returns `None` if original already meets criteria (triggers `unnecessary` status)
-   - Stores metadata: original format, dimensions, resize/conversion flags
-2. **ANIMAL_ID_PROMPT** (vision/constants.py): Standardized prompt requesting binomial nomenclature format
-3. **OpenAIVisionService** (vision/services.py):
-   - Handles GPT-4/5+ model differences (max_tokens vs max_completion_tokens)
-   - Base64 image encoding
-   - Cost calculation from token usage
-   - **Uses dex-compatible image** for CV analysis (fallback to original if conversion fails)
-4. **process_analysis_job** (vision/tasks.py): Celery task for async processing
-   - **Step 1**: Process image with ImageProcessor (creates dex_compatible_image)
-   - **Step 2**: Send dex-compatible image to Vision API
-   - **Step 3**: Parse response and create/lookup Animal
-5. **parse_and_create_animal**: Regex parsing of CV response, auto-creates Animal records
-
-**Model Compatibility**:
-- GPT-4 models: Use `max_tokens` parameter
-- GPT-5+/o-series: Use `max_completion_tokens` parameter
-- Auto-detection via model name prefix check
-
-**Pricing Tracking**: All OpenAI pricing stored in `vision/constants.py` for cost calculation
-
-### Image Transformation System
-
-**Overview**: Client-side image rotation using pixel-level transformations. Users can rotate images before CV analysis, with the rotated image uploaded directly (no server-side rotation needed).
-
-**Client-Side Implementation (camera.gd)**:
-- **Rotation UI**: RotateImageButton (from camera.tscn) appears after successful image preview
-- **UI Visibility**: On image load → hide SelectPhotoButton/InstructionLabel, show RotateImageButton
-- **Rotation Method**: Uses `Image.rotate_90(CLOCKWISE)` for pixel-level rotation (NOT visual `rotation_degrees`)
-  - Rotates actual image data, not just display transform
-  - Updates `selected_file_data` with rotated PNG: `image.save_png_to_buffer()`
-  - Changes `selected_file_type` to "image/png" after rotation
-- **Dimension Tracking**: Swaps `current_image_width/height` with each 90° rotation
-- **Aspect Ratio**: Updates `bordered_container.ratio` for future bordered display (after CV analysis)
-- **Upload**: Sends pre-rotated image as PNG (no transformation metadata needed)
-- **Critical**: Do NOT call `_update_record_image_size()` during rotation
-  - Function is for bordered view only, causes oversized display if called during simple preview
-  - Simple preview's TextureRect with `stretch_mode = 5` (Keep Aspect Centered) handles sizing automatically
-
-**Server-Side Components**:
-1. **images app** (server/images/): New Django app for centralized image management
-   - **ProcessedImage model**: Tracks transformations, versioning, and checksums
-     - Fields: original_file, processed_file, thumbnail, transformations (JSONField)
-     - Metadata: original/processed dimensions, format, file size, EXIF data
-     - Versioning: parent_image FK for image history
-     - Deduplication: SHA256 checksums for original and processed files
-   - **EnhancedImageProcessor** (images/processor.py):
-     - `apply_transformations()`: Apply rotation, crop, and future transforms
-     - `auto_rotate_from_exif()`: Auto-rotate based on EXIF orientation tag
-     - `extract_exif_data()`: Extract and store EXIF metadata
-     - `process_image_with_transformations()`: Combined processing pipeline
-
-2. **Vision API Integration** (vision/views.py):
-   - `create_vision_job()` accepts optional `transformations` parameter (JSON string or dict)
-   - Parses and validates transformations before passing to Celery task
-
-3. **Async Processing** (vision/tasks.py):
-   - `process_analysis_job()` accepts `transformations` parameter
-   - Uses EnhancedImageProcessor if transformations provided
-   - Applies transformations before CV analysis
-   - Falls back to basic ImageProcessor if no transformations
-
-**Dex Sync API** (dex/views.py - Enhanced 2025-11-11):
-- `GET /api/v1/dex/entries/sync_entries/`: Sync own dex (cached 5 min for full sync)
-  - Query param: `last_sync` (ISO 8601 datetime) - returns entries updated after this time
-  - Returns: `{entries: [...], server_time: ISO string, count: int}`
-- `GET /api/v1/dex/entries/user/{user_id}/entries/`: Sync any user's dex (respects permissions)
-  - Permission: Own entries (all), friend entries (friends+public), stranger entries (public only)
-  - Query param: `last_sync` - incremental sync support
-  - Returns: `{entries: [...], server_time: ISO string, user_id: UUID, total_count: int}`
-- `GET /api/v1/dex/entries/friends_overview/`: Get summary of all friends' dex (cached 2 min)
-  - Returns: `{friends: [{user_id, username, friend_code, total_entries, latest_update}, ...]}`
-- `POST /api/v1/dex/entries/batch_sync/`: Sync multiple users in one request
-  - Body: `{sync_requests: [{user_id: str, last_sync: str}, ...]}`
-  - Returns: `{results: {user_id: {entries: [...], count: int}}, server_time: ISO string}`
-- **DexEntrySyncSerializer**: Specialized serializer with image checksums
-  - Calculates SHA256 checksums of dex-compatible images
-  - Returns absolute URLs for image downloads
-- **Caching**: 5 min for full syncs, 2 min for friends overview, no cache for incremental syncs
-- **Performance**: Database indexes on `(owner, updated_at)`, `(visibility, updated_at)`, `(updated_at)`
-
-**Multipart Form Data** (api_manager.gd):
-- `_build_multipart_body_with_fields()`: Handles multiple form fields
-- Supports both file uploads (with filename/content-type) and text fields
-- Used for sending image + transformations JSON in single request
-
-**Implementation Files**:
-- Server: `images/models.py`, `images/processor.py`, `images/admin.py`
-- Server: `vision/tasks.py` (updated), `vision/views.py` (updated)
-- Server: `dex/views.py` (sync endpoint), `dex/serializers.py` (DexEntrySyncSerializer)
-- Client: `camera.gd` (rotation UI), `api_manager.gd` (multipart body builder)
-- Migration: `images/migrations/0001_initial.py`
-
-### API Endpoints
-
-**Base URL**: `/api/v1/`
-
-**Authentication** (`/auth/`):
-- POST `/login/` - Returns JWT + user data
-- POST `/refresh/` - Refresh access token
-
-**Users** (`/users/`):
-- POST `/` - Register (no auth required)
-- GET `/me/` - Current user profile
-- GET `/friend-code/` - Get your friend code
-- POST `/lookup_friend_code/` - Find user by code
-
-**Animals** (`/animals/`):
-- GET `/` - List all (public, paginated, filterable)
-- POST `/lookup_or_create/` - Used by CV pipeline
-
-**Dex Entries** (`/dex/entries/`):
-- POST `/` - Create entry (after CV identification)
-- GET `/my_entries/` - User's collection
-- GET `/favorites/` - Favorite entries
-- POST `/{id}/toggle_favorite/` - Toggle favorite
-- GET `/sync_entries/` - Sync own dex (cached 5 min, accepts `last_sync` query param)
-- GET `/user/{user_id}/entries/` - Sync any user's dex with permission checks (accepts `last_sync`)
-- GET `/friends_overview/` - Summary of all friends' dex collections (cached 2 min)
-- POST `/batch_sync/` - Sync multiple users in one request
-
-**Social** (`/social/friendships/`):
-- GET `/friends/` - Friends list
-- GET `/pending/` - Incoming requests
-- POST `/send_request/` - Send by friend_code or user_id
-- POST `/{id}/respond/` - Accept/reject/block
-- DELETE `/{id}/unfriend/` - Remove friendship
-
-**Vision** (`/vision/jobs/`):
-- POST `/` - Submit image (accepts optional `transformations` JSON), triggers async processing
-- GET `/{id}/` - Check job status
-- GET `/completed/` - View results
-- POST `/{id}/retry/` - Retry failed job (accepts optional `transformations` JSON)
-
-**Graph** (`/graph/`):
-- GET `/taxonomic-tree/` - Network graph (cached)
-- POST `/invalidate-cache/` - Clear cache
-
-### Critical Implementation Details
-
-**Migrations Order**:
-```bash
-# Always create migrations in this order:
-python manage.py makemigrations accounts animals dex social vision images
-python manage.py migrate
-```
-Reason: accounts.User is AUTH_USER_MODEL, must exist before admin/auth migrations. images app is independent and can be added last.
-
-**Settings Configuration**:
-- Development: `biologidex.settings.development`
-- Production Local: `biologidex.settings.production_local` (Docker/local server)
-- Production Cloud: `biologidex.settings.production` (GCP/cloud)
-- manage.py defaults to development
-
-**Required Environment Variables**:
-- `SECRET_KEY`, `DB_PASSWORD`, `OPENAI_API_KEY`
-- `GCS_BUCKET_NAME`, `GCS_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`
-- See `.env.example` for complete list
-
-**Celery Tasks**:
-- `process_analysis_job`: CV identification
-- `cleanup_old_analysis_jobs`: Periodic cleanup (optional)
-
-**Caching Strategy**:
-- Animal records: TTL from `ANIMAL_CACHE_TTL` (default 1 hour)
-- Graph data: TTL from `GRAPH_CACHE_TTL` (default 2 minutes)
-- Invalidation: Auto on model save, manual via API
-
-### Design Philosophy
-- **Modularity**: Each app self-contained (models, serializers, views, urls, admin)
-- **Extensibility**: Abstract base classes (CVMethod) for adding services
-- **Best Practices**:
-  - Services layer for complex logic
-  - Signals for cross-app updates
-  - Proper permissions (IsAuthenticated, IsOwnerOrReadOnly)
-  - Optimized queries (select_related, prefetch_related)
-  - Comprehensive indexes
-
-### Benchmarking System
-Original CV benchmarking code (`scripts/animal_id_benchmark.py`) integrated into production vision app. Key learnings applied:
-- Model parameter differences (GPT-4 vs GPT-5+)
-- Cost tracking per API call
-- Token usage monitoring
-- Retry logic for reliability
-
----
-
-## Production Infrastructure (Added 2025-10-26)
-
-### Infrastructure Components
-
-**Docker Compose Stack** (`docker-compose.production.yml`):
-- **Nginx**: Reverse proxy, SSL termination, static files
-- **Gunicorn**: Application server (workers = CPU*2+1)
-- **PostgreSQL 15**: With pgBouncer connection pooling
-- **Redis**: Cache + Celery broker (256MB, LRU policy)
-- **Celery**: Worker + Beat for async tasks
-
-### Configuration Files
-
-**Critical Files Created**:
-- `gunicorn.conf.py`: Worker management, logging, timeout settings
-- `redis.conf`: Production Redis with persistence, security
-- `init.sql`: PostgreSQL optimization, indexes, monitoring users
-- `nginx/nginx.conf`: Reverse proxy, caching, security headers
-- `biologidex/monitoring.py`: Prometheus metrics middleware
-- `biologidex/health.py`: Health check endpoints
-
-### Monitoring & Health
-
-**Health Endpoints**:
-- `/api/v1/health/`: Comprehensive health (DB, Redis, Celery, storage)
-- `/health/`: Liveness check (simple alive status)
-- `/ready/`: Readiness check (ready for traffic)
-- `/metrics/`: Prometheus metrics endpoint
-
-**Key Metrics Available**:
-- `django_http_requests_total`: Request counts by endpoint
-- `django_http_request_duration_seconds`: Response times
-- `cv_processing_total`: CV job statistics
-- `celery_tasks_total`: Task execution counts
-- `active_users`, `total_dex_entries`: Business metrics
-
-### Operational Scripts
-
-**Deployment & Setup**:
-- `scripts/setup.sh`: Complete Ubuntu server setup
-- `scripts/deploy.sh`: Zero-downtime deployment with rollback
-- `scripts/export-to-prod.sh`: Godot web client export and deployment
-- `scripts/backup.sh`: Automated database backups
-- `scripts/monitor.sh`: Real-time system monitoring dashboard
-- `scripts/diagnose.sh`: Comprehensive diagnostics
-
-**Documentation**:
-- `client-host.md`: Detailed plan for Godot web client hosting architecture
-
-### Production Settings
-
-**Key Differences from Dev** (`production_local.py`):
-- `DEBUG=False`, strict `ALLOWED_HOSTS`
-- Connection pooling: `CONN_MAX_AGE=600`
-- PrometheusMiddleware for metrics
-- Structured JSON logging
-- Security headers enabled
-- Static file optimization
-
-### Docker Production Patterns
-
-**Multi-stage Dockerfile**:
-1. Python dependencies stage (poetry install)
-2. Build stage (collect static)
-3. Production stage (minimal, non-root user)
-
-**Health Checks**: All services have health checks for orchestration
-**Volumes**: Persistent for postgres_data, redis_data, media_files
-**Networks**: Isolated biologidex-network bridge
-
-### Cloudflare Tunnel Integration
-
-**Setup**: `cloudflared tunnel create biologidex`
-**Config**: `/etc/cloudflared/config.yml` with ingress rules
-**DNS**: Auto-configured via `cloudflared tunnel route dns`
-
-### Critical Learnings
-
-**Database Optimization**:
+## Architecture
+
+### Client (Godot 4.5)
+- 1280×720 base, canvas_items stretch, MSDF fonts
+- **Singletons (autoload)**: APIManager, TokenManager, NavigationManager, DexDatabase (v2.0), SyncManager
+- **API Layer** (4-layer): HTTPClientCore → APIClient (auth/retry/queue) → Services (auth, vision, dex, social, tree) → APIManager
+- **Scenes**: login, create_acct, home, camera (CV integration), dex (multi-user gallery), record_image
+- **Storage**: `user://dex_data/{user_id}_dex.json`, `user://dex_cache/{user_id}/`, `user://sync_state.json`
+
+### Critical Patterns & Gotchas
+
+**API Usage**:
+- ✅ `APIManager.<service>.<method>()` for all API calls
+- ✅ Callbacks: `func(response: Dictionary, code: int)` - always check `code == 200`
+- ✅ Traditional callbacks with `.bind(context)`, NOT inline lambdas
+- ✅ Positional arguments ONLY (no `param=value` syntax in GDScript)
+- ❌ Never call `api_client` directly - use service methods
+- ❌ Never inline lambdas in service methods - causes "assignment in expression" errors
+
+**GDScript**:
+- Type inference: `min()`, `max()`, `Array[T].pop_back()` return Variant - cast to `float`/`String`
+- Reserved: `class_name` - use `animal_class` for variables
+- `await get_tree().process_frame` before reading dynamic sizes
+
+**UI Layout**:
+- `layout_mode`: 0=uncontrolled, 1=anchors, 2=container, 3=anchors preset
+- Container children: `layout_mode = 2`
+- AspectRatioContainer: `layout_mode = 1` with anchors
+- Touch targets: min 44×44px for mobile
+
+**Images**:
+- Camera: Upload native format → server converts → download dex-compatible PNG (max 2560x2560)
+- Image rotation: Use `Image.rotate_90(CLOCKWISE)` for pixel-level rotation, update dimensions
+- Never call `_update_record_image_size()` during rotation of simple preview
+- Update `current_image_width/height` when changing displayed image
+- RecordImage: Dual display (simple TextureRect + bordered AspectRatioContainer)
+
+**Multi-User Dex (v2.0)**:
+- DexDatabase: User-partitioned storage, auto-migrates v1→v2, image deduplication across users
+- SyncManager: Tracks `last_sync` per user in `sync_state.json`
+- DexService: `sync_user_dex()`, `sync_user_dex_with_retry()` with exponential backoff
+- Signals: `sync_started`, `sync_progress`, `sync_user_completed`, `sync_user_failed`
+
+**Auth**:
+- TokenManager: Use `is_logged_in()` not `has_valid_token()`
+- Services handle auth injection automatically
+
+**Web Export**:
+- Single-threaded mode (best compatibility)
+- `HTTPRequest.accept_gzip = false` - avoid double decompression
+
+### Server (Django)
+- **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)
+- **Settings**: `biologidex.settings.{development|production_local|production}`
+
+**Key Models**:
+- **User**: UUID pk, `friend_code` (8-char), `badges` JSONField
+- **Animal**: Taxonomic hierarchy, `creation_index` (sequential), `verified` flag
+- **DexEntry**: User↔Animal, `visibility` (private/friends/public), `customizations` JSONField, image fields (original/processed/source_vision_job)
+- **Friendship**: Bidirectional, status (pending/accepted/rejected/blocked), helpers: `are_friends()`, `get_friends()`, `get_friend_ids()`
+- **AnalysisJob**: CV tracking, `image` (original), `dex_compatible_image` (PNG ≤2560px), status, cost/tokens
+- **ProcessedImage** (images app): Transformations, versioning, SHA256 checksums, EXIF data
+
+**CV Pipeline**:
+- ImageProcessor: Converts to PNG (RGBA→RGB white bg), resizes >2560px, metadata
+- OpenAIVisionService: GPT-4 (`max_tokens`) vs GPT-5+ (`max_completion_tokens`)
+- Celery task: ImageProcessor → Vision API → parse/create Animal
+- EnhancedImageProcessor (images): EXIF rotation, transformations, deduplication
+
+**Dex Sync (v2.0)**:
+- `/sync_entries/`: Own dex, cached 5m, `last_sync` param
+- `/user/{id}/entries/`: Any user (permission-based), incremental sync
+- `/friends_overview/`: Friends summary, cached 2m
+- `/batch_sync/`: Multi-user in one request
+- DexEntrySyncSerializer: Image checksums, absolute URLs
+- Indexes: `(owner, updated_at)`, `(visibility, updated_at)`, `(updated_at)`
+
+## API Reference (`/api/v1/`)
+
+**Auth**: `/login/` (JWT), `/refresh/` (token)
+**Users**: `/users/` (register), `/me/`, `/friend-code/`, `/lookup_friend_code/`
+**Animals**: `/animals/` (list), `/lookup_or_create/` (CV pipeline)
+**Dex**: `/dex/entries/` (create), `/my_entries/`, `/favorites/`, `/{id}/toggle_favorite/`, `/sync_entries/` (cached 5m), `/user/{id}/entries/` (multi-user), `/friends_overview/` (cached 2m), `/batch_sync/`
+**Social**: `/social/friendships/` (CRUD), `/friends/`, `/pending/`, `/send_request/`, `/{id}/respond/`, `/{id}/unfriend/`
+**Vision**: `/vision/jobs/` (create w/transforms), `/{id}/` (status), `/completed/`, `/{id}/retry/`
+**Graph**: `/graph/taxonomic-tree/` (cached), `/invalidate-cache/`
+
+## Critical Details
+
+**Migrations**: `makemigrations accounts animals dex social vision images` (accounts first - AUTH_USER_MODEL)
+**Settings**: `biologidex.settings.{development|production_local|production}`
+**Env Vars**: `SECRET_KEY`, `DB_PASSWORD`, `OPENAI_API_KEY`, `GCS_*`, `GOOGLE_APPLICATION_CREDENTIALS`
+**Celery**: `process_analysis_job` (CV), `cleanup_old_analysis_jobs`
+**Caching TTL**: Animals 1h, Graph 2m, Dex sync 5m (full) / 2m (friends overview)
+
+## Production
+
+**Stack**: Nginx (reverse proxy) → Gunicorn → Django, PostgreSQL 15 + pgBouncer, Redis (cache/Celery), Celery workers
+**Monitoring**: Prometheus (`/metrics/`), health endpoints (`/health/`, `/ready/`, `/api/v1/health/`)
+**Deployment**: `scripts/deploy.sh` (backend), `scripts/export-to-prod.sh` (Godot client)
+
+### Critical Production Gotchas
+
+**Docker**:
+- Code changes require rebuilding images: `docker-compose -f docker-compose.production.yml build web celery_worker celery_beat && up -d`
+- Simply restarting uses OLD cached images
+- Host files NOT used by containers (they use `/app` inside)
+- Use service names for connections: `DB_HOST=db`, `REDIS_HOST=redis` (not `localhost`)
+- Password changes require volume rebuild: `down -v` (deletes data) then `up -d`
+
+**Nginx**:
+- Cloudflare Tunnel must point to **nginx (port 80)**, not Django (8000)
+- Must force `X-Forwarded-Proto: https` in proxy headers (not `$scheme`) - prevents mixed content errors
+- URL routing: `/` → Godot client, `/api/` → Django, `/admin/` → Django admin
+- Client files: `server/client_files/` mounted at `/var/www/biologidex/client/`
+- Caching: `.wasm/.pck` 7d immutable, `.html` 1h, PWA no-cache
+
+**Environment**:
+- `.env` files: NO inline comments after values (`DB_HOST=db  # comment` is invalid)
+- Use single `.env` file (not `.env.production`)
+
+**Database**:
 - Always use pgBouncer for connection pooling
 - Create indexes AFTER Django migrations
-- Use `ATOMIC_REQUESTS=True` for transaction safety
+- Migration sync issues: Fake unapply then reapply (`migrate app 0001 --fake` then `migrate app`)
+- Verify schema with `\d table_name` in psql, not just migration status
 
-**Redis Configuration**:
-- Set `maxmemory-policy allkeys-lru` for cache behavior
-- Rename dangerous commands (FLUSHDB, KEYS)
-- Use password auth even in private networks
+**Godot Web Export**:
+- Single-threaded mode: `variant/thread_support=false`
+- 37MB WASM → 9MB gzipped
+- `scripts/export-to-prod.sh` handles export, gzip, backup, deployment
 
-**Gunicorn Tuning**:
-- `max_requests=1000` prevents memory leaks
-- `preload_app=True` for faster worker spawns
-- Access logs essential for debugging
+## Commands
 
-**Monitoring Best Practices**:
-- Instrument early (PrometheusMiddleware)
-- Multiple health check levels (liveness vs readiness)
-- Log aggregation with structured JSON
+**Dev**:
+```bash
+poetry shell
+python manage.py makemigrations [accounts animals dex social vision images]
+python manage.py migrate
+python manage.py runserver
+celery -A biologidex worker -l info
+```
 
-**Docker Compose Patterns**:
-- Always use health checks for dependencies
-- Scale with `--scale web=N` for load testing
-- (Deprecated) Use `.env.production` for secrets (never commit)
-  - Just use a single .env file
-
-### Troubleshooting Quick Reference
-
-| Issue | Check | Fix |
-|-------|-------|-----|
-| 502 Bad Gateway | `docker-compose ps web` | Restart web service |
-| DB Connection Errors | `docker-compose exec db pg_isready` | Check pgBouncer config |
-| Celery Tasks Stuck | `celery inspect active` | Restart workers |
-| High Memory | `docker stats` | Reduce Gunicorn workers |
-| Slow API | Check `/metrics/` endpoint | Add caching/indexes |
-
-### Files to Never Modify in Production
-- (Deprecated)`.env.production` (use environment-specific overrides)
-  - Just use a single .env file
-- `init.sql` (runs only on first DB creation)
-- Migration files (use new migrations for changes)
-
----
-
-## Godot Web Client Deployment (Added 2025-10-29)
-
-### Overview
-Godot 4.5 web client served via nginx at root path (`/`), with Django API at `/api/` and admin at `/admin/`.
-
-### Export Configuration
-
-**Single-Threaded Mode** (Best Compatibility):
-- `export_presets.cfg`: `variant/thread_support=false`
-- `progressive_web_app/ensure_cross_origin_isolation_headers=false`
-- No COOP/COEP headers required
-- Works on all browsers including Safari/iOS
-- Compatible with all hosting platforms (itch.io, Newgrounds, etc.)
-
-### Deployment Workflow
-
-**Export Script**: `server/scripts/export-to-prod.sh`
-- Automated Godot CLI export using headless mode
-- Pre-compression (gzip) for performance
-- Backup system (keeps last 5 deployments)
-- Rollback capability on failure
-- Zero-downtime deployment
-
-**Usage**:
+**Prod**:
 ```bash
 cd server
-./scripts/export-to-prod.sh              # Full export + deploy
-./scripts/export-to-prod.sh --skip-export  # Deploy existing export
+docker-compose -f docker-compose.production.yml up -d
+docker-compose -f docker-compose.production.yml logs -f
+./scripts/deploy.sh              # Backend
+./scripts/export-to-prod.sh      # Client
+./scripts/monitor.sh             # Monitoring
 ```
 
-### File Structure
-
-**Production Path**: `server/client_files/`
-- Mounted in nginx container at `/var/www/biologidex/client/`
-- Served directly by nginx (no proxy)
-- Automatic backups in `server/client_files_backup/`
-
-### Nginx Configuration
-
-**URL Routing**:
-```
-/                  → Godot web client (index.html)
-/api/              → Django REST API (proxied to port 8000)
-/admin/            → Django admin panel (proxied to port 8000)
-/static/           → Django static files
-/media/            → User uploaded media
-```
-
-**MIME Types**:
-- `.wasm` → `application/wasm` (already in default mime.types)
-- `.pck` → `application/octet-stream`
-
-**Caching Strategy**:
-- `.wasm`, `.pck`: 7 days, immutable
-- `.html`: 1 hour, must-revalidate
-- `.js`, `.css`: 1 hour, public
-- PWA files (manifest.json, service.worker.js): no-cache
-
-**Compression**:
-- gzip enabled for all text assets and wasm
-- Pre-compressed .gz files served via `gzip_static on`
-- Brotli optional (requires module)
-
-### Docker Integration
-
-**Volume Mount** (docker-compose.production.yml):
-```yaml
-nginx:
-  volumes:
-    - ./client_files:/var/www/biologidex/client:ro
-```
-
-**Deployment**:
-```bash
-# After running export-to-prod.sh
-docker-compose -f docker-compose.production.yml exec nginx nginx -s reload
-```
-
-### Cloudflare Tunnel Configuration
-
-**Critical**: Tunnel must point to **nginx (port 80)**, not Django (port 8000)
-
-**Token-based setup** (via Cloudflare dashboard):
-1. Navigate to Zero Trust → Networks → Tunnels
-2. Configure tunnel → Public Hostname
-3. Set service URL: `http://localhost:80`
-
-**Config-based setup** (/etc/cloudflared/config.yml):
-```yaml
-ingress:
-  - hostname: biologidex.io
-    service: http://localhost:80  # nginx, not 8000
-```
-
-**HTTPS Gotcha** (Mixed Content Prevention):
-- Cloudflare Tunnel terminates SSL externally, forwards HTTP to nginx
-- Must force `X-Forwarded-Proto: https` in nginx proxy headers (not `$scheme`)
-- Django's `build_absolute_uri()` checks this header via `SECURE_PROXY_SSL_HEADER`
-- Without this: API returns `http://` URLs causing mixed content errors in browser
-- Config: `proxy_set_header X-Forwarded-Proto https;` in `/api/` and `/admin/` locations
-
-### Critical Learnings
-
-**Environment Variable Parsing**:
-- `.env` files **cannot have inline comments** after values
-- BAD: `DB_HOST=db  # Docker service name`
-- GOOD: `DB_HOST=db`
-- Inline comments are parsed as part of the value
-
-**Docker Compose env_file**:
-- `docker-compose.production.yml` references specific env file
-- Default is `.env`, not `.env.production`
-- Must explicitly rename or update compose file
-
-**Database Connection in Docker**:
-- Use service names, not `localhost`
-- `DB_HOST=db` (Docker service name)
-- `REDIS_HOST=redis` (Docker service name)
-- `localhost` only works outside containers
-
-**Password Changes Require Volume Rebuild**:
-- PostgreSQL and Redis store credentials in volumes
-- Changing passwords in `.env` doesn't update running containers
-- Must remove volumes and reinitialize:
-  ```bash
-  docker-compose down -v  # Removes ALL volumes (deletes data)
-  docker-compose up -d    # Fresh start with new passwords
-  ```
-
-**Nginx Location Directive Gotchas**:
-- Cannot use nested `location` blocks inside `location` with `alias`
-- Regex locations (`~*`) evaluated before prefix locations
-- Use `root` with regex, `alias` with prefix
-- `try_files` with `alias` requires careful syntax
-
-**Docker Production Code Deployment** (Critical):
-- Production uses **built Docker images**, NOT mounted volumes
-- Code changes require **rebuilding images**: `docker-compose -f docker-compose.production.yml build web celery_worker celery_beat`
-- After rebuild, **restart containers**: `docker-compose -f docker-compose.production.yml up -d`
-- Simply restarting containers (`restart`) uses OLD cached images
-- Host files at `/opt/biologidex/server` are NOT used by running containers (they use `/app` inside container)
-
-**Migration State Sync Issues**:
-- Migrations can show as applied in `django_migrations` table but columns missing in actual database
-- Fix: Fake unapply then reapply: `migrate vision 0001 --fake` then `migrate vision`
-- Always verify actual database schema with `\d table_name` in psql, not just migration status
-- Python bytecode cache can cause stale code issues - full container rebuild resolves this
-
-### Troubleshooting
-
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| 404 at root path | Cloudflare tunnel points to Django | Point tunnel to port 80 (nginx) |
-| Client files not found | Volume not mounted | Check docker-compose.yml volume mount |
-| 301 redirect loop | try_files directive issue | Simplify to `try_files $uri /index.html` |
-| Black screen | CORS/MIME type issues | Check browser console for errors |
-| DB connection refused | DB_HOST=localhost in container | Set DB_HOST=db (service name) |
-| Inline comment in env value | Bash treats everything after `=` as value | Remove inline comments from .env |
-
-### Performance Optimization
-
-**Asset Loading**:
-- 37MB WASM file compresses to ~9MB with gzip
-- Enable gzip_static to serve pre-compressed files
-- Use CDN for static assets in production (future)
-
-**Browser Cache**:
-- Long cache for immutable assets (.wasm, .pck)
-- Short cache for HTML (allows updates)
-- No cache for PWA files (service worker control)
+**Testing**: Swagger UI at `/api/docs/`
+**Logs**: `server/logs/biologidex.log`, Celery worker output
+**Debug**: Set `DEBUG=True` in dev settings, use Django admin
 
 ---
 
-## Development Workflow
+## Planned Features
 
-**Setup**: `poetry install` → `docker-compose up -d` → migrations → `runserver`
+**Taxonomic Tree** (ready to implement):
+- Server-side Reingold-Tilford layout, spatial chunking (2048x2048), 100k+ nodes at 60 FPS
+- Endpoints: `/graph/taxonomic-tree-layout/`, `/graph/chunk/{x}/{y}/`, `/graph/search/`
 
-**Testing**: Use Swagger UI at `/api/docs/` for interactive testing
-
-**Common Commands**:
-```bash
-# Development
-poetry shell                           # Activate environment
-python manage.py makemigrations       # Create migrations
-python manage.py migrate              # Apply migrations
-python manage.py createsuperuser      # Admin access
-python manage.py runserver            # Dev server
-celery -A biologidex worker -l info   # Start worker
-
-# Production
-docker-compose -f docker-compose.production.yml up -d     # Start all services
-docker-compose -f docker-compose.production.yml logs -f   # View logs
-docker-compose -f docker-compose.production.yml ps        # Check status
-./scripts/deploy.sh                                       # Deploy backend updates
-./scripts/export-to-prod.sh                               # Deploy Godot client
-./scripts/monitor.sh                                      # Real-time monitoring
-./scripts/diagnose.sh                                     # System diagnostics
-```
-
-**Debugging**:
-- Set `DEBUG=True` in development settings
-- Logs: `server/logs/biologidex.log`
-- Check Celery worker output for async task errors
-- Use Django admin panel for data inspection
-
----
-
-## Taxonomic Tree Implementation (Added 2025-11-06)
-
-### Overview
-Complete implementation plan created for high-performance taxonomic tree visualization supporting 100k+ nodes at 60 FPS.
-
-### Client Architecture (Godot 4.5)
-- **Rendering**: SubViewport-based 2D canvas with MultiMeshInstance2D batching
-- **Layout**: Client-side Reingold-Tilford algorithm with caching
-- **Optimization**: Spatial chunking (2048x2048), LOD system, progressive loading
-- **Interaction**: Touch gestures, pan/zoom, node selection
-- **Performance**: Targets 100k+ nodes at 60 FPS on mobile
-
-### Server Architecture (Django)
-- **Layout Algorithm**: Server-side Reingold-Tilford implementation in Python
-- **Chunking System**: Spatial grid for progressive data loading
-- **New Endpoints**:
-  - `GET /api/v1/graph/taxonomic-tree-layout/` - Precomputed positions
-  - `GET /api/v1/graph/chunk/{x}/{y}/` - Individual chunks
-  - `GET /api/v1/graph/search/` - Tree-aware search
-- **Caching**: Redis-backed with separate TTLs for layout (5m) and chunks (10m)
-- **Optimizations**: Fix N+1 queries, add database indexes, bulk operations
-
-### Implementation Status
-- ✅ Complete client specification (taxonomic_tree.md)
-- ✅ Server audit completed (found graph service, needs layout/chunking)
-- ✅ Detailed implementation plan with code examples
-- ⏳ Ready to implement (estimated 10-12 days total)
-
-### Key Technical Decisions
-- Server-side layout computation (too expensive for mobile clients)
-- 2048x2048 chunk size (optimal for network/memory tradeoff)
-- Parent-child edges based on taxonomy (not just same_family)
-- Progressive loading with breadth-first priority
-
-## Dex System Future Enhancements (Post-MVP)
-
-### Phase 6: Advanced Image Management
-- **Multiple Images per Entry**: Allow users to replace/add alternate photos
-  - `DexEntryImage` model with `is_primary` flag
-  - Image history/versioning
-  - User selects best photo for dex card
-- **Image Gallery**: Swipeable gallery view for entries with multiple photos
-
-### Phase 7: Collaborative Collections
-- **Shared Collections**: Groups of users contribute to themed collections
-  - `DexCollection` model with collaborators M2M relationship
-  - Custom ordering and notes per collection
-  - Public/private visibility settings
-- **Collection Templates**: Pre-made themes (Birds of North America, Endangered Species, etc.)
-
-### Phase 8: Dex Pages (Scrapbook Feature)
-- **Rich Journaling**: Transform entries into scrapbook-style pages
-  - `DexPage` model with custom layouts and content blocks
-  - Multiple layout templates (field notes, photo essay, comparison grid)
-  - Text blocks, audio notes, additional photos, weather/location metadata
-- **Page Editor**: Visual drag-and-drop editor in Godot
-  - Content blocks: title, observation, companions, habitat notes
-  - Customizable styling (CSS-in-JS)
-- **Sharing**: Export pages as images/PDFs, share to social media
-
-### Phase 9: Offline & Sync Enhancements
-- **Offline Queue**: Queue API calls when offline, sync when reconnected
-  - Conflict resolution for concurrent edits
-  - Local-first architecture with eventual consistency
-- **Background Sync**: Automatic periodic syncing in background
-- **Smart Caching**: Predictive prefetching based on usage patterns
-- **Cloud Backup**: Optional backup of local database to cloud storage
-
-### Phase 10: Social Features
-- **Activity Feed**: See friends' recent discoveries
-- **Achievement System**: Badges for collection milestones (taxonomic diversity, rare species, etc.)
-- **Leaderboards**: Compete with friends on discovery counts
-- **Dex Challenges**: Themed challenges (find 10 birds this week, complete a family)
-
-### Phase 11: Data Management
-- **Export/Import**: CSV, JSON, PDF formats
-- **Data Portability**: Import from other wildlife tracking apps
-- **Backup Management**: Scheduled backups, restore from backup
-- **Storage Quotas**: Limit cache size, LRU eviction policies
-
-## Next Steps
-
-### Frontend - Phase 2: Core Pages
-- ✅ Login/Registration scenes (connect to `/api/v1/auth/`)
-- Home screen with tab navigation (Dex, Camera, Tree, Social)
-- Profile view with stats and badges
-- Camera integration placeholder
-- Dex entry creation flow (capture → identify → create entry)
-
-### Backend - Future Phases
-- Enhanced CV pipeline (multiple providers)
-- Gamification features (achievements, leaderboards)
-- Real-time updates (WebSockets)
-
-## Environment Setup
-- `.env` file in `server/` directory with all credentials
-- Python 3.12+ with pyenv + Poetry
-- Docker for PostgreSQL and Redis
-- Google Cloud account for media storage
+**Future** (post-MVP):
+- Phase 6: Multiple images per entry, image history
+- Phase 7: Shared collections, collaborator permissions
+- Phase 8: Dex Pages (scrapbook/journaling)
+- Phase 9: Offline queue, conflict resolution, predictive prefetch
+- Phase 10: Activity feed, achievements, leaderboards, challenges
+- Phase 11: Export/import (CSV/JSON/PDF), data portability, storage quotas
