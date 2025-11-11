@@ -86,7 +86,7 @@ func _load_first_record() -> void:
 func _show_empty_state() -> void:
 	"""Show UI when no records exist"""
 	current_index = -1
-	var user_label := available_users.get(current_user_id, current_user_id)
+	var user_label: String = available_users.get(current_user_id, current_user_id)
 	dex_number_label.text = "%s - No animals discovered yet!" % user_label
 	record_image.visible = false
 	previous_button.disabled = true

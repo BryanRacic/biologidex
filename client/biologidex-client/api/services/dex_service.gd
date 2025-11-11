@@ -311,27 +311,61 @@ func _download_and_cache_image(record: Dictionary, user_id: String) -> void:
 
 	_log("Downloading image for user '%s': %s" % [user_id, image_url])
 
-	# Create HTTP request
-	var http := HTTPRequest.new()
-	add_child(http)
+	# Use HTTPClient directly (doesn't require scene tree)
+	var http := HTTPClient.new()
 
-	# Download image
-	var error := http.request(image_url)
-	if error != OK:
-		push_error("[DexService] Failed to start image download: ", error)
-		http.queue_free()
+	# Parse URL
+	var url_parts := image_url.replace("https://", "").replace("http://", "").split("/", false, 1)
+	var host := url_parts[0]
+	var path := "/" + (url_parts[1] if url_parts.size() > 1 else "")
+	var use_tls := image_url.begins_with("https://")
+
+	# Connect to host with TLS options (Godot 4.x)
+	var tls_options = TLSOptions.client() if use_tls else null
+	var connect_error := http.connect_to_host(host, 443 if use_tls else 80, tls_options)
+	if connect_error != OK:
+		push_error("[DexService] Failed to connect to host: ", connect_error)
 		return
 
-	# Wait for completion
-	var result = await http.request_completed
-	var response_code: int = result[1]
-	var body: PackedByteArray = result[3]
+	# Wait for connection
+	while http.get_status() == HTTPClient.STATUS_CONNECTING or http.get_status() == HTTPClient.STATUS_RESOLVING:
+		http.poll()
+		await Engine.get_main_loop().process_frame
 
-	http.queue_free()
+	if http.get_status() != HTTPClient.STATUS_CONNECTED:
+		push_error("[DexService] Failed to establish connection")
+		return
 
+	# Send request
+	var request_error := http.request(HTTPClient.METHOD_GET, path, [])
+	if request_error != OK:
+		push_error("[DexService] Failed to send request: ", request_error)
+		return
+
+	# Wait for response
+	while http.get_status() == HTTPClient.STATUS_REQUESTING:
+		http.poll()
+		await Engine.get_main_loop().process_frame
+
+	if http.get_status() != HTTPClient.STATUS_BODY and http.get_status() != HTTPClient.STATUS_CONNECTED:
+		push_error("[DexService] Request failed with status: ", http.get_status())
+		return
+
+	# Check response code
+	var response_code := http.get_response_code()
 	if response_code != 200:
 		push_error("[DexService] Image download failed with code: ", response_code)
 		return
+
+	# Read body
+	var body := PackedByteArray()
+	while http.get_status() == HTTPClient.STATUS_BODY:
+		http.poll()
+		var chunk := http.read_response_body_chunk()
+		if chunk.size() > 0:
+			body.append_array(chunk)
+		else:
+			await Engine.get_main_loop().process_frame
 
 	# Cache image with deduplication
 	var cached_path := DexDatabase.cache_image(image_url, body, user_id)
@@ -485,7 +519,7 @@ func _on_retry_sync_complete(response: Dictionary, code: int, context: Dictionar
 		])
 
 		# Wait with exponential backoff
-		await get_tree().create_timer(backoff_ms / 1000.0).timeout
+		await Engine.get_main_loop().create_timer(backoff_ms / 1000.0).timeout
 
 		# Retry with doubled backoff
 		_retry_sync(user_id, next_attempt, max_retries, backoff_ms * 2, callback)
