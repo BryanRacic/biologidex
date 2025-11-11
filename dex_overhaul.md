@@ -1,5 +1,13 @@
 - The "dex" system represents all the animals ever photographed by an individual user
     - Users can view their own "dex" or the "dex" of their friends
+- Whenever a user opens their "dex" on the client
+    - A request should be sent to the server for a list of that user's dex entries
+        - This should return a list of dex entry UUIDs and each of their `last_updated` at times (which includes the `last updated` time of the associated animal image).
+    - The client should compare this list of dex entries with those stored locally
+        - If any dex entry is missing locally, or has been updated more recently according to the server: then the client should make a request to download that dex entry locally (including the associated dex-compatible image) 
+        - The client app should automatically display the downloaded dex data images in the `dex` page as they become available
 - Future additions
+    - Users can replace images on dex entries with any image of that specific animal that they've ever saved/uploaded
     - Users can make custom "dex" collections with friends by combining entries into a shared collaborative "dex"
-    - 
+    - Dex entries will eventually be expanded to `dex pages` where information from `dex` and `animal` records can be combined and customized into scrabook-style field journals.
+        - These allow for personalization of the design & layout, listing of additional details about this specific animal/image, and can be shared and combined w/ finds in "dex collections"

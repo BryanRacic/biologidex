@@ -168,7 +168,7 @@ func sync_entries(last_sync: String = "", callback: Callable = Callable()) -> vo
 	)
 
 func _on_sync_entries_success(response: Dictionary, context: Dictionary) -> void:
-	var entries = response.get("results", [])
+	var entries = response.get("entries", [])
 	_log("Sync completed: %d entries" % entries.size())
 	sync_completed.emit(entries)
 	if context.callback:

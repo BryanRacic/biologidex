@@ -1,0 +1,183 @@
+DEX SYSTEM - QUICK REFERENCE TABLE
+===============================================================================
+
+BACKEND READINESS
+
+Component               Status    Completeness   Notes
+─────────────────────────────────────────────────────────────────────────────
+DexEntry Model          ✅        100%          Full schema, indexes, timestamps
+Animal Model            ✅        100%          creation_index auto-increment works
+Friendship Model        ✅        100%          Bidirectional, helper methods
+IsOwnerOrReadOnly       ✅        100%          Visibility checks integrated
+
+/dex/entries/           ✅        100%          Create & list works
+/dex/entries/my_entries/✅        100%          Returns user's entries
+/dex/entries/favorites/ ✅        100%          Favorite filtering works
+/dex/entries/sync/      ✅        90%           Works but returns "entries" key
+/dex/entries/recent/    ✅        100%          Friend entries included
+/dex/user/{id}/entries/ ❌        0%            MISSING - needed for friend dex
+
+DexEntrySerializer      ✅        100%          Full with nested animal
+DexEntrySyncSerializer  ✅        100%          Includes checksums & URLs
+Cache invalidation      ✅        100%          Tree caches properly invalidated
+
+
+FRONTEND READINESS
+
+Component               Status    Completeness   Notes
+─────────────────────────────────────────────────────────────────────────────
+DexDatabase             ✅        70%           Works great but single-user only
+dex.gd Gallery          ✅        70%           Nice UI but no friend switching
+camera.gd Integration   ✅        85%           Downloads images but no sync
+DexService API calls    ⚠️        80%           Response parsing bug (HIGH)
+APIConfig Endpoints     ✅        90%           Missing friend endpoint config
+Image caching           ✅        80%           Works but collision risk
+
+Last sync tracking      ❌        0%            MISSING - critical for sync
+Per-user storage        ❌        0%            MISSING - blocks multi-user
+Friend selector UI      ❌        0%            MISSING - blocks friend viewing
+Sync progress UI        ❌        0%            MISSING - poor UX
+get_friend_entries()    ❌        0%            MISSING - needed for friends
+
+
+CRITICAL BUGS
+
+Bug #              Severity  Impact              Location                Line #
+─────────────────────────────────────────────────────────────────────────────
+Sync response bug   HIGH     Sync fails silently dex_service.gd          171
+Friend endpoint     HIGH     Can't view friends   dex/views.py            N/A
+Single-user DB      HIGH     Can't store friends  dex_database.gd         15
+No sync timestamp   HIGH     Full re-syncs        Frontend missing        N/A
+Cache collision     MEDIUM   Images overwrite     camera.gd + dex.gd      N/A
+
+
+IMPLEMENTATION CHECKLIST FOR PHASES
+
+PHASE 1: Fix Foundation (Days 1-2) - DO THIS FIRST
+  □ Fix DexService.sync_entries() response parsing bug
+    └─ Line 171: response.get("results", []) → response.get("entries", [])
+  □ Add last_sync tracking to TokenManager or create SyncManager
+  □ Test sync flow end-to-end (create entry → sync → verify)
+  □ VERIFY: Images download and save to DexDatabase
+
+PHASE 2: Add Friend Viewing (Days 3-5)
+  □ Backend: Add @action for friend dex endpoint
+    └─ POST /dex/entries/friend/{user_id}/entries/
+    └─ Respect visibility + friendship check
+  □ Frontend: Refactor DexDatabase for multiple users
+    └─ Option: dex_database_own.json + dex_database_friend_{id}.json
+    └─ OR: Single DB with {user_id: {creation_index: {...}}}
+  □ Frontend: Add get_friend_entries() to DexService
+  □ Frontend: Add friend selector UI to dex.gd
+    └─ Tabs or dropdown for "My Dex" vs each friend
+  □ Frontend: Fix image cache to use per-user directories
+    └─ user://dex_cache/own/ and user://dex_cache/friend_{id}/
+
+PHASE 3: Improve Sync (Days 6-8)
+  □ Add sync state machine (idle → syncing → complete → error)
+  □ Add progress tracking (X of Y entries downloaded)
+  □ Show sync progress UI in dex.gd or home screen
+  □ Implement retry logic for failed image downloads
+  □ Handle partial syncs (resume interrupted)
+
+PHASE 4: Polish (Days 9-10)
+  □ Error messaging for sync failures
+  □ Performance optimization (batch requests?)
+  □ Cache cleanup (remove old entries)
+  □ Test on real network (throttled/slow)
+  □ Edge case handling (no friends, all private, etc.)
+
+
+RECOMMENDED STORAGE STRATEGY
+
+Option A: Separate JSON files per user (RECOMMENDED)
+  Own dex:     user://dex_database.json
+  Friend 1:    user://dex_database_friend_{uuid}.json
+  Friend 2:    user://dex_database_friend_{uuid}.json
+  Images:      user://dex_cache/own/{hash}.png
+               user://dex_cache/friend_{uuid}/{hash}.png
+  Pro: Simple, no conflicts, easy to clear individual friends
+  Con: More files to manage
+
+Option B: Single JSON with ownership
+  File:        user://dex_data.json
+  Structure:   {
+                 "own": {creation_idx: {...}},
+                 "friends": {
+                   "user_id": {creation_idx: {...}}
+                 }
+               }
+  Pro: Single file
+  Con: More complex parsing, harder to clear
+
+Option C: Flat with ownership key
+  File:        user://dex_database.json
+  Structure:   {
+                 "owner_own_123": {...},
+                 "owner_friend_456": {...}
+               }
+  Pro: Hybrid approach
+  Con: Key naming convention complexity
+
+
+TESTING CHECKLIST
+
+Unit Tests:
+  □ DexEntry model creation (auto-assign creation_index)
+  □ Visibility filtering (private/friends/public)
+  □ Friend dex endpoint returns correct entries
+  □ Friendship permission check works
+  □ Image URL generation (absolute URLs)
+
+Integration Tests:
+  □ Create entry → image downloads → local DB updates
+  □ Sync with last_sync timestamp
+  □ Friend dex loads separate from own dex
+  □ Cache doesn't conflict between users
+
+UI Tests:
+  □ Own dex displays correctly
+  □ Friend dex displays correctly
+  □ Can switch between dex (own/friend 1/friend 2)
+  □ Prev/Next nav works correctly
+  □ Sync progress shows
+  □ Empty state shows when needed
+
+
+PERFORMANCE TARGETS
+
+Metric                          Target           Current
+────────────────────────────────────────────────────────
+Own dex sync (<100 entries)     <2 seconds        Unknown
+Own dex sync (1000 entries)     <10 seconds       Unknown
+Friend dex load (first time)    <5 seconds        N/A
+Friend dex switch               <1 second         N/A
+Gallery scroll (100 entries)    60 FPS            ~60 FPS
+Image load from cache           <100ms            ~50ms
+Navigation (next/prev)          <50ms             ~10ms
+
+
+DEPLOYMENT CHECKLIST
+
+Before going live:
+  □ All 5 critical bugs fixed
+  □ Sync works reliably (tested on slow network)
+  □ Friend viewing working without crashes
+  □ No image cache collisions
+  □ No data loss on app restart
+  □ Error messages clear and helpful
+  □ Database migrations tested
+  □ API response times acceptable
+  □ Load tested with 100+ dex entries
+  □ Tested on target devices (mobile/web)
+
+
+DOCUMENTATION TODO
+
+  □ Update API docs for /dex/user/{user_id}/entries/
+  □ Add sync flow diagram to CLAUDE.md
+  □ Document local storage format
+  □ Update client-side API reference
+  □ Add troubleshooting guide
+  □ Document sync retry strategy
+
