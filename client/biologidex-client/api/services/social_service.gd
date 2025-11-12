@@ -11,7 +11,7 @@ signal friend_request_sent(request_data: Dictionary)
 signal friend_request_failed(error: APITypes.APIError)
 signal friendship_responded(response_data: Dictionary)
 signal friendship_response_failed(error: APITypes.APIError)
-signal friend_removed(friendship_id: int)
+signal friend_removed(friendship_id: String)
 signal friend_removal_failed(error: APITypes.APIError)
 
 ## Get friends list
@@ -30,7 +30,7 @@ func get_friends(callback: Callable = Callable()) -> void:
 	)
 
 func _on_get_friends_success(response: Dictionary, context: Dictionary) -> void:
-	var friends = response.get("results", [])
+	var friends = response.get("friends", [])
 	_log("Received %d friends" % friends.size())
 	friends_list_received.emit(friends)
 	if context.callback:
@@ -58,7 +58,7 @@ func get_pending_requests(callback: Callable = Callable()) -> void:
 	)
 
 func _on_get_pending_requests_success(response: Dictionary, context: Dictionary) -> void:
-	var requests = response.get("results", [])
+	var requests = response.get("requests", [])
 	_log("Received %d pending requests" % requests.size())
 	pending_requests_received.emit(requests)
 	if context.callback:
@@ -73,22 +73,22 @@ func _on_get_pending_requests_error(error: APITypes.APIError, context: Dictionar
 ## Send friend request by friend_code or user_id
 func send_friend_request(
 	friend_code: String = "",
-	user_id: int = 0,
+	user_id: String = "",
 	callback: Callable = Callable()
 ) -> void:
-	if friend_code.is_empty() and user_id == 0:
+	if friend_code.is_empty() and user_id.is_empty():
 		var error = APITypes.APIError.new(400, "Must provide friend_code or user_id", "Invalid parameters")
 		friend_request_failed.emit(error)
 		if callback:
 			callback.call({"error": error.message}, error.code)
 		return
 
-	_log("Sending friend request (friend_code: %s, user_id: %d)" % [friend_code, user_id])
+	_log("Sending friend request (friend_code: %s, user_id: %s)" % [friend_code, user_id])
 
 	var data = {}
 	if not friend_code.is_empty():
 		data["friend_code"] = friend_code
-	if user_id > 0:
+	if not user_id.is_empty():
 		data["to_user_id"] = user_id
 
 	var req_config = _create_request_config()
@@ -117,7 +117,7 @@ func _on_send_friend_request_error(error: APITypes.APIError, context: Dictionary
 
 ## Respond to friend request (accept/reject/block)
 func respond_to_request(
-	friendship_id: int,
+	friendship_id: String,
 	action: String,
 	callback: Callable = Callable()
 ) -> void:
@@ -128,9 +128,9 @@ func respond_to_request(
 			callback.call({"error": error.message}, error.code)
 		return
 
-	_log("Responding to friend request %d: %s" % [friendship_id, action])
+	_log("Responding to friend request %s: %s" % [friendship_id, action])
 
-	var endpoint = _format_endpoint(config.ENDPOINTS_SOCIAL["respond"], [str(friendship_id)])
+	var endpoint = _format_endpoint(config.ENDPOINTS_SOCIAL["respond"], [friendship_id])
 	var data = {"action": action}
 
 	var req_config = _create_request_config()
@@ -158,10 +158,10 @@ func _on_respond_to_request_error(error: APITypes.APIError, context: Dictionary)
 		context.callback.call({"error": error.message}, error.code)
 
 ## Unfriend (remove friendship)
-func unfriend(friendship_id: int, callback: Callable = Callable()) -> void:
-	_log("Removing friendship: %d" % friendship_id)
+func unfriend(friendship_id: String, callback: Callable = Callable()) -> void:
+	_log("Removing friendship: %s" % friendship_id)
 
-	var endpoint = _format_endpoint(config.ENDPOINTS_SOCIAL["unfriend"], [str(friendship_id)])
+	var endpoint = _format_endpoint(config.ENDPOINTS_SOCIAL["unfriend"], [friendship_id])
 
 	var req_config = _create_request_config()
 

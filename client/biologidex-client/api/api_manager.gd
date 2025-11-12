@@ -19,6 +19,7 @@ var vision: VisionService
 var tree: TreeService
 var social: SocialService
 var dex: DexService
+var animals: AnimalsService
 
 # Base URL (for backward compatibility)
 const BASE_URL = "https://biologidex.io/api/v1"
@@ -49,8 +50,9 @@ func _initialize_services() -> void:
 	tree = TreeService.new(api_client, config)
 	social = SocialService.new(api_client, config)
 	dex = DexService.new(api_client, config)
+	animals = AnimalsService.new(api_client, config)
 
-	print("[APIManager] Services initialized: auth, vision, tree, social, dex")
+	print("[APIManager] Services initialized: auth, vision, tree, social, dex, animals")
 
 ## Connect signals for backward compatibility
 func _connect_signals() -> void:

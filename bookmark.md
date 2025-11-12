@@ -1,7 +1,7 @@
 # TODO 
 - always download/view dex if it doesn't exist locally
  - download first 5 in the background on login (if possible)
-
+- catch_date should be exclusively server side
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
 Email configured with SMTP backend

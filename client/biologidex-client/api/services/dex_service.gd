@@ -24,13 +24,13 @@ signal friends_overview_failed(error: APITypes.APIError)
 
 ## Create a new dex entry
 func create_entry(
-	animal_id: int,
+	animal_id: String,
 	vision_job_id: String = "",
 	notes: String = "",
 	visibility: String = "friends",
 	callback: Callable = Callable()
 ) -> void:
-	_log("Creating dex entry for animal: %d" % animal_id)
+	_log("Creating dex entry for animal: %s" % animal_id)
 
 	var data = {
 		"animal": animal_id,

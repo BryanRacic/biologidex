@@ -58,11 +58,15 @@ class DexEntryListSerializer(serializers.ModelSerializer):
 
 class DexEntryCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating dex entries."""
+    source_vision_job = serializers.UUIDField(required=False, allow_null=True)
+    original_image = serializers.ImageField(required=False, allow_null=True)
+    catch_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = DexEntry
         fields = [
             'animal',
+            'source_vision_job',
             'original_image',
             'location_lat',
             'location_lon',
@@ -72,9 +76,42 @@ class DexEntryCreateSerializer(serializers.ModelSerializer):
             'visibility',
         ]
 
+    def validate(self, attrs):
+        """Validate that either source_vision_job or original_image is provided."""
+        source_vision_job = attrs.get('source_vision_job')
+        original_image = attrs.get('original_image')
+
+        if not source_vision_job and not original_image:
+            raise serializers.ValidationError(
+                "Either source_vision_job or original_image must be provided."
+            )
+
+        return attrs
+
     def create(self, validated_data):
-        """Set owner from request context."""
+        """Set owner and handle vision job image."""
+        from django.utils import timezone
+        from vision.models import AnalysisJob
+
         validated_data['owner'] = self.context['request'].user
+
+        # If source_vision_job provided, get the image from it
+        source_vision_job_id = validated_data.pop('source_vision_job', None)
+        if source_vision_job_id:
+            try:
+                vision_job = AnalysisJob.objects.get(id=source_vision_job_id)
+                # Use the original image from the vision job
+                if not validated_data.get('original_image'):
+                    validated_data['original_image'] = vision_job.image
+                # Link the vision job
+                validated_data['source_vision_job'] = vision_job
+            except AnalysisJob.DoesNotExist:
+                pass
+
+        # Set catch_date to now if not provided
+        if not validated_data.get('catch_date'):
+            validated_data['catch_date'] = timezone.now()
+
         return super().create(validated_data)
 
 

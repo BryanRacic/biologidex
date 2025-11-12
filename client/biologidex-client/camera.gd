@@ -703,7 +703,7 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 
 		if creation_index_value != null and animal_id_value != null:
 			var creation_index: int = int(creation_index_value)
-			var animal_id: int = int(animal_id_value)
+			var animal_id: String = str(animal_id_value)  # Animal ID is UUID string
 
 			# Get the cached image path
 			var cached_path := ""
@@ -743,7 +743,7 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 		print("[Camera] Editor mode: Test image %d uploaded. Press 'Select Photo' to load next image." % current_test_image_index)
 
 
-func _create_server_dex_entry(animal_id: int, vision_job_id: String) -> void:
+func _create_server_dex_entry(animal_id: String, vision_job_id: String) -> void:
 	"""Create server-side dex entry for syncing across devices"""
 	print("[Camera] Creating server-side dex entry for animal: ", animal_id)
 
