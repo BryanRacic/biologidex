@@ -202,5 +202,6 @@ class DexEntrySyncSerializer(serializers.ModelSerializer):
     def get_image_updated_at(self, obj):
         """Get the last update time for the image."""
         if obj.source_vision_job:
-            return obj.source_vision_job.updated_at
+            # AnalysisJob doesn't have updated_at, use completed_at or created_at
+            return obj.source_vision_job.completed_at or obj.source_vision_job.created_at
         return obj.updated_at
