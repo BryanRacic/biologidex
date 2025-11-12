@@ -134,7 +134,7 @@ class TaxonomyService:
 
         # If common name provided, filter to match common name
         if common_name:
-            # Try to find candidates that match the common name
+            # Try to find candidates that match the common name (fuzzy matching)
             matching_common_name = []
             for candidate in candidates:
                 # Get common names for this taxonomy
@@ -142,9 +142,14 @@ class TaxonomyService:
                     taxonomy=candidate
                 ).values_list('name', flat=True)
 
-                # Check if any common name matches (case-insensitive)
-                if any(cn.lower() == common_name.lower() for cn in common_names):
-                    matching_common_name.append(candidate)
+                # Fuzzy match: check if one name is contained in the other (case-insensitive)
+                common_name_lower = common_name.lower()
+                for cn in common_names:
+                    cn_lower = cn.lower()
+                    # Accept if either name contains the other
+                    if common_name_lower in cn_lower or cn_lower in common_name_lower:
+                        matching_common_name.append(candidate)
+                        break
 
             # If we found matches with common name, use those
             if matching_common_name:
@@ -153,7 +158,7 @@ class TaxonomyService:
                 # No match with common name - this might be a mismatch
                 logger.warning(
                     f"Found taxonomy for {scientific_name} but common name '{common_name}' "
-                    f"doesn't match. Rejecting to avoid mismatch."
+                    f"doesn't match any known names. Rejecting to avoid mismatch."
                 )
                 return None, False, f"Found {scientific_name} but common name mismatch"
         else:

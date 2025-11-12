@@ -254,19 +254,19 @@ func _on_request_completed(_result: int, response_code: int, _headers: PackedStr
 
 ## Logging functions
 func _log_request(method: String, url: String, data: Dictionary) -> void:
-	print("\n[HTTPClient] === REQUEST ===")
+	print("[HTTPClient] === REQUEST ===")
 	print("[HTTPClient] %s %s" % [method, url])
 	if data.size() > 0:
 		print("[HTTPClient] Data: ", JSON.stringify(data, "\t"))
 
 func _log_response(url: String, code: int, data: Dictionary) -> void:
-	print("\n[HTTPClient] === RESPONSE ===")
+	print("[HTTPClient] === RESPONSE ===")
 	print("[HTTPClient] URL: ", url)
 	print("[HTTPClient] Status: ", code)
 	if data.size() > 0:
 		print("[HTTPClient] Body: ", JSON.stringify(data, "\t"))
 
 func _log_error(url: String, error: String) -> void:
-	print("\n[HTTPClient] === ERROR ===")
+	print("[HTTPClient] === ERROR ===")
 	print("[HTTPClient] URL: ", url)
 	print("[HTTPClient] Error: ", error)

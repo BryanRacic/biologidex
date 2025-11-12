@@ -79,7 +79,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
     restart: always
-    command: celery -A biologidex worker -l info --concurrency=${CELERY_WORKERS:-4}
+    command: /bin/bash -c "/app/.venv/bin/celery -A biologidex worker -l info --concurrency=${CELERY_WORKERS:-4}"
     volumes:
       - ${DATA_DIR}/media:/app/media
       - ./logs:/app/logs
@@ -96,7 +96,7 @@ services:
     networks:
       - biologidex-network
     healthcheck:
-      test: ["CMD-SHELL", "celery -A biologidex inspect ping"]
+      test: ["CMD-SHELL", "/app/.venv/bin/celery -A biologidex inspect ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -107,7 +107,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
     restart: always
-    command: celery -A biologidex beat -l info --schedule=/app/celerybeat-schedule
+    command: /bin/bash -c "/app/.venv/bin/celery -A biologidex beat -l info --schedule=/app/celerybeat-schedule"
     volumes:
       - ./logs:/app/logs
       - ${DATA_DIR}/celerybeat:/app

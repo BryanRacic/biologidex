@@ -196,14 +196,15 @@ class DexEntryViewSet(viewsets.ModelViewSet):
         # Filter by last_sync timestamp if provided
         if last_sync:
             try:
+                # URL decode the + sign if present (+ becomes space in URL decode)
+                last_sync = last_sync.replace(' ', '+')
                 last_sync_dt = parse_datetime(last_sync)
-                if last_sync_dt:
-                    entries = entries.filter(updated_at__gt=last_sync_dt)
-                else:
+                if last_sync_dt is None:
                     return Response(
                         {'error': 'Invalid last_sync format. Use ISO 8601 datetime.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                entries = entries.filter(updated_at__gt=last_sync_dt)
             except Exception as e:
                 return Response(
                     {'error': f'Failed to parse last_sync: {str(e)}'},
@@ -278,14 +279,15 @@ class DexEntryViewSet(viewsets.ModelViewSet):
         last_sync = request.query_params.get('last_sync')
         if last_sync:
             try:
+                # URL decode the + sign if present (+ becomes space in URL decode)
+                last_sync = last_sync.replace(' ', '+')
                 last_sync_dt = parse_datetime(last_sync)
-                if last_sync_dt:
-                    entries = entries.filter(updated_at__gt=last_sync_dt)
-                else:
+                if last_sync_dt is None:
                     return Response(
                         {'error': 'Invalid last_sync format. Use ISO 8601 datetime.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                entries = entries.filter(updated_at__gt=last_sync_dt)
             except Exception as e:
                 return Response(
                     {'error': f'Failed to parse last_sync: {str(e)}'},
