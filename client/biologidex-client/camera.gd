@@ -453,8 +453,8 @@ func _on_upload_pressed() -> void:
 
 func _on_upload_completed(response: Dictionary, code: int) -> void:
 	"""Handle upload completion"""
-	if code == 201:
-		# Upload successful, job created
+	if code == 200 or code == 201:
+		# Upload successful, job created (service layer normalizes 201 to 200)
 		var id_value = response.get("id")
 		current_job_id = "" if id_value == null else str(id_value)
 

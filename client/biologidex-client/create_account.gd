@@ -93,8 +93,8 @@ func _perform_registration(username: String, email: String, password: String, pa
 	_set_loading(true, "Creating account...")
 
 	APIManager.register(username, email, password, password_confirm, func(response: Dictionary, code: int):
-		if code == 201:
-			# Successful registration
+		if code == 200 or code == 201:
+			# Successful registration (service layer normalizes 201 to 200)
 			print("[CreateAccount] Registration successful!")
 
 			# Show success message
