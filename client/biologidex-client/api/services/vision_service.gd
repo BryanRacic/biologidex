@@ -77,7 +77,7 @@ func get_vision_job(job_id: String, callback: Callable = Callable()) -> void:
 
 	var context = {"job_id": job_id, "callback": callback}
 
-	api_client.get(
+	api_client.request_get(
 		endpoint,
 		_on_get_vision_job_success.bind(context),
 		_on_get_vision_job_error.bind(context),
@@ -153,7 +153,7 @@ func get_completed_jobs(callback: Callable = Callable()) -> void:
 
 	var context = {"callback": callback}
 
-	api_client.get(
+	api_client.request_get(
 		config.ENDPOINTS_VISION["completed"],
 		_on_get_completed_jobs_success.bind(context),
 		_on_get_completed_jobs_error.bind(context),

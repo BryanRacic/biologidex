@@ -29,9 +29,10 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 
 **API Usage**:
 - ✅ `APIManager.<service>.<method>()` for all API calls
-- ✅ Callbacks: `func(response: Dictionary, code: int)` - always check `code == 200`
+- ✅ Callbacks: `func(response: Dictionary, code: int)` - check `code == 200 or code == 201` (services may normalize 201→200)
 - ✅ Traditional callbacks with `.bind(context)`, NOT inline lambdas
 - ✅ Positional arguments ONLY (no `param=value` syntax in GDScript)
+- ✅ APIClient methods: `request_get()`, `post()`, `put()`, `delete()` (NOT `.get()`)
 - ❌ Never call `api_client` directly - use service methods
 - ❌ Never inline lambdas in service methods - causes "assignment in expression" errors
 
@@ -58,6 +59,8 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - SyncManager: Tracks `last_sync` per user in `sync_state.json`
 - DexService: `sync_user_dex()`, `sync_user_dex_with_retry()` with exponential backoff
 - Signals: `sync_started`, `sync_progress`, `sync_user_completed`, `sync_user_failed`
+- **Critical**: Camera must create BOTH local (DexDatabase) AND server-side (APIManager.dex.create_entry) entries
+- **Auto-sync**: Trigger sync when database empty OR never synced (check `SyncManager.get_last_sync()`)
 
 **Auth**:
 - TokenManager: Use `is_logged_in()` not `has_valid_token()`

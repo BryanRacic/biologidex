@@ -699,15 +699,18 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	# Save to local dex database if we have all required info
 	if animal_details.size() > 0:
 		var creation_index_value = animal_details.get("creation_index")
-		if creation_index_value != null:
+		var animal_id_value = animal_details.get("id")
+
+		if creation_index_value != null and animal_id_value != null:
 			var creation_index: int = int(creation_index_value)
+			var animal_id: int = int(animal_id_value)
 
 			# Get the cached image path
 			var cached_path := ""
 			if dex_compatible_url.length() > 0:
 				cached_path = "user://dex_cache/" + dex_compatible_url.md5_text() + ".png"
 
-			# Add to database
+			# Add to local database
 			DexDatabase.add_record(
 				creation_index,
 				scientific_name,
@@ -716,8 +719,11 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 			)
 
 			print("[Camera] Saved to local dex database: #", creation_index)
+
+			# Create server-side dex entry for syncing
+			_create_server_dex_entry(animal_id, current_job_id)
 		else:
-			print("[Camera] WARNING: No creation_index in animal_details, not saving to dex")
+			print("[Camera] WARNING: Missing creation_index or animal ID, not saving to dex")
 	else:
 		print("[Camera] WARNING: No animal_details, not saving to dex")
 
@@ -735,6 +741,29 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	if OS.has_feature("editor"):
 		current_test_image_index += 1
 		print("[Camera] Editor mode: Test image %d uploaded. Press 'Select Photo' to load next image." % current_test_image_index)
+
+
+func _create_server_dex_entry(animal_id: int, vision_job_id: String) -> void:
+	"""Create server-side dex entry for syncing across devices"""
+	print("[Camera] Creating server-side dex entry for animal: ", animal_id)
+
+	APIManager.dex.create_entry(
+		animal_id,
+		vision_job_id,
+		"",  # notes
+		"friends",  # visibility
+		_on_dex_entry_created
+	)
+
+
+func _on_dex_entry_created(response: Dictionary, code: int) -> void:
+	"""Handle dex entry creation response"""
+	if code == 200 or code == 201:
+		var entry_id = response.get("id", "unknown")
+		print("[Camera] Server-side dex entry created: ", entry_id)
+	else:
+		var error_msg = response.get("error", "Unknown error")
+		print("[Camera] WARNING: Failed to create server-side dex entry: ", error_msg)
 
 
 func _stop_status_polling() -> void:

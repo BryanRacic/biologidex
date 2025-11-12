@@ -52,6 +52,9 @@ func _ready() -> void:
 	# Initialize user list
 	_populate_user_list()
 
+	# Check if we need to sync
+	_check_and_sync_if_needed()
+
 	# Load first record for current user
 	_load_first_record()
 
@@ -71,6 +74,24 @@ func _populate_user_list() -> void:
 
 	# Fetch friends overview to update names
 	APIManager.dex.get_friends_overview()
+
+
+func _check_and_sync_if_needed() -> void:
+	"""Check if sync is needed and trigger it automatically"""
+	# Check if database is empty
+	var first_index := DexDatabase.get_first_index_for_user("self")
+	var database_empty := (first_index < 0)
+
+	# Check if we've never synced
+	var last_sync := SyncManager.get_last_sync("self")
+	var never_synced := last_sync.is_empty()
+
+	# Trigger sync if database is empty OR never synced
+	if database_empty or never_synced:
+		print("[Dex] Auto-triggering initial sync (database_empty=%s, never_synced=%s)" % [database_empty, never_synced])
+		trigger_sync()
+	else:
+		print("[Dex] Sync not needed (last_sync: %s)" % last_sync)
 
 
 func _load_first_record() -> void:
