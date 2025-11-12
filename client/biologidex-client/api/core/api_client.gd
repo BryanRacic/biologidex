@@ -237,29 +237,9 @@ func _execute_request(request: APITypes.QueuedRequest) -> void:
 	active_requests += 1
 
 	# Wrap callbacks to handle retry and queue processing
-	var success_wrapper = func(data: Dictionary):
-		active_requests -= 1
-		request.success_callback.call(data)
-		_process_queue()
-
-	var error_wrapper = func(error: APITypes.APIError):
-		active_requests -= 1
-
-		# Check if we should retry
-		if request.config.retry_on_failure and request.attempt < request.config.max_retries:
-			# Retry with exponential backoff
-			request.attempt += 1
-			var delay = config.get_retry_delay(request.attempt)
-			print("[APIClient] Retrying request (attempt %d/%d) after %.2fs" % [request.attempt, request.config.max_retries, delay])
-
-			# Re-queue after delay
-			await get_tree().create_timer(delay).timeout
-			request_queue.append(request)
-			_process_queue()
-		else:
-			# Max retries reached or retry disabled
-			request.error_callback.call(error)
-			_process_queue()
+	# Use bind() to pass the request object to the callback methods
+	var success_wrapper = _on_request_success.bind(request)
+	var error_wrapper = _on_request_error.bind(request)
 
 	# Execute based on body type
 	if request.body is PackedByteArray:
@@ -293,6 +273,42 @@ func _execute_request(request: APITypes.QueuedRequest) -> void:
 	else:
 		# GET or DELETE request
 		http_client.http_get(request.url, success_wrapper, error_wrapper, Array(request.headers))
+
+## Handle successful request completion
+func _on_request_success(data: Dictionary, request: APITypes.QueuedRequest) -> void:
+	active_requests -= 1
+	request.success_callback.call(data)
+	_process_queue()
+
+## Handle request error with retry logic
+func _on_request_error(error: APITypes.APIError, request: APITypes.QueuedRequest) -> void:
+	active_requests -= 1
+
+	# Don't retry auth errors (401/403) - they won't succeed
+	var should_retry = (
+		request.config.retry_on_failure
+		and request.attempt < request.config.max_retries
+		and not error.is_auth_error()
+	)
+
+	if should_retry:
+		# Retry with exponential backoff
+		request.attempt += 1
+		var delay = config.get_retry_delay(request.attempt)
+		print("[APIClient] Retrying request (attempt %d/%d) after %.2fs" % [request.attempt, request.config.max_retries, delay])
+
+		# Re-queue after delay
+		_retry_request_after_delay(request, delay)
+	else:
+		# Max retries reached, retry disabled, or auth error
+		request.error_callback.call(error)
+		_process_queue()
+
+## Retry a request after a delay
+func _retry_request_after_delay(request: APITypes.QueuedRequest, delay: float) -> void:
+	await get_tree().create_timer(delay).timeout
+	request_queue.append(request)
+	_process_queue()
 
 ## Get number of pending requests
 func get_pending_count() -> int:

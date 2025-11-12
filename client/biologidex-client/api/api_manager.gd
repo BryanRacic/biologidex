@@ -40,6 +40,7 @@ func _initialize_core() -> void:
 
 	# Create API client
 	api_client = APIClient.new(http_client, config)
+	add_child(api_client)
 
 ## Initialize all services
 func _initialize_services() -> void:
