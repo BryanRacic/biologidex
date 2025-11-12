@@ -190,8 +190,8 @@ class DexEntryViewSet(viewsets.ModelViewSet):
                 print(f"[DexCache] Hit for user {request.user.id}")
                 return Response(cached_response)
 
-        # Get user's entries
-        entries = self.queryset.filter(owner=request.user)
+        # Get user's entries ordered by creation_index
+        entries = self.queryset.filter(owner=request.user).order_by('animal__creation_index')
 
         # Filter by last_sync timestamp if provided
         if last_sync:
