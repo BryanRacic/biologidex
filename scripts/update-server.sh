@@ -1,9 +1,3 @@
-#!/bin/bash
-# BiologiDex Server Update Script
-# Usage: ./scripts/update-server.sh
-#
-# This script pulls latest code, copies to production, rebuilds and restarts services
-
 set -e
 
 # Colors for output
@@ -17,7 +11,7 @@ echo ""
 
 # Step 1: Pull latest code from git
 echo -e "${BLUE}[1/6] Pulling latest code from git...${NC}"
-cd ~/Development/Github/biologidex/
+cd ~/Development/biologidex/
 git pull
 
 # Step 2: Copy files to production directory

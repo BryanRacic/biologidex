@@ -87,16 +87,36 @@ class BaseImporter(abc.ABC):
         from taxonomy.raw_models import RawCatalogueOfLife
 
         batch_size = 1000
-        raw_records = RawCatalogueOfLife.objects.filter(
-            import_job=self.import_job,
-            is_processed=False
+
+        # Get all unprocessed records and collect their IDs upfront to avoid
+        # queryset re-evaluation issues when marking records as processed
+        logger.info("=" * 80)
+        logger.info("STEP: NORMALIZE RAW DATA TO TAXONOMY TABLE")
+        logger.info("=" * 80)
+
+        raw_record_ids = list(
+            RawCatalogueOfLife.objects.filter(
+                import_job=self.import_job,
+                is_processed=False
+            ).values_list('id', flat=True)
         )
 
-        total_records = raw_records.count()
-        logger.info(f"Normalizing {total_records} raw records...")
+        total_records = len(raw_record_ids)
+        logger.info(f"Collected {total_records:,} unprocessed record IDs upfront (prevents queryset re-evaluation bug)")
+
+        if total_records == 0:
+            logger.info("No unprocessed records found. Normalization complete.")
+            return
+
+        logger.info(f"Processing in batches of {batch_size}...")
 
         for batch_start in range(0, total_records, batch_size):
-            batch = raw_records[batch_start:batch_start + batch_size]
+            batch_ids = raw_record_ids[batch_start:batch_start + batch_size]
+            batch = RawCatalogueOfLife.objects.filter(id__in=batch_ids)
+
+            batch_num = (batch_start // batch_size) + 1
+            total_batches = (total_records + batch_size - 1) // batch_size
+            logger.info(f"Processing batch {batch_num}/{total_batches} (records {batch_start+1:,} to {min(batch_start+batch_size, total_records):,})")
 
             with transaction.atomic():
                 for raw in batch:
@@ -127,6 +147,19 @@ class BaseImporter(abc.ABC):
                             'error': str(e)
                         })
 
-            # Log progress
-            if (batch_start + batch_size) % 10000 == 0:
-                logger.info(f"Processed {batch_start + batch_size}/{total_records} records...")
+            # Log progress every 10 batches
+            if batch_num % 10 == 0 or batch_num == total_batches:
+                logger.info(f"Progress: {self.stats['records_imported']:,} imported, {self.stats['records_failed']} failed")
+
+        # Final summary
+        logger.info("=" * 80)
+        logger.info("NORMALIZATION COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Total records processed: {total_records:,}")
+        logger.info(f"Successfully imported: {self.stats['records_imported']:,}")
+        logger.info(f"Failed: {self.stats['records_failed']}")
+
+        if self.stats['errors']:
+            logger.warning(f"First 10 errors:")
+            for i, error in enumerate(self.stats['errors'][:10], 1):
+                logger.warning(f"  {i}. Record {error['record_id']}: {error['error']}")

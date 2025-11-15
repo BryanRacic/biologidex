@@ -399,9 +399,9 @@ func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
 		line.width = 2.0
 		line.default_color = Color(0.4, 0.4, 0.4, 0.5)
 	elif source_node.is_taxonomic() and target_node.is_animal():
-		# Taxonomy to animal: thinner, less opaque (leaf connections)
-		line.width = 1.0
-		line.default_color = Color(0.3, 0.3, 0.3, 0.3)
+		# Taxonomy to animal: visible connections to dex entries
+		line.width = 1.5
+		line.default_color = Color(0.4, 0.4, 0.4, 0.6)
 	else:
 		# Default (shouldn't happen with proper hierarchy, but fallback)
 		line.width = 1.0
@@ -411,7 +411,7 @@ func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
 
 
 func _render_taxonomy_labels() -> void:
-	"""Render labels for taxonomy nodes (zoom-dependent)."""
+	"""Render labels for taxonomy nodes and dex animal nodes (zoom-dependent)."""
 	# Clear existing labels
 	for label in taxonomy_labels.values():
 		label.queue_free()
@@ -425,11 +425,25 @@ func _render_taxonomy_labels() -> void:
 	if current_zoom < MIN_ZOOM_FOR_LABELS:
 		return
 
-	# Add labels for visible taxonomy nodes
+	# Add labels for visible nodes
 	for render_data in visible_nodes:
+		var label_text = ""
+		var should_show_label = false
+
 		if render_data.node.is_taxonomic():
+			# Show labels for all taxonomy nodes
+			label_text = render_data.node.name
+			should_show_label = true
+		elif render_data.node.is_animal():
+			# Show labels for animal nodes that are in the dex (captured by user or friends)
+			if render_data.node.captured_by_user or render_data.node.captured_by_friends.size() > 0:
+				# Use common name if available, otherwise scientific name
+				label_text = render_data.node.common_name if render_data.node.common_name else render_data.node.scientific_name
+				should_show_label = true
+
+		if should_show_label:
 			var label = Label.new()
-			label.text = render_data.node.name
+			label.text = label_text
 			label.add_theme_font_size_override("font_size", 10)
 			label.add_theme_color_override("font_color", Color.WHITE)
 			label.add_theme_color_override("font_outline_color", Color.BLACK)
