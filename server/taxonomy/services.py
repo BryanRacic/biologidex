@@ -87,13 +87,14 @@ class TaxonomyService:
         confidence: float = 0.0
     ) -> Tuple[Optional[Taxonomy], bool, str]:
         """
-        Lookup taxonomy from CV identification, matching ALL fields (genus, species, subspecies, common name)
+        Lookup taxonomy from CV identification, matching genus + species + subspecies.
+        Common name is used for validation but won't block a valid scientific name match.
 
         Args:
             genus: Genus name from CV
             species: Species epithet from CV
             subspecies: Subspecies/infraspecific epithet from CV (optional)
-            common_name: Common name from CV (optional)
+            common_name: Common name from CV (optional, advisory only)
             confidence: CV confidence score
 
         Returns:
@@ -106,11 +107,11 @@ class TaxonomyService:
             scientific_name = f"{genus} {species}"
 
         logger.info(
-            f"Looking up taxonomy: genus={genus}, species={species}, "
+            f"[TAXONOMY LOOKUP] Starting lookup: genus={genus}, species={species}, "
             f"subspecies={subspecies}, common_name={common_name}"
         )
 
-        # Build query to match ALL fields
+        # Build query to match scientific name components
         query = Q(
             genus__iexact=genus,
             specific_epithet__iexact=species,
@@ -132,50 +133,119 @@ class TaxonomyService:
             '-confidence_score'
         )
 
-        # If common name provided, filter to match common name
-        if common_name:
-            # Try to find candidates that match the common name (fuzzy matching)
-            matching_common_name = []
-            for candidate in candidates:
-                # Get common names for this taxonomy
-                common_names = CommonName.objects.filter(
-                    taxonomy=candidate
-                ).values_list('name', flat=True)
+        candidate_count = candidates.count()
+        logger.info(f"[TAXONOMY LOOKUP] Found {candidate_count} candidate(s) for {scientific_name}")
 
-                # Fuzzy match: check if one name is contained in the other (case-insensitive)
-                common_name_lower = common_name.lower()
-                for cn in common_names:
-                    cn_lower = cn.lower()
-                    # Accept if either name contains the other
-                    if common_name_lower in cn_lower or cn_lower in common_name_lower:
-                        matching_common_name.append(candidate)
-                        break
-
-            # If we found matches with common name, use those
-            if matching_common_name:
-                taxonomy = matching_common_name[0]
-            else:
-                # No match with common name - this might be a mismatch
-                logger.warning(
-                    f"Found taxonomy for {scientific_name} but common name '{common_name}' "
-                    f"doesn't match any known names. Rejecting to avoid mismatch."
+        # Log all candidates with their details
+        if candidate_count > 0:
+            logger.info(f"[TAXONOMY LOOKUP] All candidates found:")
+            for idx, candidate in enumerate(candidates[:10], 1):  # Log up to 10 candidates
+                logger.info(
+                    f"  [{idx}] {candidate.scientific_name} "
+                    f"(source: {candidate.source.short_code}, "
+                    f"status: {candidate.status}, "
+                    f"completeness: {candidate.completeness_score}, "
+                    f"confidence: {candidate.confidence_score}, "
+                    f"priority: {candidate.source.priority})"
                 )
-                return None, False, f"Found {scientific_name} but common name mismatch"
-        else:
-            # No common name provided, use first candidate
-            taxonomy = candidates.first() if candidates else None
+                # Log taxonomy hierarchy for first 3 candidates
+                if idx <= 3:
+                    logger.info(
+                        f"      Taxonomy: kingdom={candidate.kingdom}, "
+                        f"phylum={candidate.phylum}, class={candidate.class_name}, "
+                        f"order={candidate.order}, family={candidate.family}"
+                    )
+            if candidate_count > 10:
+                logger.info(f"  ... and {candidate_count - 10} more candidates (truncated)")
+
+        # If common name provided, try to validate it (advisory only)
+        taxonomy = None
+        common_name_matched = False
+
+        if candidates.exists():
+            if common_name:
+                logger.info(f"[TAXONOMY LOOKUP] Attempting common name validation for: '{common_name}'")
+
+                # Try to find candidates that match the common name (fuzzy matching)
+                matching_common_name = []
+                for idx, candidate in enumerate(candidates, 1):
+                    # Get common names for this taxonomy
+                    db_common_names = list(CommonName.objects.filter(
+                        taxonomy=candidate
+                    ).values_list('name', flat=True))
+
+                    logger.debug(
+                        f"[TAXONOMY LOOKUP] Candidate [{idx}] {candidate.scientific_name} "
+                        f"has common names: {db_common_names}"
+                    )
+
+                    # Fuzzy match: check if one name is contained in the other (case-insensitive)
+                    common_name_lower = common_name.lower()
+                    for cn in db_common_names:
+                        cn_lower = cn.lower()
+                        # Accept if either name contains the other
+                        if common_name_lower in cn_lower or cn_lower in common_name_lower:
+                            matching_common_name.append(candidate)
+                            common_name_matched = True
+                            logger.info(
+                                f"[TAXONOMY LOOKUP] ✓ Common name MATCH: CV '{common_name}' "
+                                f"matched database '{cn}' for {candidate.scientific_name}"
+                            )
+                            break
+
+                # Prefer common name match if available
+                if matching_common_name:
+                    taxonomy = matching_common_name[0]
+                    logger.info(
+                        f"[TAXONOMY LOOKUP] SELECTED (common name match): {taxonomy.scientific_name} "
+                        f"from {len(matching_common_name)} matching candidate(s)"
+                    )
+                else:
+                    # Common name didn't match, but use taxonomy anyway (advisory warning)
+                    taxonomy = candidates.first()
+                    db_names = list(CommonName.objects.filter(
+                        taxonomy=taxonomy
+                    ).values_list('name', flat=True)[:5])
+                    logger.warning(
+                        f"[TAXONOMY LOOKUP] ⚠ Common name mismatch for {scientific_name}: "
+                        f"CV provided '{common_name}' but database has {db_names}. "
+                        f"SELECTED (best candidate): {taxonomy.scientific_name} "
+                        f"(using taxonomy anyway - common name is advisory only)"
+                    )
+            else:
+                # No common name provided, use first candidate
+                taxonomy = candidates.first()
+                logger.info(
+                    f"[TAXONOMY LOOKUP] SELECTED (no common name provided): {taxonomy.scientific_name} "
+                    f"(best candidate by source priority={taxonomy.source.priority}, "
+                    f"completeness={taxonomy.completeness_score})"
+                )
 
         if taxonomy:
             # Found in taxonomy database
             if taxonomy.status == 'synonym':
                 # Get accepted name
                 if taxonomy.accepted_name:
+                    logger.info(
+                        f"[TAXONOMY LOOKUP] Found as synonym, resolving to accepted name: "
+                        f"{taxonomy.scientific_name} → {taxonomy.accepted_name.scientific_name}"
+                    )
                     taxonomy = taxonomy.accepted_name
                     message = f"Found synonym, using accepted name: {taxonomy.scientific_name}"
                 else:
+                    logger.warning(f"[TAXONOMY LOOKUP] Found synonym without accepted name for {scientific_name}")
                     message = f"Found synonym without accepted name"
             else:
                 message = f"Found in taxonomy: {taxonomy.scientific_name}"
+
+            # Log taxonomy completeness
+            logger.info(
+                f"[TAXONOMY LOOKUP] Taxonomy details for {taxonomy.scientific_name}: "
+                f"kingdom={taxonomy.kingdom}, phylum={taxonomy.phylum}, "
+                f"class={taxonomy.class_name}, order={taxonomy.order}, "
+                f"family={taxonomy.family}, genus={taxonomy.genus}, "
+                f"species={taxonomy.species or taxonomy.specific_epithet}"
+            )
 
             # Create or update animal
             from animals.services import AnimalService
@@ -185,11 +255,56 @@ class TaxonomyService:
                 cv_confidence=confidence
             )
 
+            logger.info(
+                f"[TAXONOMY LOOKUP] {'Created' if created else 'Updated'} animal from taxonomy: "
+                f"{animal.scientific_name} (#{animal.creation_index})"
+            )
+
             return taxonomy, created, message
 
-        # Not found in taxonomy
-        logger.warning(f"Taxonomy not found for: {scientific_name}")
+        # Not found in taxonomy - log detailed info for debugging
+        logger.error(
+            f"[TAXONOMY LOOKUP] FAILED - Taxonomy not found for: {scientific_name} "
+            f"(genus={genus}, species={species}, subspecies={subspecies}). "
+            f"This species is not in the Catalogue of Life database."
+        )
         return None, False, f"Not found in taxonomy database: {scientific_name}"
+
+    @classmethod
+    def lookup_genus(cls, genus: str) -> Optional[Taxonomy]:
+        """
+        Lookup taxonomy by genus to get higher-level classification.
+        Used as fallback when species lookup fails.
+
+        Args:
+            genus: Genus name to lookup
+
+        Returns:
+            Taxonomy object for the genus, or None if not found
+        """
+        logger.info(f"[TAXONOMY LOOKUP] Attempting genus-level lookup for: {genus}")
+
+        # Look for accepted genus-level taxonomy entry
+        genus_taxonomy = Taxonomy.objects.filter(
+            genus__iexact=genus,
+            rank__name='genus',
+            status__in=['accepted', 'provisional']
+        ).select_related('source', 'rank').order_by(
+            'source__priority',
+            '-completeness_score'
+        ).first()
+
+        if genus_taxonomy:
+            logger.info(
+                f"[TAXONOMY LOOKUP] Found genus-level taxonomy: {genus_taxonomy.scientific_name}, "
+                f"kingdom={genus_taxonomy.kingdom}, phylum={genus_taxonomy.phylum}, "
+                f"class={genus_taxonomy.class_name}, order={genus_taxonomy.order}, "
+                f"family={genus_taxonomy.family}"
+            )
+            return genus_taxonomy
+
+        logger.warning(f"[TAXONOMY LOOKUP] Genus-level taxonomy not found for: {genus}")
+        return None
 
     @classmethod
     def get_common_names(

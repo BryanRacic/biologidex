@@ -281,6 +281,16 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'taxonomy': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'animals': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
         'biologidex.api': {
             'handlers': ['console', 'file'],
             'level': 'INFO',

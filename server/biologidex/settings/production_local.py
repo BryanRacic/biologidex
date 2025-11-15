@@ -236,6 +236,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'animals': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
     'root': {
         'handlers': ['file', 'console'],

@@ -193,19 +193,47 @@ class AnimalService:
             animal = Animal.objects.get(scientific_name=taxonomy.scientific_name)
             return animal, created, message
 
-        # Not found in taxonomy - create basic animal record from CV data
-        logger.warning(f"Creating basic animal record for: {scientific_name}")
+        # Not found in taxonomy - try genus-level lookup for higher classification
+        logger.warning(f"Species not in taxonomy database: {scientific_name}. Attempting genus-level lookup.")
+
+        genus_taxonomy = TaxonomyService.lookup_genus(genus)
+
+        # Build defaults with genus-level taxonomy if available
+        defaults = {
+            'common_name': common_name or scientific_name,
+            'genus': genus,
+            'species': species,
+            'verified': False,  # Not verified - needs manual review
+            'verification_method': 'cv'
+        }
+
+        if genus_taxonomy:
+            # Populate higher-level taxonomy from genus
+            defaults.update({
+                'kingdom': genus_taxonomy.kingdom or 'Animalia',
+                'phylum': genus_taxonomy.phylum or '',
+                'class_name': genus_taxonomy.class_name or '',
+                'order': genus_taxonomy.order or '',
+                'family': genus_taxonomy.family or '',
+            })
+            logger.info(
+                f"Populated higher taxonomy from genus '{genus}': "
+                f"kingdom={defaults['kingdom']}, phylum={defaults['phylum']}, "
+                f"class={defaults['class_name']}, order={defaults['order']}, "
+                f"family={defaults['family']}"
+            )
+            message = f"Created animal with genus-level taxonomy: {scientific_name}"
+        else:
+            # No genus taxonomy found either - use minimal defaults
+            logger.warning(
+                f"Genus '{genus}' not found in taxonomy database. "
+                f"Creating minimal animal record for: {scientific_name}"
+            )
+            message = f"Created basic animal record (genus not in database): {scientific_name}"
 
         animal, created = Animal.objects.get_or_create(
             scientific_name=scientific_name,
-            defaults={
-                'common_name': common_name or scientific_name,
-                'genus': genus,
-                'species': species,
-                'verified': False,  # Not verified - needs manual review
-                'verification_method': 'cv'
-            }
+            defaults=defaults
         )
 
-        message = f"Created basic animal record (not in taxonomy database): {scientific_name}"
         return animal, created, message

@@ -85,6 +85,7 @@ services:
       - ./logs:/app/logs
     environment:
       DJANGO_SETTINGS_MODULE: biologidex.settings.production_local
+      PYTHONUNBUFFERED: "1"  # Ensure logs appear immediately in docker logs
       C_FORCE_ROOT: "1"  # Allow celery to run as root in container
     env_file:
       - .env
@@ -113,6 +114,7 @@ services:
       - ${DATA_DIR}/celerybeat:/app
     environment:
       DJANGO_SETTINGS_MODULE: biologidex.settings.production_local
+      PYTHONUNBUFFERED: "1"  # Ensure logs appear immediately in docker logs
     env_file:
       - .env
     depends_on:

@@ -82,6 +82,23 @@ def process_analysis_job(self, job_id: str, transformations: dict = None):
         # Perform identification with the processed image
         result = cv_service.identify_animal(image_to_analyze.path)
 
+        # Log complete CV response for debugging
+        logger.info(
+            f"[CV RESPONSE] Job {job_id} completed:\n"
+            f"  Model: {job.model_name}\n"
+            f"  Prediction: {result['prediction']}\n"
+            f"  Cost: ${result['cost_usd']:.6f}\n"
+            f"  Processing time: {result['processing_time']:.2f}s\n"
+            f"  Input tokens: {result.get('input_tokens', 0)}\n"
+            f"  Output tokens: {result.get('output_tokens', 0)}"
+        )
+
+        # Log raw response structure (first 500 chars to avoid spam)
+        raw_response_str = str(result.get('raw_response', {}))
+        if len(raw_response_str) > 500:
+            raw_response_str = raw_response_str[:500] + "... (truncated)"
+        logger.debug(f"[CV RESPONSE] Raw response structure: {raw_response_str}")
+
         # Parse the prediction to extract animal information
         animal = parse_and_create_animal(
             result['prediction'],
@@ -171,7 +188,15 @@ def parse_and_create_animal(prediction: str, user) -> Animal:
         else:
             scientific_name = f"{genus} {species}"
 
-        logger.info(f"Parsed: genus={genus}, species={species}, subspecies={subspecies}, common_name={common_name}")
+        logger.info(
+            f"[CV PARSING] Successfully parsed prediction:\n"
+            f"  Original: {first_line}\n"
+            f"  Genus: {genus}\n"
+            f"  Species: {species}\n"
+            f"  Subspecies: {subspecies}\n"
+            f"  Common name: {common_name}\n"
+            f"  Scientific name: {scientific_name}"
+        )
 
         # Use taxonomy-aware animal service for lookup/creation
         from animals.services import AnimalService
