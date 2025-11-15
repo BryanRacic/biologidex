@@ -297,14 +297,8 @@ class DynamicTaxonomicTreeService:
 
             processed_taxonomy_nodes.add(node_path)
 
-            # Skip if this node has animals (we'll add them as animal nodes below)
-            if node.get('animals'):
-                # Process children first (taxonomy nodes above the species level)
-                for child in node.get('children', {}).values():
-                    add_taxonomy_nodes(child, node_path)
-                return
-
-            # Create taxonomy node
+            # Create taxonomy node for ALL non-root nodes
+            # (Animal nodes are added separately in the loop below)
             taxonomy_node = {
                 'id': node_id,
                 'type': 'taxonomic',
@@ -321,7 +315,7 @@ class DynamicTaxonomicTreeService:
             }
             nodes.append(taxonomy_node)
 
-            # Recursively add children
+            # Recursively add children taxonomy nodes
             for child in node.get('children', {}).values():
                 add_taxonomy_nodes(child, node_path)
 

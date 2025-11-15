@@ -341,19 +341,46 @@ func _input(event: InputEvent) -> void:
 
 func _on_node_selected(node: TreeDataModels.TaxonomicNode) -> void:
 	"""Handle node selection from renderer."""
-	print("[TreeController] Node selected: %s" % node.scientific_name)
+	if node.is_taxonomic():
+		# Taxonomy node selected - show taxonomic information
+		print("[TreeController] Taxonomy node selected: %s (rank: %s)" % [node.name, _get_rank_name(node.rank)])
 
-	# Update stats label with node info
-	var info = "%s (%s)" % [node.scientific_name, node.common_name]
-	if node.captured_by_user:
-		info += " - Captured by you"
-	elif node.captured_by_friends.size() > 0:
-		info += " - Captured by %d friend(s)" % node.captured_by_friends.size()
+		var info = "%s (Rank: %s)" % [node.name, _get_rank_name(node.rank)]
+		if node.children_count > 0:
+			info += " - %d children" % node.children_count
+
+		stats_label.text = info
+		stats_label.remove_theme_color_override("font_color")
 	else:
-		info += " - Not yet captured"
+		# Animal node selected - show dex information
+		print("[TreeController] Node selected: %s" % node.scientific_name)
 
-	stats_label.text = info
-	stats_label.remove_theme_color_override("font_color")
+		var info = "%s (%s)" % [node.scientific_name, node.common_name]
+		if node.captured_by_user:
+			info += " - Captured by you"
+		elif node.captured_by_friends.size() > 0:
+			info += " - Captured by %d friend(s)" % node.captured_by_friends.size()
+		else:
+			info += " - Not yet captured"
+
+		stats_label.text = info
+		stats_label.remove_theme_color_override("font_color")
+
+
+func _get_rank_name(rank: int) -> String:
+	"""Convert rank enum to display name."""
+	match rank:
+		TreeDataModels.TaxonomicRank.ROOT: return "Root"
+		TreeDataModels.TaxonomicRank.KINGDOM: return "Kingdom"
+		TreeDataModels.TaxonomicRank.PHYLUM: return "Phylum"
+		TreeDataModels.TaxonomicRank.CLASS: return "Class"
+		TreeDataModels.TaxonomicRank.ORDER: return "Order"
+		TreeDataModels.TaxonomicRank.FAMILY: return "Family"
+		TreeDataModels.TaxonomicRank.SUBFAMILY: return "Subfamily"
+		TreeDataModels.TaxonomicRank.GENUS: return "Genus"
+		TreeDataModels.TaxonomicRank.SPECIES: return "Species"
+		TreeDataModels.TaxonomicRank.SUBSPECIES: return "Subspecies"
+		_: return "Unknown"
 
 
 func _on_node_hovered(node: TreeDataModels.TaxonomicNode) -> void:

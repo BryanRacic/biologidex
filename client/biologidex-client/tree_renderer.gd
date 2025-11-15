@@ -65,6 +65,11 @@ var tree_data: TreeDataModels.TreeData = null
 # Rendering nodes
 var nodes_multimesh: MultiMeshInstance2D = null
 var edges_container: Node2D = null
+var labels_container: Node2D = null
+
+# Label management
+var taxonomy_labels: Dictionary = {}  # node_id -> Label
+const MIN_ZOOM_FOR_LABELS: float = 0.8  # Only show labels when zoomed in
 
 # =============================================================================
 # State
@@ -102,6 +107,7 @@ func _ready() -> void:
 	# Create rendering nodes
 	_setup_multimesh()
 	_setup_edges_container()
+	_setup_labels_container()
 
 	print("[TreeRenderer] Renderer ready")
 
@@ -175,6 +181,16 @@ func _setup_edges_container() -> void:
 	print("[TreeRenderer] Edges container setup complete")
 
 
+func _setup_labels_container() -> void:
+	"""Setup container for label rendering."""
+	labels_container = Node2D.new()
+	labels_container.name = "LabelsContainer"
+	add_child(labels_container)
+	labels_container.z_index = 2  # Labels above nodes
+
+	print("[TreeRenderer] Labels container setup complete")
+
+
 # =============================================================================
 # Public API
 # =============================================================================
@@ -218,6 +234,7 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	_update_visible_nodes()
 	_update_multimesh()
 	_render_edges()
+	_render_taxonomy_labels()
 
 	print("[TreeRenderer] Tree rendering complete")
 
@@ -229,6 +246,7 @@ func update_view() -> void:
 
 	_update_visible_nodes()
 	_update_multimesh()
+	_render_taxonomy_labels()
 
 
 func clear() -> void:
@@ -244,6 +262,11 @@ func clear() -> void:
 	# Clear edges
 	for child in edges_container.get_children():
 		child.queue_free()
+
+	# Clear labels
+	for label in taxonomy_labels.values():
+		label.queue_free()
+	taxonomy_labels.clear()
 
 	print("[TreeRenderer] Cleared all render data")
 
@@ -385,6 +408,38 @@ func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
 		line.default_color = COLOR_EDGE
 
 	edges_container.add_child(line)
+
+
+func _render_taxonomy_labels() -> void:
+	"""Render labels for taxonomy nodes (zoom-dependent)."""
+	# Clear existing labels
+	for label in taxonomy_labels.values():
+		label.queue_free()
+	taxonomy_labels.clear()
+
+	if not camera or not labels_container:
+		return
+
+	# Only show labels when zoomed in enough
+	var current_zoom = camera.zoom.x
+	if current_zoom < MIN_ZOOM_FOR_LABELS:
+		return
+
+	# Add labels for visible taxonomy nodes
+	for render_data in visible_nodes:
+		if render_data.node.is_taxonomic():
+			var label = Label.new()
+			label.text = render_data.node.name
+			label.add_theme_font_size_override("font_size", 10)
+			label.add_theme_color_override("font_color", Color.WHITE)
+			label.add_theme_color_override("font_outline_color", Color.BLACK)
+			label.add_theme_constant_override("outline_size", 2)
+
+			# Position label slightly below the node
+			label.position = render_data.position + Vector2(-20, 10)
+
+			labels_container.add_child(label)
+			taxonomy_labels[render_data.node.id] = label
 
 
 # =============================================================================
@@ -530,12 +585,8 @@ func _handle_click(screen_pos: Vector2) -> void:
 	var node = get_node_at_position(world_pos)
 
 	if node:
-		# Only select animal nodes, not taxonomy nodes
-		if node.is_animal():
-			select_node(node)
-		else:
-			# Taxonomy node clicked - could show info in future
-			print("[TreeRenderer] Clicked taxonomy node: %s (rank: %d)" % [node.name, node.rank])
+		# Select node (both animal and taxonomy nodes)
+		select_node(node)
 	else:
 		clear_selection()
 
