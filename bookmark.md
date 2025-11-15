@@ -1,10 +1,13 @@
 # TODO 
-- always download/view dex if it doesn't exist locally
- - download first 5 in the background on login (if possible)
+- [done] always download/view dex if it doesn't exist locally
+ - [check on] download first 5 in the background on login (if possible)
 - catch_date should be exclusively server side
 - add loading ux when downloading dex entries
 - fix tree view (only loading friends not self?)
-
+- add version check and update alert
+  - for both api version and client side version
+    - maybe an automatic simplified api docs export for usage in updating the client api?
+     
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
 Email configured with SMTP backend

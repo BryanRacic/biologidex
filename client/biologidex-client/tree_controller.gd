@@ -107,14 +107,14 @@ func _on_tree_loaded(tree_data: TreeDataModels.TreeData) -> void:
 	_render_tree()
 
 
-func _on_tree_load_failed(error: String) -> void:
+func _on_tree_load_failed(error: APITypes.APIError) -> void:
 	"""Handle tree load failure."""
-	push_error("[TreeController] Failed to load tree: ", error)
+	push_error("[TreeController] Failed to load tree: ", error.message)
 	is_loading = false
 	_show_loading(false)
 
 	# Show error message
-	stats_label.text = "Error: " + error
+	stats_label.text = "Error: " + error.message
 	stats_label.add_theme_color_override("font_color", Color.RED)
 
 
@@ -212,10 +212,10 @@ func _on_search_results(results: Array) -> void:
 				print("[TreeController] Focused on: ", first_result.get("scientific_name", ""))
 
 
-func _on_search_failed(error: String) -> void:
+func _on_search_failed(error: APITypes.APIError) -> void:
 	"""Handle search failure."""
-	push_error("[TreeController] Search failed: ", error)
-	stats_label.text = "Search error: " + error
+	push_error("[TreeController] Search failed: ", error.message)
+	stats_label.text = "Search error: " + error.message
 	stats_label.add_theme_color_override("font_color", Color.RED)
 
 

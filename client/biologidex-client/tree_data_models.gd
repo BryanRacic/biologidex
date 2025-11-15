@@ -100,14 +100,22 @@ class TreeLayoutData extends Resource:
 			if pos_array is Array and pos_array.size() >= 2:
 				positions[node_id] = Vector2(pos_array[0], pos_array[1])
 
-		# Parse world bounds
-		var bounds_dict = data.get("world_bounds", {})
-		if not bounds_dict.is_empty():
+		# Parse world bounds - can be array [min_x, min_y, max_x, max_y] or dict
+		var bounds_data = data.get("world_bounds", [])
+		if bounds_data is Array and bounds_data.size() >= 4:
+			# Array format: [min_x, min_y, max_x, max_y]
+			var min_x = float(bounds_data[0])
+			var min_y = float(bounds_data[1])
+			var max_x = float(bounds_data[2])
+			var max_y = float(bounds_data[3])
+			world_bounds = Rect2(min_x, min_y, max_x - min_x, max_y - min_y)
+		elif bounds_data is Dictionary and not bounds_data.is_empty():
+			# Dict format: {x, y, width, height}
 			world_bounds = Rect2(
-				bounds_dict.get("x", 0),
-				bounds_dict.get("y", 0),
-				bounds_dict.get("width", 0),
-				bounds_dict.get("height", 0)
+				bounds_data.get("x", 0),
+				bounds_data.get("y", 0),
+				bounds_data.get("width", 0),
+				bounds_data.get("height", 0)
 			)
 
 		chunk_metadata = data.get("chunk_metadata", {})

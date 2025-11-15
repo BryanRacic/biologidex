@@ -3,7 +3,9 @@ class_name TreeService
 
 ## TreeService - Taxonomic tree API operations
 
-signal tree_loaded(tree_data: Dictionary)
+const TreeDataModels = preload("res://tree_data_models.gd")
+
+signal tree_loaded(tree_data: TreeDataModels.TreeData)
 signal tree_load_failed(error: APITypes.APIError)
 signal chunk_loaded(chunk_id: Vector2i, chunk_data: Dictionary)
 signal chunk_load_failed(chunk_id: Vector2i, error: APITypes.APIError)
@@ -51,7 +53,11 @@ func _on_fetch_tree_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Tree data received")
 	_log("Nodes: %d" % response.get("nodes", []).size())
 	_log("Edges: %d" % response.get("edges", []).size())
-	tree_loaded.emit(response)
+
+	# Parse response into TreeData object
+	var tree_data = TreeDataModels.TreeData.new(response)
+	tree_loaded.emit(tree_data)
+
 	if context.callback:
 		context.callback.call(response, 200)
 
