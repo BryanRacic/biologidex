@@ -19,13 +19,31 @@ signal node_unhovered()
 # Configuration
 # =============================================================================
 
-# Visual settings
+# Visual settings - Animal nodes
 const NODE_SIZE_BASE: float = 10.0
 const NODE_SIZE_USER: float = 16.0
 const NODE_SIZE_FRIEND: float = 14.0
 const NODE_SIZE_DISCOVERER_BONUS: float = 2.0
 
-# Colors
+# Visual settings - Taxonomy nodes
+const TAXONOMY_NODE_SIZE: float = 6.0
+const COLOR_TAXONOMY: Color = Color(0.6, 0.6, 0.6, 0.8)  # Gray with transparency
+const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
+
+# Rank-specific size multipliers (hierarchy visual emphasis)
+const RANK_SIZE_MULTIPLIERS = {
+	TreeDataModels.TaxonomicRank.ROOT: 1.5,
+	TreeDataModels.TaxonomicRank.KINGDOM: 1.4,
+	TreeDataModels.TaxonomicRank.PHYLUM: 1.3,
+	TreeDataModels.TaxonomicRank.CLASS: 1.2,
+	TreeDataModels.TaxonomicRank.ORDER: 1.1,
+	TreeDataModels.TaxonomicRank.FAMILY: 1.0,
+	TreeDataModels.TaxonomicRank.SUBFAMILY: 0.95,
+	TreeDataModels.TaxonomicRank.GENUS: 0.9,
+	TreeDataModels.TaxonomicRank.SPECIES: 0.8
+}
+
+# Colors - Animal nodes
 const COLOR_USER_CAPTURED: Color = Color(0.13, 0.59, 0.95, 1.0)  # #2196F3
 const COLOR_FRIEND_CAPTURED: Color = Color(0.30, 0.69, 0.31, 1.0)  # #4CAF50
 const COLOR_BOTH_CAPTURED: Color = Color(0.48, 0.12, 0.64, 1.0)  # #7B1FA2
@@ -301,7 +319,11 @@ func _update_multimesh() -> void:
 		if render_data.node == selected_node:
 			color = COLOR_SELECTED
 		elif render_data.node == hovered_node:
-			color = color.lightened(0.2)
+			# Different hover effect for taxonomy vs animal nodes
+			if render_data.node.is_taxonomic():
+				color = COLOR_TAXONOMY_HOVER
+			else:
+				color = color.lightened(0.2)
 
 		multimesh.set_instance_color(i, color)
 
@@ -336,7 +358,7 @@ func _render_edges() -> void:
 
 
 func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
-	"""Draw a single edge."""
+	"""Draw a single edge with style based on node types."""
 	var source_node = tree_data.get_node_by_id(edge.source)
 	var target_node = tree_data.get_node_by_id(edge.target)
 
@@ -346,9 +368,21 @@ func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
 	var line = Line2D.new()
 	line.add_point(source_node.position)
 	line.add_point(target_node.position)
-	line.default_color = COLOR_EDGE
-	line.width = 1.0
 	line.antialiased = false  # Performance
+
+	# Vary edge appearance based on node types
+	if source_node.is_taxonomic() and target_node.is_taxonomic():
+		# Taxonomy to taxonomy: thicker, more visible (hierarchical structure)
+		line.width = 2.0
+		line.default_color = Color(0.4, 0.4, 0.4, 0.5)
+	elif source_node.is_taxonomic() and target_node.is_animal():
+		# Taxonomy to animal: thinner, less opaque (leaf connections)
+		line.width = 1.0
+		line.default_color = Color(0.3, 0.3, 0.3, 0.3)
+	else:
+		# Default (shouldn't happen with proper hierarchy, but fallback)
+		line.width = 1.0
+		line.default_color = COLOR_EDGE
 
 	edges_container.add_child(line)
 
@@ -358,7 +392,12 @@ func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
 # =============================================================================
 
 func _get_node_color(node: TreeDataModels.TaxonomicNode) -> Color:
-	"""Get color for a node based on capture status."""
+	"""Get color for a node based on type and capture status."""
+	# Taxonomy nodes are gray
+	if node.is_taxonomic():
+		return COLOR_TAXONOMY
+
+	# Animal nodes: color by capture status
 	if node.captured_by_user and node.captured_by_friends.size() > 0:
 		return COLOR_BOTH_CAPTURED
 	elif node.captured_by_user:
@@ -370,7 +409,14 @@ func _get_node_color(node: TreeDataModels.TaxonomicNode) -> Color:
 
 
 func _get_node_scale(node: TreeDataModels.TaxonomicNode) -> float:
-	"""Get scale for a node based on capture status and importance."""
+	"""Get scale for a node based on type, rank, capture status and importance."""
+	# Taxonomy nodes: size based on rank
+	if node.is_taxonomic():
+		var base = TAXONOMY_NODE_SIZE
+		var multiplier = RANK_SIZE_MULTIPLIERS.get(node.rank, 1.0)
+		return (base * multiplier) / NODE_SIZE_BASE
+
+	# Animal nodes: size based on capture status
 	var base_size = NODE_SIZE_BASE
 
 	if node.captured_by_user:
@@ -451,7 +497,10 @@ func set_hovered_node(node: TreeDataModels.TaxonomicNode) -> void:
 	_update_multimesh()
 
 	if node:
-		node_hovered.emit(node)
+		# Only emit hover signal for animal nodes
+		if node.is_animal():
+			node_hovered.emit(node)
+		# Taxonomy nodes get visual feedback but no signal
 	else:
 		node_unhovered.emit()
 
@@ -481,7 +530,12 @@ func _handle_click(screen_pos: Vector2) -> void:
 	var node = get_node_at_position(world_pos)
 
 	if node:
-		select_node(node)
+		# Only select animal nodes, not taxonomy nodes
+		if node.is_animal():
+			select_node(node)
+		else:
+			# Taxonomy node clicked - could show info in future
+			print("[TreeRenderer] Clicked taxonomy node: %s (rank: %d)" % [node.name, node.rank])
 	else:
 		clear_selection()
 

@@ -5,21 +5,47 @@ Matches server API response structure from DynamicTaxonomicTreeService.
 class_name TreeDataModels extends Resource
 
 # =============================================================================
+# Enums
+# =============================================================================
+
+enum NodeType {
+	TAXONOMIC = 0,
+	ANIMAL = 1
+}
+
+enum TaxonomicRank {
+	ROOT = 0,
+	KINGDOM = 1,
+	PHYLUM = 2,
+	CLASS = 3,
+	ORDER = 4,
+	FAMILY = 5,
+	SUBFAMILY = 6,
+	GENUS = 7,
+	SPECIES = 8,
+	SUBSPECIES = 9
+}
+
+# =============================================================================
 # Core Data Models
 # =============================================================================
 
 class TaxonomicNode extends Resource:
 	"""
-	Represents a single animal node in the tree.
+	Represents a node in the tree (either taxonomic rank or animal species).
 	Maps to server 'nodes' array entries.
 	"""
 	@export var id: String = ""
-	@export var type: String = "animal"  # Always "animal" for now
+	@export var type: String = "animal"  # "animal" or "taxonomic"
+	@export var node_type: int = NodeType.ANIMAL  # New field for enum type
+	@export var rank: int = TaxonomicRank.SPECIES  # New field for taxonomic rank
+	@export var name: String = ""  # For taxonomy nodes (e.g., "Mammalia")
 	@export var scientific_name: String = ""
 	@export var common_name: String = ""
 	@export var creation_index: int = -1
+	@export var children_count: int = 0  # New field for taxonomy nodes
 
-	# Taxonomy hierarchy
+	# Taxonomy hierarchy (for animal nodes)
 	@export var taxonomy: Dictionary = {}  # {kingdom, phylum, class, order, family, genus, species}
 
 	# Position in world space
@@ -30,7 +56,7 @@ class TaxonomicNode extends Resource:
 	@export var captured_by_friends: Array = []  # Array of {user_id, username, captured_at}
 	@export var capture_count: int = 0
 
-	# Additional metadata
+	# Additional metadata (for animal nodes)
 	@export var conservation_status: String = ""
 	@export var verified: bool = false
 	@export var discoverer: Dictionary = {}  # {user_id, username, is_self, is_friend}
@@ -45,6 +71,21 @@ class TaxonomicNode extends Resource:
 		common_name = data.get("common_name", "")
 		creation_index = data.get("creation_index", -1)
 		taxonomy = data.get("taxonomy", {})
+		children_count = data.get("children_count", 0)
+
+		# Parse node type
+		var type_str = data.get("node_type", data.get("type", "animal"))
+		if type_str == "taxonomic":
+			node_type = NodeType.TAXONOMIC
+		else:
+			node_type = NodeType.ANIMAL
+
+		# Parse rank for taxonomy nodes
+		var rank_str = data.get("rank", "species")
+		rank = _parse_rank(rank_str)
+
+		# For taxonomy nodes, name is the primary identifier
+		name = data.get("name", scientific_name)
 
 		# Parse position array to Vector2
 		var pos_array = data.get("position", [0, 0])
@@ -57,6 +98,29 @@ class TaxonomicNode extends Resource:
 		conservation_status = data.get("conservation_status", "")
 		verified = data.get("verified", false)
 		discoverer = data.get("discoverer", {})
+
+	func _parse_rank(rank_str: String) -> int:
+		"""Parse rank string to enum value."""
+		match rank_str.to_lower():
+			"root": return TaxonomicRank.ROOT
+			"kingdom": return TaxonomicRank.KINGDOM
+			"phylum": return TaxonomicRank.PHYLUM
+			"class": return TaxonomicRank.CLASS
+			"order": return TaxonomicRank.ORDER
+			"family": return TaxonomicRank.FAMILY
+			"subfamily": return TaxonomicRank.SUBFAMILY
+			"genus": return TaxonomicRank.GENUS
+			"species": return TaxonomicRank.SPECIES
+			"subspecies": return TaxonomicRank.SUBSPECIES
+			_: return TaxonomicRank.SPECIES
+
+	func is_taxonomic() -> bool:
+		"""Check if this node is a taxonomic rank node."""
+		return node_type == NodeType.TAXONOMIC
+
+	func is_animal() -> bool:
+		"""Check if this node is an animal species node."""
+		return node_type == NodeType.ANIMAL
 
 
 class TreeEdge extends Resource:

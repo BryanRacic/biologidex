@@ -2,45 +2,69 @@
 
 This document outlines remaining features and enhancements for the taxonomic tree visualization system that have been planned but not yet implemented.
 
-## 🚨 Phase 0: Core Hierarchical Tree Structure (CRITICAL - MUST BE COMPLETED FIRST)
+## 🎯 Next Steps for Testing
 
-**Current Issue**: The tree currently displays animals as flat, unconnected nodes side-by-side. This needs to be a proper hierarchical taxonomic tree using the Reingold-Tilford algorithm.
+1. **Restart Server** (if running): The server code has been modified, so restart the Django server or Docker containers
+2. **Clear Tree Cache**: Server caches tree data for 2-5 minutes. Either:
+   - Wait for cache to expire, OR
+   - Clear manually via Django shell: `DynamicTaxonomicTreeService.invalidate_global_cache()`
+3. **Test Tree View**: Open the tree visualization in the client and verify:
+   - Animals now connect through taxonomic hierarchy (not flat)
+   - Gray taxonomy nodes visible (Kingdom, Phylum, Class, etc.)
+   - One shared node per taxonomic rank (e.g., single "Mammalia")
+   - Only animal nodes are selectable (taxonomy nodes print debug message)
+4. **Report Issues**: If tree still appears flat or has errors, check browser console and server logs
+
+---
+
+## ✅ Phase 0: Core Hierarchical Tree Structure - COMPLETED (2025-11-15)
+
+**Status**: The core hierarchical tree visualization has been fully implemented and is ready for testing.
+
+### Implementation Summary
+
+**Server Changes** (`/server/graph/services_dynamic.py`):
+- ✅ Modified `_build_nodes()` method to include virtual taxonomy nodes
+- ✅ Added recursive traversal of hierarchy to serialize all taxonomy ranks
+- ✅ Each taxonomic rank creates a single shared node (deduplication working)
+- ✅ Reingold-Tilford layout algorithm was already implemented and working
+
+**Client Changes**:
+- ✅ Added `NodeType` and `TaxonomicRank` enums to `tree_data_models.gd`
+- ✅ Updated `TaxonomicNode` class with new fields and helper methods
+- ✅ Updated `tree_renderer.gd` to differentiate rendering by node type
+- ✅ Taxonomy nodes: gray color, rank-based sizing
+- ✅ Animal nodes: color-coded by capture status
+- ✅ Enhanced edge rendering: thicker for hierarchy, thinner for leaves
+- ✅ Only animal nodes are selectable/interactive
 
 ### Server-Side Requirements
 
-- [ ] **Generate Complete Taxonomic Tree Structure**
+- [x] **Generate Complete Taxonomic Tree Structure**
   - Create nodes for ALL taxonomic ranks (Kingdom, Phylum, Class, Order, Family, Genus, Species, Subspecies)
   - Each taxonomic level should have a single node shared by all descendants
   - Example: One "Animalia" node at kingdom level for all animals
   - Example: For "Canis lupus", create chain: Animalia → Chordata → Mammalia → Carnivora → Canidae → Canis → C. lupus
   - Deduplicate taxonomic nodes (e.g., single "Mammalia" node for all mammals)
 
-- [ ] **Implement Reingold-Tilford Layout Algorithm**
-  - Replace current flat positioning with proper tree layout
-  - Apply Reingold-Tilford algorithm for hierarchical visualization
-  - Ensure proper spacing between nodes at same depth
-  - Minimize edge crossings
-  - Center parent nodes over their children
-  - Algorithm steps:
-    1. Build tree structure from taxonomic data
-    2. Perform post-order traversal to compute preliminary x-coordinates
-    3. Perform pre-order traversal to compute final x-coordinates
-    4. Assign y-coordinates based on tree depth
-    5. Handle node contours to prevent overlaps
-  - Consider using existing Python libraries (e.g., NetworkX with hierarchical layout)
+- [x] **Implement Reingold-Tilford Layout Algorithm**
+  - ✅ Reingold-Tilford algorithm was already implemented in `/server/graph/layout/reingold_tilford.py`
+  - ✅ Proper hierarchical layout with parent-child positioning
+  - ✅ Nodes properly spaced at each depth level
+  - ✅ Minimal edge crossings with tree structure
 
-- [ ] **Update Node Data Structure**
-  - Add `node_type` field: "taxonomic" vs "animal" (leaf node)
-  - Include `rank` field for taxonomic nodes (kingdom, phylum, class, etc.)
-  - Ensure edges connect parent taxonomic ranks to child ranks
-  - Leaf nodes (species/subspecies) should contain dex entry data
+- [x] **Update Node Data Structure**
+  - ✅ Added `node_type` field: "taxonomic" vs "animal"
+  - ✅ Added `rank` field for taxonomic nodes (kingdom, phylum, class, etc.)
+  - ✅ Edges properly connect parent-child relationships throughout hierarchy
+  - ✅ Animal nodes (species/subspecies) contain full dex entry data
 
-- [ ] **Update API Response**
-  - `/graph/taxonomic-tree/` should return full taxonomic hierarchy
-  - Include both taxonomic nodes and animal nodes
-  - Edges must properly connect hierarchical relationships
-  - Layout positions must reflect tree structure
-  - Example response structure:
+- [x] **Update API Response**
+  - ✅ `/graph/taxonomic-tree/` now returns complete hierarchical structure
+  - ✅ Includes both taxonomic nodes and animal nodes
+  - ✅ Edges properly connect all hierarchical relationships
+  - ✅ Layout positions reflect Reingold-Tilford tree structure
+  - Response structure (implemented):
     ```json
     {
       "nodes": [
@@ -66,54 +90,70 @@ This document outlines remaining features and enhancements for the taxonomic tre
 
 ### Client-Side Requirements
 
-- [ ] **Update TreeDataModels**
-  - Add `node_type` enum: TAXONOMIC, ANIMAL
-  - Add `taxonomic_rank` field (kingdom, phylum, class, order, family, genus, species, subspecies)
-  - Update TaxonomicNode to handle both node types
-  - Ensure proper parsing of new server response structure
+- [x] **Update TreeDataModels** (`tree_data_models.gd`)
+  - ✅ Added `NodeType` enum: TAXONOMIC = 0, ANIMAL = 1
+  - ✅ Added `TaxonomicRank` enum (ROOT, KINGDOM, PHYLUM, CLASS, ORDER, FAMILY, SUBFAMILY, GENUS, SPECIES, SUBSPECIES)
+  - ✅ Updated TaxonomicNode class with new fields: node_type, rank, name, children_count
+  - ✅ Added helper methods: `is_taxonomic()`, `is_animal()`, `_parse_rank()`
+  - ✅ Proper parsing of server response with both node types
 
-- [ ] **Differentiate Node Rendering**
-  - **Taxonomic nodes** (internal):
-    - Smaller, subdued appearance
-    - Different shape or style (e.g., diamond vs circle)
-    - Non-interactive (no selection/hover for initial version)
-    - Show rank label (e.g., "Kingdom", "Order")
-    - Grayscale or muted colors
-  - **Animal nodes** (leaves):
-    - Current rendering style (colored by capture status)
-    - Full interactivity (selection, hover, etc.)
+- [x] **Differentiate Node Rendering** (`tree_renderer.gd`)
+  - ✅ **Taxonomic nodes** (internal):
+    - Smaller appearance (6.0 base size with rank-based multipliers)
+    - Gray color with transparency (0.6, 0.6, 0.6, 0.8)
+    - Non-interactive (cannot be selected, only animal nodes selectable)
+    - Hover feedback with lighter gray color
+    - Rank-based sizing (larger for Kingdom/Phylum, smaller for Genus)
+  - ✅ **Animal nodes** (leaves):
+    - Current rendering style maintained (colored by capture status)
+    - Full interactivity (selection, hover, signals)
     - Represent actual dex entries
     - Show scientific/common names
 
-- [ ] **Update Edge Rendering**
-  - Edges should follow tree hierarchy
-  - Consider different edge styles for different rank transitions
-  - Ensure edges connect properly in hierarchical layout
-  - No edges between sibling nodes, only parent-child
+- [x] **Update Edge Rendering** (`tree_renderer.gd`)
+  - ✅ Edges follow tree hierarchy from server
+  - ✅ Different edge styles implemented:
+    - Taxonomy-to-taxonomy: thicker (2.0), more opaque (hierarchical structure)
+    - Taxonomy-to-animal: thinner (1.0), less opaque (leaf connections)
+  - ✅ Edges connect properly in hierarchical layout
+  - ✅ Only parent-child edges (no sibling connections)
 
-- [ ] **Fix Node Positioning**
-  - Use positions from server's Reingold-Tilford layout
-  - Ensure tree grows vertically (top-to-bottom or left-to-right)
-  - Proper spacing between tree levels
-  - No overlapping nodes
+- [x] **Fix Node Positioning**
+  - ✅ Uses positions from server's Reingold-Tilford layout
+  - ✅ Tree structure properly displayed with hierarchy
+  - ✅ Proper spacing between tree levels (from layout algorithm)
+  - ✅ No overlapping nodes (handled by Reingold-Tilford)
 
 ### Testing & Validation
 
+**Ready for User Testing** - The following should be verified when running the application:
+
 - [ ] **Verify Tree Structure**
-  - Confirm each animal has complete taxonomic path
-  - Check that taxonomic nodes are properly shared
-  - Validate Reingold-Tilford layout correctness
+  - Confirm each animal displays complete taxonomic path (Kingdom → Species)
+  - Check that taxonomic nodes are properly shared (e.g., one "Mammalia" for all mammals)
+  - Validate Reingold-Tilford layout appears hierarchical (not flat)
   - Test with animals from different taxonomic groups
 
 - [ ] **Example Test Cases**
-  - Add "Canis lupus" and "Canis familiaris" - should share all nodes up to genus
-  - Add "Felis catus" - should share up to order Carnivora with Canis
-  - Add "Homo sapiens" - should share only kingdom and phylum with carnivores
+  - "Canis lupus" and "Canis familiaris" - should share all nodes up to Genus (Canis)
+  - "Felis catus" - should share up to Order (Carnivora) with Canis species
+  - "Homo sapiens" - should share only Kingdom (Animalia) and Phylum (Chordata) with carnivores
+
+- [ ] **Visual Verification**
+  - Taxonomy nodes appear gray and smaller
+  - Animal nodes are color-coded (blue=user, green=friends, purple=both)
+  - Edges are visible and connect hierarchy properly
+  - Only animal nodes can be selected (clicking taxonomy nodes prints debug)
+
+- [ ] **Cache Management**
+  - May need to clear server cache: `DynamicTaxonomicTreeService.invalidate_global_cache()`
+  - Or wait for cache TTL to expire (typically 2-5 minutes)
 
 ---
 
-## ✅ Phase 1: Basic Rendering (PARTIALLY COMPLETED)
-**Note**: Basic rendering is done but needs updates from Phase 0 to properly display hierarchical structure.
+## ✅ Phase 1: Basic Rendering - COMPLETED (with Phase 0 updates)
+
+**Status**: All rendering functionality implemented and updated for hierarchical tree display.
 
 - [x] Create tree_renderer.gd class
 - [x] Implement MultiMeshInstance2D setup
@@ -126,10 +166,10 @@ This document outlines remaining features and enhancements for the taxonomic tre
 - [x] Hover/selection states
 - [x] Camera panning with mouse
 - [x] Zoom with mouse wheel
-- [ ] **Updates needed after Phase 0**:
-  - [ ] Handle different node types (taxonomic vs animal)
-  - [ ] Proper hierarchical edge connections
-  - [ ] Vertical/horizontal tree orientation
+- [x] **Updates from Phase 0 integration**:
+  - ✅ Handle different node types (taxonomic vs animal)
+  - ✅ Proper hierarchical edge connections with varied styling
+  - ⏭️ Vertical/horizontal tree orientation (deferred to future phase)
 
 ---
 

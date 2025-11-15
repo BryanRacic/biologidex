@@ -115,7 +115,7 @@ class DynamicTaxonomicTreeService:
         positions = self.layout_engine.calculate_layout(hierarchy)
 
         # Build nodes with metadata
-        nodes = self._build_nodes(animals, positions)
+        nodes = self._build_nodes(animals, hierarchy, positions)
 
         # Build parent-child edges (true tree structure)
         edges = self._build_tree_edges(hierarchy)
@@ -271,12 +271,13 @@ class DynamicTaxonomicTreeService:
         traverse(hierarchy)
         return edges
 
-    def _build_nodes(self, animals, positions):
+    def _build_nodes(self, animals, hierarchy, positions):
         """
         Build node list with full metadata.
-        Includes capture info specific to current scope.
+        Includes capture info specific to current scope and virtual taxonomy nodes.
         """
         nodes = []
+        processed_taxonomy_nodes = set()
 
         # Build lookup for friend relationships
         if self.scoped_user_ids:
@@ -284,6 +285,51 @@ class DynamicTaxonomicTreeService:
         else:
             friend_ids = set()
 
+        # First, add all virtual taxonomy nodes from hierarchy
+        def add_taxonomy_nodes(node, parent_path=""):
+            """Recursively add taxonomy nodes from hierarchy."""
+            node_id = node['id']
+            node_path = f"{parent_path}/{node['name']}" if parent_path else node['name']
+
+            # Skip if already processed or if this is the root node
+            if node_path in processed_taxonomy_nodes or node_id == 'root':
+                return
+
+            processed_taxonomy_nodes.add(node_path)
+
+            # Skip if this node has animals (we'll add them as animal nodes below)
+            if node.get('animals'):
+                # Process children first (taxonomy nodes above the species level)
+                for child in node.get('children', {}).values():
+                    add_taxonomy_nodes(child, node_path)
+                return
+
+            # Create taxonomy node
+            taxonomy_node = {
+                'id': node_id,
+                'type': 'taxonomic',
+                'node_type': 'taxonomic',  # For client compatibility
+                'rank': node['rank'],
+                'name': node['name'],
+                'scientific_name': node['name'],  # For consistency with animal nodes
+                'position': positions.get(node_id, [0, 0]),
+                'captured_by_user': False,  # Taxonomy nodes aren't captured
+                'captured_by_friends': [],
+                'capture_count': 0,
+                'children_count': len(node.get('children', {})) + len(node.get('animals', [])),
+                'animal_count': node.get('animal_count', 0)
+            }
+            nodes.append(taxonomy_node)
+
+            # Recursively add children
+            for child in node.get('children', {}).values():
+                add_taxonomy_nodes(child, node_path)
+
+        # Add taxonomy nodes starting from root's children
+        for child in hierarchy.get('children', {}).values():
+            add_taxonomy_nodes(child)
+
+        # Then add animal nodes (existing code)
         for animal in animals:
             # Get scoped capture info
             scoped_captures = getattr(animal, 'scoped_captures', [])
@@ -298,10 +344,11 @@ class DynamicTaxonomicTreeService:
                 if c.owner_id != self.user.id and c.owner_id in friend_ids
             ]
 
-            # Build node
+            # Build animal node
             node = {
                 'id': str(animal.id),
-                'type': 'animal',  # Distinguish from virtual taxonomy nodes
+                'type': 'animal',
+                'node_type': 'animal',  # For client compatibility
                 'scientific_name': animal.scientific_name,
                 'common_name': animal.common_name,
                 'creation_index': animal.creation_index,
@@ -329,9 +376,7 @@ class DynamicTaxonomicTreeService:
             }
             nodes.append(node)
 
-        # Add virtual taxonomy nodes
-        # These are created from the hierarchy for complete tree visualization
-        # Implementation depends on UI requirements
+        logger.info(f"Built {len(nodes)} total nodes ({len([n for n in nodes if n['type'] == 'taxonomic'])} taxonomic, {len([n for n in nodes if n['type'] == 'animal'])} animal)")
 
         return nodes
 
