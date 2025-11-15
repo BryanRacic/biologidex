@@ -7,7 +7,12 @@
 - add version check and update alert
   - for both api version and client side version
     - maybe an automatic simplified api docs export for usage in updating the client api?
-     
+- try to find a more "function" based OpenAI model interface
+  - to fill a format w/ standardized output for subspecies if it exists and always "none" if not (which is gracefully handled on the animal addition side)
+- ensure deletion of an animal record reindexes the rest of the animal record dscovery indexs
+  - maybe re-index django command
+    - ideally runnable on the admin interface
+
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
 Email configured with SMTP backend

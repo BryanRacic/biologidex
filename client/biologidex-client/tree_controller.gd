@@ -5,6 +5,7 @@ Coordinates data loading, rendering, and user interaction.
 extends Control
 
 const APITypes = preload("res://api/core/api_types.gd")
+const TreeRenderer = preload("res://tree_renderer.gd")
 
 # Node references (assigned in _ready)
 @onready var back_button: Button = $VBoxContainer/Toolbar/BackButton
@@ -25,9 +26,16 @@ var current_tree_data: TreeDataModels.TreeData = null
 var current_mode: APITypes.TreeMode = APITypes.TreeMode.FRIENDS
 var selected_friend_ids: Array[int] = []
 
+# Renderer
+var tree_renderer: TreeRenderer = null
+
 # State
 var is_loading: bool = false
 var is_initialized: bool = false
+
+# Camera control state
+var is_panning: bool = false
+var last_mouse_position: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -52,6 +60,9 @@ func _ready() -> void:
 	# Setup viewport
 	_setup_viewport()
 
+	# Setup renderer
+	_setup_renderer()
+
 	# Initial load
 	await get_tree().process_frame
 	load_tree()
@@ -71,6 +82,23 @@ func _setup_viewport() -> void:
 	"""Setup SubViewport for rendering."""
 	sub_viewport.size = Vector2i(1280, 720)
 	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+
+func _setup_renderer() -> void:
+	"""Setup TreeRenderer for visualization."""
+	tree_renderer = TreeRenderer.new()
+	tree_renderer.name = "TreeRenderer"
+	tree_world.add_child(tree_renderer)
+
+	# Set camera reference
+	tree_renderer.set_camera(tree_camera)
+
+	# Connect renderer signals
+	tree_renderer.node_selected.connect(_on_node_selected)
+	tree_renderer.node_hovered.connect(_on_node_hovered)
+	tree_renderer.node_unhovered.connect(_on_node_unhovered)
+
+	print("[TreeController] TreeRenderer initialized")
 
 
 # =============================================================================
@@ -134,10 +162,11 @@ func _render_tree() -> void:
 		push_error("[TreeController] No tree data to render")
 		return
 
-	print("[TreeController] Rendering tree...")
+	if not tree_renderer:
+		push_error("[TreeController] TreeRenderer not initialized")
+		return
 
-	# For now, just log the data
-	# Full rendering implementation will be added with TreeRenderer
+	print("[TreeController] Rendering tree...")
 
 	var bounds = current_tree_data.layout.world_bounds
 	print("[TreeController] World bounds: ", bounds)
@@ -149,9 +178,19 @@ func _render_tree() -> void:
 		tree_camera.position = center
 		print("[TreeController] Camera positioned at: ", center)
 
-	# TODO: Implement actual rendering with MultiMeshInstance2D
-	# This will be done in tree_renderer.gd
-	print("[TreeController] Rendering complete (placeholder)")
+	# Render tree with TreeRenderer
+	tree_renderer.render_tree(current_tree_data)
+
+	# Log rendering stats
+	var stats = tree_renderer.get_stats()
+	print("[TreeController] Rendered %d/%d nodes, %d/%d edges" % [
+		stats.visible_nodes,
+		stats.total_nodes,
+		stats.rendered_edges,
+		stats.total_edges
+	])
+
+	print("[TreeController] Rendering complete")
 
 
 # =============================================================================
@@ -226,6 +265,10 @@ func _on_zoom_in() -> void:
 		tree_camera.zoom = Vector2(current_zoom * 1.2, current_zoom * 1.2)
 		print("[TreeController] Zoomed in to: ", tree_camera.zoom.x)
 
+		# Update renderer view
+		if tree_renderer:
+			tree_renderer.update_view()
+
 
 func _on_zoom_out() -> void:
 	"""Handle zoom out button."""
@@ -233,6 +276,10 @@ func _on_zoom_out() -> void:
 		var current_zoom = tree_camera.zoom.x
 		tree_camera.zoom = Vector2(current_zoom / 1.2, current_zoom / 1.2)
 		print("[TreeController] Zoomed out to: ", tree_camera.zoom.x)
+
+		# Update renderer view
+		if tree_renderer:
+			tree_renderer.update_view()
 
 
 func _on_zoom_reset() -> void:
@@ -244,11 +291,81 @@ func _on_zoom_reset() -> void:
 			tree_camera.position = center
 		print("[TreeController] Zoom reset")
 
+		# Update renderer view
+		if tree_renderer:
+			tree_renderer.update_view()
+
 
 func _on_back_button_pressed() -> void:
 	"""Handle back button press."""
 	print("[TreeController] Back button pressed")
 	NavigationManager.go_back()
+
+
+func _input(event: InputEvent) -> void:
+	"""Handle input events for camera control."""
+	if not tree_camera or not is_initialized:
+		return
+
+	# Middle mouse button or right mouse button for panning
+	if event is InputEventMouseButton:
+		var mouse_event = event as InputEventMouseButton
+
+		if mouse_event.button_index == MOUSE_BUTTON_MIDDLE or mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			if mouse_event.pressed:
+				is_panning = true
+				last_mouse_position = mouse_event.position
+			else:
+				is_panning = false
+
+		# Scroll wheel for zoom
+		elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP and mouse_event.pressed:
+			_on_zoom_in()
+		elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and mouse_event.pressed:
+			_on_zoom_out()
+
+	# Mouse motion for panning
+	elif event is InputEventMouseMotion and is_panning:
+		var motion_event = event as InputEventMouseMotion
+		var delta = motion_event.position - last_mouse_position
+		last_mouse_position = motion_event.position
+
+		# Move camera (invert delta and scale by zoom)
+		var zoom_factor = 1.0 / tree_camera.zoom.x
+		tree_camera.position -= delta * zoom_factor
+
+		# Update renderer view
+		if tree_renderer:
+			tree_renderer.update_view()
+
+
+func _on_node_selected(node: TreeDataModels.TaxonomicNode) -> void:
+	"""Handle node selection from renderer."""
+	print("[TreeController] Node selected: %s" % node.scientific_name)
+
+	# Update stats label with node info
+	var info = "%s (%s)" % [node.scientific_name, node.common_name]
+	if node.captured_by_user:
+		info += " - Captured by you"
+	elif node.captured_by_friends.size() > 0:
+		info += " - Captured by %d friend(s)" % node.captured_by_friends.size()
+	else:
+		info += " - Not yet captured"
+
+	stats_label.text = info
+	stats_label.remove_theme_color_override("font_color")
+
+
+func _on_node_hovered(node: TreeDataModels.TaxonomicNode) -> void:
+	"""Handle node hover from renderer."""
+	# Could show tooltip here in the future
+	pass
+
+
+func _on_node_unhovered() -> void:
+	"""Handle node unhover from renderer."""
+	# Could hide tooltip here in the future
+	pass
 
 
 # =============================================================================
@@ -295,6 +412,12 @@ func _update_stats_display() -> void:
 func _exit_tree() -> void:
 	"""Cleanup when exiting tree view."""
 	print("[TreeController] Cleaning up")
+
+	# Clean up renderer
+	if tree_renderer:
+		tree_renderer.clear()
+		tree_renderer.queue_free()
+		tree_renderer = null
 
 	# Disconnect signals
 	if APIManager.tree.tree_loaded.is_connected(_on_tree_loaded):
