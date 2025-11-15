@@ -100,20 +100,23 @@ class TaxonomicRankAdmin(admin.ModelAdmin):
 class TaxonomyAdmin(admin.ModelAdmin):
     list_display = [
         'scientific_name', 'rank', 'status', 'kingdom',
-        'phylum', 'class_name', 'source_link', 'completeness_display'
+        'phylum', 'class_name', 'genus', 'specific_epithet',
+        'infraspecific_epithet', 'source_link', 'completeness_display'
     ]
     list_filter = [
         'status', 'kingdom', 'phylum', 'rank__name', 'source__short_code',
         'extinct', 'nomenclatural_code'
     ]
     search_fields = [
-        'scientific_name', 'genus', 'species',
+        'scientific_name', 'genus', 'species', 'specific_epithet',
+        'infraspecific_epithet', 'subspecies',
         'source_taxon_id', 'common_names__name'
     ]
     readonly_fields = [
         'id', 'created_at', 'updated_at', 'completeness_score',
-        'full_hierarchy_display'
+        'full_hierarchy_display', 'common_names_display'
     ]
+    autocomplete_fields = ['parent', 'accepted_name']
 
     fieldsets = (
         ('Identification', {
@@ -193,6 +196,19 @@ class TaxonomyAdmin(admin.ModelAdmin):
         html += '</table>'
         return format_html(html)
     full_hierarchy_display.short_description = 'Full Hierarchy'
+
+    def common_names_display(self, obj):
+        """Display common names for this taxonomy"""
+        names = obj.common_names.all()[:10]
+        if not names:
+            return '-'
+        html = '<ul style="margin: 0; padding-left: 20px;">'
+        for cn in names:
+            preferred = ' ⭐' if cn.is_preferred else ''
+            html += f'<li>{cn.name} ({cn.language}){preferred}</li>'
+        html += '</ul>'
+        return format_html(html)
+    common_names_display.short_description = 'Common Names'
 
 
 @admin.register(CommonName)

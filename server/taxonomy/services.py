@@ -111,21 +111,15 @@ class TaxonomyService:
             f"subspecies={subspecies}, common_name={common_name}"
         )
 
-        # Build query to match scientific name components
+        # STEP 1: Build query to match genus + species ONLY (ignore subspecies for now)
         query = Q(
             genus__iexact=genus,
             specific_epithet__iexact=species,
             status__in=['accepted', 'provisional', 'synonym']
         )
 
-        # Match subspecies field (must match exactly, including None)
-        if subspecies:
-            query &= Q(infraspecific_epithet__iexact=subspecies)
-        else:
-            query &= (Q(infraspecific_epithet__isnull=True) | Q(infraspecific_epithet=''))
-
-        # Execute query with priority ordering
-        candidates = Taxonomy.objects.filter(query).select_related(
+        # Execute query to get ALL matches for genus + species
+        all_candidates = Taxonomy.objects.filter(query).select_related(
             'source', 'rank'
         ).order_by(
             'source__priority',  # Higher priority sources first
@@ -133,16 +127,18 @@ class TaxonomyService:
             '-confidence_score'
         )
 
-        candidate_count = candidates.count()
-        logger.info(f"[TAXONOMY LOOKUP] Found {candidate_count} candidate(s) for {scientific_name}")
+        candidate_count = all_candidates.count()
+        logger.info(f"[TAXONOMY LOOKUP] Found {candidate_count} candidate(s) for genus+species: {genus} {species}")
 
-        # Log all candidates with their details
+        # Log all genus+species candidates with their details
         if candidate_count > 0:
-            logger.info(f"[TAXONOMY LOOKUP] All candidates found:")
-            for idx, candidate in enumerate(candidates[:10], 1):  # Log up to 10 candidates
+            logger.info(f"[TAXONOMY LOOKUP] All genus+species candidates found:")
+            for idx, candidate in enumerate(all_candidates[:20], 1):  # Log up to 20 candidates
+                subspecies_info = f"subspecies={candidate.infraspecific_epithet or 'None'}"
                 logger.info(
                     f"  [{idx}] {candidate.scientific_name} "
-                    f"(source: {candidate.source.short_code}, "
+                    f"({subspecies_info}, "
+                    f"source: {candidate.source.short_code}, "
                     f"status: {candidate.status}, "
                     f"completeness: {candidate.completeness_score}, "
                     f"confidence: {candidate.confidence_score}, "
@@ -155,14 +151,97 @@ class TaxonomyService:
                         f"phylum={candidate.phylum}, class={candidate.class_name}, "
                         f"order={candidate.order}, family={candidate.family}"
                     )
-            if candidate_count > 10:
-                logger.info(f"  ... and {candidate_count - 10} more candidates (truncated)")
+            if candidate_count > 20:
+                logger.info(f"  ... and {candidate_count - 20} more candidates (truncated)")
 
-        # If common name provided, try to validate it (advisory only)
+        # STEP 2: Apply fuzzy subspecies matching if subspecies provided
+        candidates = all_candidates  # Start with all genus+species matches
+
+        if subspecies and candidate_count > 0:
+            logger.info(f"[TAXONOMY LOOKUP] Applying fuzzy subspecies matching for: '{subspecies}'")
+
+            # Score each candidate by how well the subspecies matches
+            exact_matches = []
+            fuzzy_matches = []
+            no_subspecies = []
+
+            for candidate in all_candidates:
+                db_subspecies = candidate.infraspecific_epithet
+
+                if db_subspecies:
+                    # Exact match (case-insensitive)
+                    if db_subspecies.lower() == subspecies.lower():
+                        exact_matches.append(candidate)
+                        logger.info(
+                            f"  ✓ EXACT subspecies match: {candidate.scientific_name} "
+                            f"(CV: '{subspecies}' == DB: '{db_subspecies}')"
+                        )
+                    # Fuzzy match: one contains the other
+                    elif (subspecies.lower() in db_subspecies.lower() or
+                          db_subspecies.lower() in subspecies.lower()):
+                        fuzzy_matches.append(candidate)
+                        logger.info(
+                            f"  ≈ FUZZY subspecies match: {candidate.scientific_name} "
+                            f"(CV: '{subspecies}' ≈ DB: '{db_subspecies}')"
+                        )
+                    else:
+                        logger.debug(
+                            f"  ✗ No subspecies match: {candidate.scientific_name} "
+                            f"(CV: '{subspecies}' vs DB: '{db_subspecies}')"
+                        )
+                else:
+                    # Database has no subspecies for this candidate
+                    no_subspecies.append(candidate)
+                    logger.debug(
+                        f"  - No subspecies in DB: {candidate.scientific_name} "
+                        f"(CV requested: '{subspecies}', DB has: None)"
+                    )
+
+            # Select best match with priority: exact > fuzzy > no_subspecies
+            if exact_matches:
+                candidates = exact_matches
+                logger.info(
+                    f"[TAXONOMY LOOKUP] Selected {len(exact_matches)} EXACT subspecies match(es) "
+                    f"from {candidate_count} total candidates"
+                )
+            elif fuzzy_matches:
+                candidates = fuzzy_matches
+                logger.info(
+                    f"[TAXONOMY LOOKUP] Selected {len(fuzzy_matches)} FUZZY subspecies match(es) "
+                    f"from {candidate_count} total candidates"
+                )
+            elif no_subspecies:
+                # Fall back to species-level match (no subspecies in DB)
+                candidates = no_subspecies
+                logger.warning(
+                    f"[TAXONOMY LOOKUP] No subspecies matches found for '{subspecies}'. "
+                    f"Using {len(no_subspecies)} species-level candidate(s) without subspecies."
+                )
+            else:
+                # No matches at all - keep all candidates as fallback
+                logger.warning(
+                    f"[TAXONOMY LOOKUP] No subspecies matches found for '{subspecies}'. "
+                    f"Using all {candidate_count} genus+species candidates as fallback."
+                )
+        elif subspecies and candidate_count == 0:
+            logger.info(
+                f"[TAXONOMY LOOKUP] No genus+species candidates found to apply subspecies matching"
+            )
+
+        # STEP 3: Apply common name matching (advisory only)
         taxonomy = None
         common_name_matched = False
 
-        if candidates.exists():
+        # Convert to list if it's a queryset (after fuzzy subspecies matching)
+        if not isinstance(candidates, list):
+            candidates = list(candidates)
+
+        if candidates:
+            logger.info(
+                f"[TAXONOMY LOOKUP] Final candidate pool after subspecies filtering: "
+                f"{len(candidates)} candidate(s)"
+            )
+
             if common_name:
                 logger.info(f"[TAXONOMY LOOKUP] Attempting common name validation for: '{common_name}'")
 
@@ -202,7 +281,7 @@ class TaxonomyService:
                     )
                 else:
                     # Common name didn't match, but use taxonomy anyway (advisory warning)
-                    taxonomy = candidates.first()
+                    taxonomy = candidates[0]  # Use first from list
                     db_names = list(CommonName.objects.filter(
                         taxonomy=taxonomy
                     ).values_list('name', flat=True)[:5])
@@ -214,7 +293,7 @@ class TaxonomyService:
                     )
             else:
                 # No common name provided, use first candidate
-                taxonomy = candidates.first()
+                taxonomy = candidates[0]  # Use first from list
                 logger.info(
                     f"[TAXONOMY LOOKUP] SELECTED (no common name provided): {taxonomy.scientific_name} "
                     f"(best candidate by source priority={taxonomy.source.priority}, "
