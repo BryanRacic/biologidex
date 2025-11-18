@@ -14,6 +14,8 @@
     - ideally runnable on the admin interface
 - taxonomy db in admin panel gives 500 error
 - update col_importer job to run multithreaded
+- include additional data from COL export
+  - SpeciesEstimate, TypeMaterial (locality), Vernacular Name
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done

@@ -243,17 +243,79 @@ class TaxonomyService:
             logger.info(f"[TAXONOMY LOOKUP] Match found via method: {match_method}")
 
             if taxonomy.status == 'synonym':
-                # Get accepted name
-                if taxonomy.accepted_name:
+                # Resolve synonym to accepted name
+                accepted = taxonomy.accepted_name
+
+                # Strategy 1: Use accepted_name FK if populated
+                if accepted:
                     logger.info(
-                        f"[TAXONOMY LOOKUP] Found as synonym, resolving to accepted name: "
-                        f"{taxonomy.scientific_name} → {taxonomy.accepted_name.scientific_name}"
+                        f"[TAXONOMY LOOKUP] Synonym resolved via FK: "
+                        f"{taxonomy.scientific_name} → {accepted.scientific_name}"
                     )
-                    taxonomy = taxonomy.accepted_name
+                    taxonomy = accepted
                     message = f"Found synonym, using accepted name: {taxonomy.scientific_name} (via {match_method})"
                 else:
-                    logger.warning(f"[TAXONOMY LOOKUP] Found synonym without accepted name for {scientific_name}")
-                    message = f"Found synonym without accepted name (via {match_method})"
+                    # Strategy 2: Check NameRelation table for spelling correction relationship
+                    logger.info(
+                        f"[TAXONOMY LOOKUP] Synonym has no FK, checking NameRelation for: {taxonomy.scientific_name}"
+                    )
+
+                    from taxonomy.models import NameRelation
+
+                    # Look for spelling correction or other synonym relationships
+                    relation = NameRelation.objects.filter(
+                        name=taxonomy,
+                        relation_type__in=['spelling correction', 'basionym', 'homotypic synonym']
+                    ).select_related('related_name', 'related_name__source', 'related_name__rank').first()
+
+                    if relation and relation.related_name.status == 'accepted':
+                        accepted = relation.related_name
+                        logger.info(
+                            f"[TAXONOMY LOOKUP] ✓ Resolved via NameRelation ({relation.relation_type}): "
+                            f"{taxonomy.scientific_name} → {accepted.scientific_name}"
+                        )
+                        taxonomy = accepted
+                        message = f"Resolved synonym via {relation.relation_type}: {taxonomy.scientific_name} (via {match_method})"
+                    else:
+                        # Strategy 3: Parse name and search for accepted species-level name
+                        # E.g., "Canis lupus familiaris" → try "Canis familiaris"
+                        name_parts = taxonomy.scientific_name.split()
+
+                        if len(name_parts) >= 3:
+                            # Trinomial - try genus + last part
+                            search_genus = name_parts[0]
+                            search_species = name_parts[-1]  # Use last part
+
+                            logger.info(
+                                f"[TAXONOMY LOOKUP] Searching for species-level accepted name: "
+                                f"{search_genus} {search_species}"
+                            )
+
+                            accepted = Taxonomy.objects.filter(
+                                status_filter & Q(
+                                    genus__iexact=search_genus,
+                                    specific_epithet__iexact=search_species,
+                                    status='accepted'
+                                )
+                            ).select_related('source', 'rank').order_by(
+                                'source__priority', '-completeness_score'
+                            ).first()
+
+                            if accepted:
+                                logger.info(
+                                    f"[TAXONOMY LOOKUP] ✓ Found via name parsing: "
+                                    f"{taxonomy.scientific_name} → {accepted.scientific_name}"
+                                )
+                                taxonomy = accepted
+                                message = f"Resolved synonym via name parsing: {taxonomy.scientific_name} (via {match_method})"
+
+                        # If still unresolved, use synonym as-is
+                        if taxonomy.status == 'synonym':
+                            logger.warning(
+                                f"[TAXONOMY LOOKUP] Could not resolve synonym to accepted name for: {scientific_name}. "
+                                f"Using synonym record (may have incomplete taxonomy)"
+                            )
+                            message = f"Using unresolved synonym (via {match_method})"
             else:
                 message = f"Found in taxonomy: {taxonomy.scientific_name} (via {match_method})"
 

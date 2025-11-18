@@ -226,6 +226,15 @@ class CatalogueOfLifeImporter(BaseImporter):
         else:
             raise ValueError(f"NameUsage.tsv not found in {extract_path}")
 
+        # Parse NameRelation.tsv if available
+        namerelation_file = os.path.join(extract_path, 'NameRelation.tsv')
+        if os.path.exists(namerelation_file):
+            file_size_mb = os.path.getsize(namerelation_file) / (1024 * 1024)
+            logger.info(f"NameRelation.tsv size: {file_size_mb:.2f}MB")
+            self._parse_namerelation(namerelation_file)
+        else:
+            logger.warning("NameRelation.tsv not found - synonym relationships will not be imported")
+
         # TODO: Parse VernacularName.tsv and Distribution.tsv in future iterations
 
     def _validate_coldp_structure(self, extract_path: str):
@@ -391,6 +400,113 @@ class CatalogueOfLifeImporter(BaseImporter):
                 logger.warning(f"... and {len(error_log) - 20} more errors")
 
         logger.info("✓ Parsing completed successfully")
+
+    def _parse_namerelation(self, file_path: str):
+        """Parse NameRelation.tsv file for synonym relationships"""
+        from taxonomy.models import Taxonomy, NameRelation
+
+        logger.info("=" * 80)
+        logger.info("STEP 7: Parsing name relationships...")
+        logger.info("=" * 80)
+        logger.info(f"Parsing NameRelation.tsv from {file_path}...")
+
+        # Create lookup dict for COL IDs to Taxonomy objects
+        logger.info("Building taxonomy ID lookup...")
+        taxonomy_by_col_id = {}
+        for tax in Taxonomy.objects.filter(source=self.source).select_related('source'):
+            taxonomy_by_col_id[tax.source_taxon_id] = tax
+        logger.info(f"Loaded {len(taxonomy_by_col_id)} taxonomy records for lookup")
+
+        batch_size = 1000
+        batch = []
+        imported_count = 0
+        skipped_count = 0
+        error_count = 0
+        last_log_count = 0
+
+        logger.info("Starting to read NameRelation.tsv...")
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f, delimiter='\t')
+
+            for row_num, row in enumerate(reader, start=2):
+                try:
+                    name_id = row.get('col:nameID', '')
+                    related_name_id = row.get('col:relatedNameID', '')
+                    relation_type = row.get('col:type', '')
+
+                    # Skip if missing required fields
+                    if not name_id or not related_name_id or not relation_type:
+                        skipped_count += 1
+                        continue
+
+                    # Look up both taxonomy objects
+                    name_tax = taxonomy_by_col_id.get(name_id)
+                    related_tax = taxonomy_by_col_id.get(related_name_id)
+
+                    if not name_tax or not related_tax:
+                        # One or both IDs not in our taxonomy table - skip
+                        skipped_count += 1
+                        continue
+
+                    # Create NameRelation object
+                    relation = NameRelation(
+                        name=name_tax,
+                        related_name=related_tax,
+                        relation_type=relation_type,
+                        col_name_id=name_id,
+                        col_related_name_id=related_name_id,
+                        col_source_id=row.get('col:sourceID', ''),
+                        reference_id=row.get('col:referenceID', ''),
+                        page=row.get('col:page', ''),
+                        remarks=row.get('col:remarks', ''),
+                        source=self.source,
+                        import_job=self.import_job
+                    )
+                    batch.append(relation)
+                    imported_count += 1
+
+                    # Bulk create when batch is full
+                    if len(batch) >= batch_size:
+                        try:
+                            NameRelation.objects.bulk_create(batch, ignore_conflicts=True)
+                        except Exception as e:
+                            logger.error(f"Bulk create failed: {e}")
+                            error_count += len(batch)
+                        batch = []
+
+                        # Log progress every 10k records
+                        if imported_count - last_log_count >= 10000:
+                            logger.info(
+                                f"Progress: Imported {imported_count:,} relationships, "
+                                f"Skipped {skipped_count:,}, Errors {error_count}"
+                            )
+                            last_log_count = imported_count
+
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"Error processing row {row_num}: {str(e)[:100]}")
+                    continue
+
+            # Create remaining records
+            if batch:
+                try:
+                    NameRelation.objects.bulk_create(batch, ignore_conflicts=True)
+                except Exception as e:
+                    logger.error(f"Final bulk create failed: {e}")
+                    error_count += len(batch)
+
+        # Final statistics
+        final_count = NameRelation.objects.filter(import_job=self.import_job).count()
+
+        logger.info("=" * 80)
+        logger.info("NAME RELATION PARSING COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Relationships imported:    {imported_count:,}")
+        logger.info(f"Skipped (missing refs):    {skipped_count:,}")
+        logger.info(f"Errors:                    {error_count}")
+        logger.info(f"Successfully saved to DB:  {final_count:,}")
+        logger.info("✓ Name relationship parsing completed successfully")
 
     def validate_record(self, record):
         """Validate COL record"""

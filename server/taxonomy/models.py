@@ -311,3 +311,80 @@ class GeographicDistribution(models.Model):
 
     def __str__(self):
         return f"{self.taxonomy.scientific_name} in {self.area_name or self.area_code}"
+
+
+class NameRelation(models.Model):
+    """
+    Relationships between taxonomic names (synonyms, spelling corrections, basionyms, etc.)
+    Imported from Catalogue of Life NameRelation.tsv
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # The name this relationship is FROM
+    name = models.ForeignKey(
+        Taxonomy,
+        on_delete=models.CASCADE,
+        related_name='name_relations_from',
+        help_text="Source name in the relationship"
+    )
+
+    # The name this relationship is TO
+    related_name = models.ForeignKey(
+        Taxonomy,
+        on_delete=models.CASCADE,
+        related_name='name_relations_to',
+        help_text="Target name in the relationship"
+    )
+
+    # Relationship type
+    relation_type = models.CharField(
+        max_length=50,
+        db_index=True,
+        choices=[
+            ('spelling correction', 'Spelling Correction'),
+            ('basionym', 'Basionym'),
+            ('based on', 'Based On'),
+            ('replacement name', 'Replacement Name'),
+            ('conserved', 'Conserved'),
+            ('later homonym', 'Later Homonym'),
+            ('superfluous', 'Superfluous'),
+            ('homotypic synonym', 'Homotypic Synonym'),
+            ('heterotypic synonym', 'Heterotypic Synonym'),
+            ('proparte synonym', 'Pro Parte Synonym'),
+            ('misapplied', 'Misapplied'),
+            ('type', 'Type'),
+        ],
+        help_text="Type of relationship from COL NameRelation"
+    )
+
+    # Source identifiers from COL
+    col_name_id = models.CharField(max_length=20, blank=True, db_index=True)
+    col_related_name_id = models.CharField(max_length=20, blank=True, db_index=True)
+    col_source_id = models.CharField(max_length=20, blank=True)
+
+    # Optional reference and metadata
+    reference_id = models.CharField(max_length=50, blank=True)
+    page = models.CharField(max_length=50, blank=True)
+    remarks = models.TextField(blank=True)
+
+    # Source tracking
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    import_job = models.ForeignKey(ImportJob, on_delete=models.SET_NULL, null=True, blank=True)
+
+    # Timestamps
+    source_modified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['name', 'relation_type']),
+            models.Index(fields=['related_name', 'relation_type']),
+            models.Index(fields=['col_name_id']),
+            models.Index(fields=['col_related_name_id']),
+            models.Index(fields=['relation_type', 'created_at']),
+        ]
+        unique_together = [('name', 'related_name', 'relation_type')]
+
+    def __str__(self):
+        return f"{self.name.scientific_name} --[{self.relation_type}]--> {self.related_name.scientific_name}"
