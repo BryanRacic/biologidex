@@ -261,15 +261,13 @@ class CatalogueOfLifeImporter(BaseImporter):
         # Initialize error tracking
         if 'records_errored' not in self.stats:
             self.stats['records_errored'] = 0
-        if 'records_skipped_status' not in self.stats:
-            self.stats['records_skipped_status'] = 0
 
         error_log = []  # Store errors for summary
         accepted_count = 0
         last_log_count = 0
 
         logger.info("Starting to read NameUsage.tsv...")
-        logger.info("Filter: Only importing 'accepted' and 'provisionally accepted' names")
+        logger.info("Importing ALL taxonomic records (no status filter)")
 
         with open(file_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f, delimiter='\t')
@@ -278,11 +276,9 @@ class CatalogueOfLifeImporter(BaseImporter):
                 self.stats['records_read'] += 1
 
                 try:
-                    # Skip non-accepted names in initial import (reduces dataset size)
-                    status = row.get('col:status', '').lower()
-                    if status not in ['accepted', 'provisionally accepted']:
-                        self.stats['records_skipped_status'] += 1
-                        continue
+                    # REMOVED: Status filter that was skipping synonyms and other non-accepted names
+                    # This ensures all taxonomic records are imported, including synonyms which are
+                    # important for species identification and taxonomic relationships
 
                     # Get ID for error logging
                     col_id = row.get('col:ID', 'UNKNOWN')
@@ -341,8 +337,7 @@ class CatalogueOfLifeImporter(BaseImporter):
                         if accepted_count - last_log_count >= 10000:
                             logger.info(
                                 f"Progress: Read {self.stats['records_read']:,} rows, "
-                                f"Accepted {accepted_count:,} records, "
-                                f"Skipped {self.stats['records_skipped_status']:,} (status filter), "
+                                f"Imported {accepted_count:,} records, "
                                 f"Errors {self.stats['records_errored']}"
                             )
                             last_log_count = accepted_count
@@ -378,10 +373,9 @@ class CatalogueOfLifeImporter(BaseImporter):
         logger.info("PARSING COMPLETE")
         logger.info("=" * 80)
         logger.info(f"Total rows read:           {self.stats['records_read']:,}")
-        logger.info(f"Accepted records:          {accepted_count:,}")
-        logger.info(f"Skipped (status filter):   {self.stats['records_skipped_status']:,}")
+        logger.info(f"Records imported:          {accepted_count:,}")
         logger.info(f"Errored records:           {self.stats['records_errored']}")
-        logger.info(f"Successfully imported:     {imported_count:,}")
+        logger.info(f"Successfully saved to DB:  {imported_count:,}")
 
         if error_log:
             logger.warning("=" * 80)
