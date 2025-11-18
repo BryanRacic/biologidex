@@ -2,6 +2,7 @@
 Views for graph app.
 """
 import logging
+import uuid
 from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -86,10 +87,11 @@ class DynamicTreeView(APIView):
             friend_ids_param = request.query_params.get('friend_ids', '')
             if friend_ids_param:
                 try:
-                    friend_ids = [int(id_str) for id_str in friend_ids_param.split(',')]
-                except ValueError:
+                    # Parse as UUIDs (User model uses UUID primary keys)
+                    friend_ids = [uuid.UUID(id_str.strip()) for id_str in friend_ids_param.split(',')]
+                except (ValueError, AttributeError):
                     return Response(
-                        {'error': 'Invalid friend_ids format'},
+                        {'error': 'Invalid friend_ids format - expected comma-separated UUIDs'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
@@ -145,7 +147,14 @@ class TreeChunkView(APIView):
         if mode == DynamicTaxonomicTreeService.MODE_SELECTED:
             friend_ids_param = request.query_params.get('friend_ids', '')
             if friend_ids_param:
-                friend_ids = [int(id_str) for id_str in friend_ids_param.split(',')]
+                try:
+                    # Parse as UUIDs (User model uses UUID primary keys)
+                    friend_ids = [uuid.UUID(id_str.strip()) for id_str in friend_ids_param.split(',')]
+                except (ValueError, AttributeError):
+                    return Response(
+                        {'error': 'Invalid friend_ids format - expected comma-separated UUIDs'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
         # Check permissions
         if mode == DynamicTaxonomicTreeService.MODE_GLOBAL and not request.user.is_staff:
@@ -210,7 +219,14 @@ class TreeSearchView(APIView):
         if mode == DynamicTaxonomicTreeService.MODE_SELECTED:
             friend_ids_param = request.query_params.get('friend_ids', '')
             if friend_ids_param:
-                friend_ids = [int(id_str) for id_str in friend_ids_param.split(',')]
+                try:
+                    # Parse as UUIDs (User model uses UUID primary keys)
+                    friend_ids = [uuid.UUID(id_str.strip()) for id_str in friend_ids_param.split(',')]
+                except (ValueError, AttributeError):
+                    return Response(
+                        {'error': 'Invalid friend_ids format - expected comma-separated UUIDs'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
         try:
             service = DynamicTaxonomicTreeService(

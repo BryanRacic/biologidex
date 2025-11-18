@@ -8,6 +8,7 @@ signal navigation_failed(error_message: String)
 
 var scene_stack: Array[String] = []
 var max_stack_size: int = 10  # Prevent memory issues with very deep navigation
+var navigation_context: Dictionary = {}  # Context data to pass to next scene
 
 
 func navigate_to(scene_path: String, clear_history: bool = false) -> void:
@@ -105,3 +106,33 @@ func peek_previous() -> String:
 	if scene_stack.size() > 0:
 		return scene_stack.back()
 	return ""
+
+
+func set_context(context: Dictionary) -> void:
+	"""
+	Set context data to pass to the next scene
+
+	Args:
+		context: Dictionary containing context data
+	"""
+	navigation_context = context
+
+
+func get_context() -> Dictionary:
+	"""
+	Get the navigation context data
+
+	Returns:
+		Dictionary containing context data, or empty dict if none set
+	"""
+	return navigation_context
+
+
+func clear_context() -> void:
+	"""Clear the navigation context data"""
+	navigation_context.clear()
+
+
+func has_context() -> bool:
+	"""Returns true if navigation context exists"""
+	return not navigation_context.is_empty()

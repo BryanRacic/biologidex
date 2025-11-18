@@ -53,8 +53,7 @@ func _on_tree_pressed() -> void:
 func _on_social_pressed() -> void:
 	"""Navigate to social/friends"""
 	print("[Home] Social button pressed")
-	# TODO: Implement social scene
-	print("[Home] TODO: Social scene not yet implemented")
+	NavigationManager.navigate_to("res://social.tscn")
 
 
 func _on_menu_pressed() -> void:

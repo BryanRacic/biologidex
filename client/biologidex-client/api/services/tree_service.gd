@@ -15,9 +15,10 @@ signal cache_invalidated()
 signal friends_list_received(friends: Array)
 
 ## Fetch complete tree data from server
+## friend_ids should be an array of UUID strings (not integers)
 func fetch_tree(
 	mode: APITypes.TreeMode = APITypes.TreeMode.FRIENDS,
-	friend_ids: Array[int] = [],
+	friend_ids: Array = [],
 	use_cache: bool = true,
 	callback: Callable = Callable()
 ) -> void:
@@ -30,7 +31,7 @@ func fetch_tree(
 		"use_cache": "true" if use_cache else "false"
 	}
 
-	# Add friend_ids for selected mode
+	# Add friend_ids for selected mode (expects UUID strings)
 	if mode == APITypes.TreeMode.SELECTED and friend_ids.size() > 0:
 		var friend_ids_str = ",".join(friend_ids.map(func(id): return str(id)))
 		params["friend_ids"] = friend_ids_str

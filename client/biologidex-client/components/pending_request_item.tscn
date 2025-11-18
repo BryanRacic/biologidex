@@ -1,0 +1,56 @@
+[gd_scene load_steps=2 format=3 uid="uid://cd7u2qv5nxwra"]
+
+[ext_resource type="Script" path="res://components/pending_request_item.gd" id="1_pending_item"]
+
+[node name="PendingRequestItem" type="Panel"]
+custom_minimum_size = Vector2(0, 90)
+script = ExtResource("1_pending_item")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="InfoContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="UsernameLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+layout_mode = 2
+text = "Username"
+theme_type_variation = &"HeaderLarge"
+
+[node name="TimeLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+layout_mode = 2
+text = "Requested recently"
+
+[node name="ActionsContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AcceptButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "Accept"
+
+[node name="RejectButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "Reject"
+
+[node name="BlockButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "Block"

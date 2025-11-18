@@ -24,7 +24,7 @@ const TreeRenderer = preload("res://tree_renderer.gd")
 # Tree data
 var current_tree_data: TreeDataModels.TreeData = null
 var current_mode: APITypes.TreeMode = APITypes.TreeMode.FRIENDS
-var selected_friend_ids: Array[int] = []
+var selected_friend_ids: Array = []  # Array of UUID strings
 
 # Renderer
 var tree_renderer: TreeRenderer = null
@@ -53,6 +53,27 @@ func _ready() -> void:
 	APIManager.tree.tree_load_failed.connect(_on_tree_load_failed)
 	APIManager.tree.search_results_received.connect(_on_search_results)
 	APIManager.tree.search_failed.connect(_on_search_failed)
+
+	# Check for friend context from navigation (viewing friend's tree)
+	if NavigationManager.has_context():
+		var context: Dictionary = NavigationManager.get_context()
+		if context.has("mode"):
+			var mode_str: String = context.get("mode", "")
+			var friend_id: String = context.get("friend_id", "")
+			var username: String = context.get("username", "Friend")
+
+			print("[TreeController] Loading tree for friend: ", username)
+
+			# Set mode based on context
+			if mode_str == "selected" and not friend_id.is_empty():
+				current_mode = APITypes.TreeMode.SELECTED
+				# Pass the friend UUID as a string
+				# Backend now correctly handles UUID strings (fixed in graph/views.py)
+				selected_friend_ids = [friend_id]
+				print("[TreeController] Set to SELECTED mode with friend UUID: ", friend_id)
+
+			# Clear context
+			NavigationManager.clear_context()
 
 	# Setup mode dropdown
 	_setup_mode_dropdown()

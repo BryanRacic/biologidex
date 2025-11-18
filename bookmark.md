@@ -1,9 +1,33 @@
-# TODO 
-- [done] always download/view dex if it doesn't exist locally
- - [check on] download first 5 in the background on login (if possible)
+# BiologiDex Development Bookmark (2025-11-18)
+
+## Latest: Taxonomy Matching & Synonym Resolution ✅
+
+### Problem Solved
+- "Canis lupus familiaris" wasn't matching due to empty genus fields in COL data
+- Implemented 6-stage matching + 3-stage synonym resolution + field population
+- Added NameRelation model to track COL synonym relationships
+
+### Files Changed
+- `taxonomy/models.py`: NameRelation model
+- `taxonomy/services.py`: Enhanced lookup_or_create_from_cv()
+- `taxonomy/importers/col_importer.py`: _parse_namerelation()
+- `taxonomy/migrations/0002_namerelation.py`: New migration
+
+### Next Steps
+1. Apply migration in production (copy to /opt, rebuild, migrate)
+2. Re-import COL data to populate NameRelation table
+3. Test with dog photo upload
+
+### Documentation Created
+- `/CLAUDE.md`: Updated with taxonomy matching details
+- `/server/taxonomy/README_MATCHING.md`: Deep dive on matching logic
+
+---
+
+## TODO
+- download first 5 dex records in the background on login (if possible)
 - catch_date should be exclusively server side
 - add loading ux when downloading dex entries
-- fix tree view (only loading friends not self?)
 - add version check and update alert
   - for both api version and client side version
     - maybe an automatic simplified api docs export for usage in updating the client api?
@@ -15,7 +39,20 @@
 - taxonomy db in admin panel gives 500 error
 - update col_importer job to run multithreaded
 - include additional data from COL export
-  - SpeciesEstimate, TypeMaterial (locality), Vernacular Name
+  - VernacularName (now have NameRelation, need CommonName import)
+  - SpeciesEstimate, TypeMaterial (locality)
+- add friends/social features
+  - add a friend by code
+  - display a list of friends
+    - click on freind to
+      - remove friend
+      - view dex
+      - view taxonomic tree 
+- allow modification of dex entries
+  - retry if image id seems inaccurate
+    - try different model/modify prompt
+  - manually lookup by common/scientific name
+ 
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done

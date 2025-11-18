@@ -9,10 +9,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-11-11)
+## Status (2025-11-18)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
-- 📋 Taxonomic tree visualization (planned, ready to build)
+- ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
+- ✅ Taxonomic tree visualization with Walker-Buchheim O(n) layout algorithm
 
 ---
 
@@ -77,16 +78,24 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **Key Models**:
 - **User**: UUID pk, `friend_code` (8-char), `badges` JSONField
 - **Animal**: Taxonomic hierarchy, `creation_index` (sequential), `verified` flag
+- **Taxonomy**: COL data, `source_taxon_id`, hierarchy fields, `accepted_name` FK (often unpopulated)
+- **NameRelation**: Synonym relationships from COL `NameRelation.tsv` (spelling corrections, basionyms, etc.)
 - **DexEntry**: User↔Animal, `visibility` (private/friends/public), `customizations` JSONField, image fields (original/processed/source_vision_job)
 - **Friendship**: Bidirectional, status (pending/accepted/rejected/blocked), helpers: `are_friends()`, `get_friends()`, `get_friend_ids()`
 - **AnalysisJob**: CV tracking, `image` (original), `dex_compatible_image` (PNG ≤2560px), status, cost/tokens
 - **ProcessedImage** (images app): Transformations, versioning, SHA256 checksums, EXIF data
 
-**CV Pipeline**:
+**CV Pipeline & Taxonomy Matching**:
 - ImageProcessor: Converts to PNG (RGBA→RGB white bg), resizes >2560px, metadata
 - OpenAIVisionService: GPT-4 (`max_tokens`) vs GPT-5+ (`max_completion_tokens`)
 - Celery task: ImageProcessor → Vision API → parse/create Animal
 - EnhancedImageProcessor (images): EXIF rotation, transformations, deduplication
+
+**Taxonomy Matching** (`taxonomy/services.py:lookup_or_create_from_cv`):
+- **6-stage matching**: (1) Exact fields (genus+species+subspecies), (2) Exact scientific name, (3) Exact common name, (4) Fuzzy fields, (5) Fuzzy scientific name, (6) Fuzzy common name
+- **3-stage synonym resolution**: (1) `accepted_name` FK, (2) `NameRelation` table lookup, (3) Name parsing ("Canis lupus familiaris" → "Canis familiaris")
+- **Field population**: Auto-populates empty genus/species/subspecies fields by parsing scientific name
+- **Critical**: Stage 2 (exact scientific name) catches synonyms with empty genus fields (COL data quality issue)
 
 **Dex Sync (v2.0)**:
 - `/sync_entries/`: Own dex, cached 5m, `last_sync` param
@@ -123,11 +132,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 ### Critical Production Gotchas
 
 **Docker**:
-- Code changes require rebuilding images: `docker-compose -f docker-compose.production.yml build web celery_worker celery_beat && up -d`
-- Simply restarting uses OLD cached images
-- Host files NOT used by containers (they use `/app` inside)
+- Code changes (including migrations) require rebuilding: `docker-compose -f docker-compose.production.yml build web celery_worker celery_beat && up -d`
+- Simply restarting uses OLD cached images - code/migrations won't update
+- Host files NOT used by containers (they use `/app` inside) - must rebuild after code changes
 - Use service names for connections: `DB_HOST=db`, `REDIS_HOST=redis` (not `localhost`)
 - Password changes require volume rebuild: `down -v` (deletes data) then `up -d`
+- **Migration workflow**: Create migration in dev → copy to prod dir → rebuild containers → run migrate
 
 **Nginx**:
 - Cloudflare Tunnel must point to **nginx (port 80)**, not Django (8000)
@@ -156,10 +166,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **Dev**:
 ```bash
 poetry shell
-python manage.py makemigrations [accounts animals dex social vision images]
+python manage.py makemigrations [accounts animals dex social vision images taxonomy]
 python manage.py migrate
 python manage.py runserver
 celery -A biologidex worker -l info
+python manage.py import_col  # Import COL taxonomy + NameRelation data
 ```
 
 **Prod**:
@@ -180,9 +191,14 @@ docker-compose -f docker-compose.production.yml logs -f
 
 ## Planned Features
 
-**Taxonomic Tree** (ready to implement):
-- Server-side Reingold-Tilford layout, spatial chunking (2048x2048), 100k+ nodes at 60 FPS
-- Endpoints: `/graph/taxonomic-tree-layout/`, `/graph/chunk/{x}/{y}/`, `/graph/search/`
+**Taxonomic Tree** (✅ implemented 2025-11-18):
+- Walker-Buchheim O(n) layout algorithm for aesthetically pleasing, compact tree layouts
+- No node overlaps, proper spacing for multiple animals per species
+- Spatial chunking (2048x2048) for progressive loading
+- Dynamic tree generation with modes: personal, friends, selected, global
+- 5-minute server cache, dual-layer client cache (memory + disk)
+- Endpoints: `/api/v1/graph/tree/`, `/tree/chunk/{x}/{y}/`, `/tree/search/`
+- See `/server/graph/README.md` for algorithm details and performance characteristics
 
 **Future** (post-MVP):
 - Phase 6: Multiple images per entry, image history

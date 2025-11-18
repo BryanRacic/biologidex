@@ -49,6 +49,22 @@ func _ready() -> void:
 	APIManager.dex.sync_user_failed.connect(_on_sync_user_failed)
 	APIManager.dex.friends_overview_received.connect(_on_friends_overview_received)
 
+	# Check for friend context from navigation (viewing friend's dex)
+	if NavigationManager.has_context():
+		var context := NavigationManager.get_context()
+		if context.has("user_id"):
+			var friend_id: String = context.get("user_id")
+			var username: String = context.get("username", "Friend")
+
+			print("[Dex] Loading friend's dex: ", username, " (", friend_id, ")")
+
+			# Switch to friend's dex
+			current_user_id = friend_id
+			available_users[friend_id] = username
+
+			# Clear context
+			NavigationManager.clear_context()
+
 	# Initialize user list
 	_populate_user_list()
 
@@ -61,13 +77,14 @@ func _ready() -> void:
 
 func _populate_user_list() -> void:
 	"""Initialize the list of available users (self + cached friends)"""
-	available_users.clear()
-	available_users["self"] = "My Dex"
+	# Only set "self" if not already populated (from context)
+	if not available_users.has("self"):
+		available_users["self"] = "My Dex"
 
-	# Add any friends whose dex we have cached
+	# Add any friends whose dex we have cached (but don't overwrite existing)
 	var tracked_users := DexDatabase.get_tracked_users()
 	for user_id in tracked_users:
-		if user_id != "self":
+		if user_id != "self" and not available_users.has(user_id):
 			available_users[user_id] = "Friend (%s)" % user_id.substr(0, 8)
 
 	print("[Dex] Available users: ", available_users.keys())
