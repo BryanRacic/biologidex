@@ -12,7 +12,8 @@
 - ensure deletion of an animal record reindexes the rest of the animal record dscovery indexs
   - maybe re-index django command
     - ideally runnable on the admin interface
-- taxonomic records from raw catalogue of life who have `is_processed` false are not showing up in taxonomy db. taxonomy db in admin panel gives 500 error
+- taxonomy db in admin panel gives 500 error
+- update col_importer job to run multithreaded
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
