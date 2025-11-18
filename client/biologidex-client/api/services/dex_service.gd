@@ -58,13 +58,13 @@ func create_entry(
 func _on_create_entry_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Dex entry created successfully: %s" % response.get("id", ""))
 	dex_entry_created.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_create_entry_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "create_entry")
 	dex_entry_creation_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get user's dex entries
@@ -86,13 +86,13 @@ func _on_get_my_entries_success(response: Dictionary, context: Dictionary) -> vo
 	var entries = response.get("results", [])
 	_log("Received %d dex entries" % entries.size())
 	my_entries_received.emit(entries)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_my_entries_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_my_entries")
 	my_entries_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get favorite dex entries
@@ -114,13 +114,13 @@ func _on_get_favorites_success(response: Dictionary, context: Dictionary) -> voi
 	var entries = response.get("results", [])
 	_log("Received %d favorite entries" % entries.size())
 	favorites_received.emit(entries)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_favorites_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_favorites")
 	favorites_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Toggle favorite status of a dex entry
@@ -145,13 +145,13 @@ func _on_toggle_favorite_success(response: Dictionary, context: Dictionary) -> v
 	var is_favorite = response.get("is_favorite", false)
 	_log("Entry %d favorite status: %s" % [context.entry_id, "favorited" if is_favorite else "unfavorited"])
 	favorite_toggled.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_toggle_favorite_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "toggle_favorite")
 	favorite_toggle_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Sync dex entries with server (get updates since last sync)
@@ -179,13 +179,13 @@ func _on_sync_entries_success(response: Dictionary, context: Dictionary) -> void
 	var entries = response.get("entries", [])
 	_log("Sync completed: %d entries" % entries.size())
 	sync_completed.emit(entries)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_sync_entries_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "sync_entries")
 	sync_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Sync a specific user's dex (self or friend)
@@ -234,7 +234,7 @@ func _on_sync_user_success(response: Dictionary, context: Dictionary) -> void:
 		sync_user_completed.emit(user_id, 0)
 		if not server_time.is_empty():
 			SyncManager.update_last_sync(user_id, server_time)
-		if context.callback:
+		if context.callback and context.callback.is_valid():
 			context.callback.call(response, 200)
 		return
 
@@ -245,7 +245,7 @@ func _on_sync_user_error(error: APITypes.APIError, context: Dictionary) -> void:
 	var user_id: String = context.user_id
 	_handle_error(error, "sync_user_dex")
 	sync_user_failed.emit(user_id, error.message)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 func _process_sync_entries(entries: Array, user_id: String, server_time: String, callback: Callable) -> void:
@@ -391,13 +391,13 @@ func _on_friends_overview_success(response: Dictionary, context: Dictionary) -> 
 	var friends: Array = response.get("friends", [])
 	_log("Received friends overview: %d friends" % friends.size())
 	friends_overview_received.emit(friends)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_friends_overview_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_friends_overview")
 	friends_overview_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Sync all friends' dex in one operation
@@ -470,12 +470,12 @@ func _on_batch_sync_success(response: Dictionary, context: Dictionary) -> void:
 		var entries: Array = user_result.get("entries", [])
 		_process_sync_entries(entries, user_id, server_time, Callable())
 
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_batch_sync_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "batch_sync")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Retry logic with exponential backoff

@@ -59,13 +59,13 @@ func _on_fetch_tree_success(response: Dictionary, context: Dictionary) -> void:
 	var tree_data = TreeDataModels.TreeData.new(response)
 	tree_loaded.emit(tree_data)
 
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_fetch_tree_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "fetch_tree")
 	tree_load_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Fetch specific chunk from server
@@ -105,13 +105,13 @@ func fetch_chunk(
 func _on_fetch_chunk_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Chunk %s received" % context.chunk_id)
 	chunk_loaded.emit(context.chunk_id, response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_fetch_chunk_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "fetch_chunk")
 	chunk_load_failed.emit(context.chunk_id, error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Search within current tree scope
@@ -162,13 +162,13 @@ func _on_search_tree_success(response: Dictionary, context: Dictionary) -> void:
 	var results = response.get("results", [])
 	_log("Search returned %d results" % results.size())
 	search_results_received.emit(results)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_search_tree_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "search_tree")
 	search_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Invalidate tree cache on server
@@ -192,12 +192,12 @@ func invalidate_cache(scope: String = "user", callback: Callable = Callable()) -
 func _on_invalidate_cache_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Cache invalidated successfully")
 	cache_invalidated.emit()
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_invalidate_cache_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "invalidate_cache")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Fetch friends list with their tree stats
@@ -219,10 +219,10 @@ func _on_fetch_friends_list_success(response: Dictionary, context: Dictionary) -
 	var friends = response.get("friends", [])
 	_log("Received %d friends" % friends.size())
 	friends_list_received.emit(friends)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_fetch_friends_list_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "fetch_friends_list")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)

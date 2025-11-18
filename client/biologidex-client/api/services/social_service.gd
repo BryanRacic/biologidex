@@ -33,13 +33,13 @@ func _on_get_friends_success(response: Dictionary, context: Dictionary) -> void:
 	var friends = response.get("friends", [])
 	_log("Received %d friends" % friends.size())
 	friends_list_received.emit(friends)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_friends_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_friends")
 	friends_list_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get pending friend requests
@@ -61,13 +61,13 @@ func _on_get_pending_requests_success(response: Dictionary, context: Dictionary)
 	var requests = response.get("requests", [])
 	_log("Received %d pending requests" % requests.size())
 	pending_requests_received.emit(requests)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_pending_requests_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_pending_requests")
 	pending_requests_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Send friend request by friend_code or user_id
@@ -106,13 +106,13 @@ func send_friend_request(
 func _on_send_friend_request_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Friend request sent successfully")
 	friend_request_sent.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_send_friend_request_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "send_friend_request")
 	friend_request_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Respond to friend request (accept/reject/block)
@@ -148,13 +148,13 @@ func respond_to_request(
 func _on_respond_to_request_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Friend request response successful: %s" % context.action)
 	friendship_responded.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_respond_to_request_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "respond_to_request")
 	friendship_response_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Unfriend (remove friendship)
@@ -177,11 +177,11 @@ func unfriend(friendship_id: String, callback: Callable = Callable()) -> void:
 func _on_unfriend_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Friend removed successfully")
 	friend_removed.emit(context.friendship_id)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_unfriend_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "unfriend")
 	friend_removal_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)

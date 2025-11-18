@@ -57,13 +57,13 @@ func create_vision_job(
 func _on_create_vision_job_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Vision job created successfully: %s" % response.get("id", ""))
 	job_created.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_create_vision_job_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "create_vision_job")
 	job_creation_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Check status of vision analysis job
@@ -94,13 +94,13 @@ func _on_get_vision_job_success(response: Dictionary, context: Dictionary) -> vo
 	if status == "completed":
 		job_completed.emit(response)
 
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_vision_job_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_vision_job")
 	job_status_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Retry a failed vision job
@@ -134,13 +134,13 @@ func retry_vision_job(
 func _on_retry_vision_job_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Vision job retry initiated: %s" % context.job_id)
 	job_created.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_retry_vision_job_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "retry_vision_job")
 	job_creation_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get completed vision jobs
@@ -163,10 +163,10 @@ func get_completed_jobs(callback: Callable = Callable()) -> void:
 func _on_get_completed_jobs_success(response: Dictionary, context: Dictionary) -> void:
 	var results = response.get("results", [])
 	_log("Received %d completed jobs" % results.size())
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_completed_jobs_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_completed_jobs")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)

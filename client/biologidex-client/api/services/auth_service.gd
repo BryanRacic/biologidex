@@ -34,13 +34,13 @@ func login(username: String, password: String, callback: Callable = Callable()) 
 func _on_login_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Login successful for user: %s" % context.username)
 	login_succeeded.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_login_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "login")
 	login_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Register a new user account
@@ -75,13 +75,13 @@ func register(
 func _on_register_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Registration successful for user: %s" % context.username)
 	registration_succeeded.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_register_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "register")
 	registration_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message, "field_errors": error.field_errors}, error.code)
 
 ## Refresh access token using refresh token
@@ -107,11 +107,11 @@ func refresh_token(refresh: String, callback: Callable = Callable()) -> void:
 func _on_refresh_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Token refresh successful")
 	token_refreshed.emit(response.get("access", ""))
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_refresh_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "refresh_token")
 	token_refresh_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)

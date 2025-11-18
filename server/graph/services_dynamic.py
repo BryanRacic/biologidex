@@ -60,10 +60,12 @@ class DynamicTaxonomicTreeService:
         elif self.mode == self.MODE_SELECTED:
             # Validate selected friends
             friend_ids = Friendship.get_friend_ids(self.user)
+            logger.info(f"MODE_SELECTED: user={self.user.username}, friend_ids={friend_ids}, selected_friend_ids={self.selected_friend_ids}")
             valid_friend_ids = [
                 fid for fid in self.selected_friend_ids
                 if fid in friend_ids
             ]
+            logger.info(f"MODE_SELECTED: valid_friend_ids={valid_friend_ids}")
             self.scoped_user_ids = [self.user.id] + valid_friend_ids
 
         elif self.mode == self.MODE_GLOBAL:

@@ -45,13 +45,13 @@ func _on_list_success(response: Dictionary, context: Dictionary) -> void:
 	var animals = response.get("results", [])
 	_log("Received %d animals" % animals.size())
 	animals_list_received.emit(animals)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_list_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "list")
 	animals_list_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get single animal by ID
@@ -72,13 +72,13 @@ func get_animal(animal_id: String, callback: Callable = Callable()) -> void:
 func _on_get_animal_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Retrieved animal: %s" % context.animal_id)
 	animal_received.emit(response)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_animal_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_animal")
 	animal_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Look up animal by scientific name, or create if doesn't exist
@@ -119,13 +119,13 @@ func _on_lookup_or_create_success(response: Dictionary, context: Dictionary) -> 
 	var animal = response.get("animal", {})
 	_log("Animal %s: %s" % ["created" if was_created else "found", animal.get("scientific_name", "")])
 	animal_created.emit(animal, was_created)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_lookup_or_create_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "lookup_or_create")
 	animal_creation_failed.emit(error)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get recently discovered animals
@@ -146,12 +146,12 @@ func get_recent(callback: Callable = Callable()) -> void:
 func _on_get_recent_success(response: Dictionary, context: Dictionary) -> void:
 	var animals = response if typeof(response) == TYPE_ARRAY else response.get("results", [])
 	_log("Received %d recent animals" % animals.size())
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"results": animals}, 200)
 
 func _on_get_recent_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_recent")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get most captured/popular animals
@@ -172,12 +172,12 @@ func get_popular(callback: Callable = Callable()) -> void:
 func _on_get_popular_success(response: Dictionary, context: Dictionary) -> void:
 	var animals = response if typeof(response) == TYPE_ARRAY else response.get("results", [])
 	_log("Received %d popular animals" % animals.size())
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"results": animals}, 200)
 
 func _on_get_popular_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_popular")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
 ## Get taxonomic tree for an animal
@@ -197,10 +197,10 @@ func get_taxonomy(animal_id: String, callback: Callable = Callable()) -> void:
 
 func _on_get_taxonomy_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Retrieved taxonomy for animal: %s" % context.animal_id)
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
 
 func _on_get_taxonomy_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "get_taxonomy")
-	if context.callback:
+	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
