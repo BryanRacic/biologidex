@@ -532,6 +532,96 @@ The `unfriend()` functionality currently uses the friend's `user_id` as the frie
 - [x] Friend tree navigation works from social scene
 - [x] Context passing between scenes works correctly
 
+### 🐛 Critical Bug Fixes (2025-11-18 Part 2)
+
+#### 1. Callback Validation Bug
+
+**Problem:**
+When users navigated away from scenes (e.g., social → tree view) while API requests were still pending, callbacks would attempt to invoke methods on freed/destroyed scene instances, causing null reference errors:
+```
+SCRIPT ERROR: Attempt to call function 'null::_on_pending_loaded (Callable)' on a null instance.
+```
+
+**Root Cause:**
+Services were checking `if context.callback:` but not validating that the callback target still existed before calling it. In GDScript, when an object is freed, Callable references become invalid.
+
+**Files Fixed (58 callback sites total):**
+- `api/services/social_service.gd` (10 callbacks)
+- `api/services/tree_service.gd` (10 callbacks)
+- `api/services/auth_service.gd` (6 callbacks)
+- `api/services/dex_service.gd` (12 callbacks)
+- `api/services/animals_service.gd` (12 callbacks)
+- `api/services/vision_service.gd` (8 callbacks)
+
+**Fix Applied:**
+```gdscript
+# BEFORE:
+if context.callback:
+    context.callback.call(response, 200)
+
+# AFTER:
+if context.callback and context.callback.is_valid():
+    context.callback.call(response, 200)
+```
+
+**Impact:**
+- Prevents crashes when navigating between scenes during async operations
+- Signals still emit regardless of callback validity (other systems can still react)
+- No performance impact, defensive programming best practice
+
+#### 2. URL Encoding Bug (Friend Tree Not Loading)
+
+**Problem:**
+Friend trees were loading as empty (0 nodes, 0 edges) even though the friend had 12 dex entries. Server logs showed mangled query parameters:
+```
+Query Params: {'mode': ['selected'], 'amp;use_cache': ['true'], 'amp;friend_ids': ['3f1acfa2-de78-4e49-ade2-4b5ae1f3a847']}
+```
+
+**Root Cause:**
+The `build_url_with_params()` function in `api_config.gd` was using `"&amp;"` (HTML-encoded ampersand) to join query parameters:
+```gdscript
+url += "?" + "&amp;".join(param_strings)
+```
+
+This caused the backend to receive parameters named `amp;use_cache` and `amp;friend_ids` instead of `use_cache` and `friend_ids`. As a result:
+- The `use_cache` parameter was never received (defaulted to true)
+- The `friend_ids` parameter was never received (resulted in empty list)
+- The tree service only included the current user (no friend data)
+
+**File Fixed:**
+- `client/biologidex-client/api/core/api_config.gd:95`
+
+**Fix Applied:**
+```gdscript
+# BEFORE:
+url += "?" + "&amp;".join(param_strings)
+
+# AFTER:
+url += "?" + "&".join(param_strings)
+```
+
+**Verification:**
+Server logs now show correct parameters:
+```
+Query Params: {'mode': ['selected'], 'use_cache': ['true'], 'friend_ids': ['3f1acfa2-de78-4e49-ade2-4b5ae1f3a847']}
+```
+
+**Impact:**
+- Friend trees now load correctly with all expected data
+- All URL query parameters are now properly parsed by the backend
+- Fixes any other endpoints that use query parameters
+
+**Lessons Learned:**
+1. Always validate Callable references with `.is_valid()` before invoking them in async contexts
+2. Never HTML-encode URL components client-side - use plain `&` for query parameter separators
+3. Server-side query param logging is invaluable for debugging client-side encoding issues
+4. URL encoding bugs can silently fail by creating non-existent parameter names
+
 ## Conclusion
 
-The social features are now fully implemented and production-ready. The critical UUID/integer bug has been fixed, enabling the SELECTED tree mode to work correctly. Users can add friends, view their dex collections, and see their combined taxonomic trees. The implementation follows best practices and integrates seamlessly with the existing BiologiDex architecture.
+The social features are now fully implemented and production-ready. Critical bugs have been fixed:
+1. UUID/integer mismatch in tree service (initial bug)
+2. Callback validation for freed scene instances (navigation crash)
+3. URL encoding for query parameters (empty friend trees)
+
+Users can now add friends, view their dex collections, see their combined taxonomic trees, and navigate between scenes without crashes. The implementation follows best practices and integrates seamlessly with the existing BiologiDex architecture.

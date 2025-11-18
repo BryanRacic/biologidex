@@ -92,7 +92,7 @@ func build_url_with_params(endpoint: String, params: Dictionary) -> String:
 			# Convert value to string if needed
 			var value_str = str(value) if typeof(value) != TYPE_STRING else value
 			param_strings.append("%s=%s" % [key, value_str])
-		url += "?" + "&amp;".join(param_strings)
+		url += "?" + "&".join(param_strings)
 
 	return url
 

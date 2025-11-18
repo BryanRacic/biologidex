@@ -34,6 +34,8 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Traditional callbacks with `.bind(context)`, NOT inline lambdas
 - ✅ Positional arguments ONLY (no `param=value` syntax in GDScript)
 - ✅ APIClient methods: `request_get()`, `post()`, `put()`, `delete()` (NOT `.get()`)
+- ✅ **Callback validation**: Always check `callback.is_valid()` before calling (prevents crashes on freed scenes)
+- ✅ **URL building**: Use plain `&` to join query params, NOT `&amp;` (HTML encoding breaks server parsing)
 - ❌ Never call `api_client` directly - use service methods
 - ❌ Never inline lambdas in service methods - causes "assignment in expression" errors
 
