@@ -235,7 +235,16 @@ class CatalogueOfLifeImporter(BaseImporter):
         else:
             logger.warning("NameRelation.tsv not found - synonym relationships will not be imported")
 
-        # TODO: Parse VernacularName.tsv and Distribution.tsv in future iterations
+        # Parse VernacularName.tsv if available
+        vernacular_file = os.path.join(extract_path, 'VernacularName.tsv')
+        if os.path.exists(vernacular_file):
+            file_size_mb = os.path.getsize(vernacular_file) / (1024 * 1024)
+            logger.info(f"VernacularName.tsv size: {file_size_mb:.2f}MB")
+            self._parse_vernacular_names(vernacular_file)
+        else:
+            logger.warning("VernacularName.tsv not found - common names will not be imported")
+
+        # TODO: Parse Distribution.tsv in future iterations
 
     def _validate_coldp_structure(self, extract_path: str):
         """Validate that extracted directory has required ColDP files"""
@@ -507,6 +516,121 @@ class CatalogueOfLifeImporter(BaseImporter):
         logger.info(f"Errors:                    {error_count}")
         logger.info(f"Successfully saved to DB:  {final_count:,}")
         logger.info("✓ Name relationship parsing completed successfully")
+
+    def _parse_vernacular_names(self, file_path: str):
+        """Parse VernacularName.tsv file for common names"""
+        from taxonomy.models import Taxonomy, CommonName
+
+        logger.info("=" * 80)
+        logger.info("STEP 8: Parsing vernacular names...")
+        logger.info("=" * 80)
+        logger.info(f"Parsing VernacularName.tsv from {file_path}...")
+
+        # Create lookup dict for COL IDs to Taxonomy objects
+        logger.info("Building taxonomy ID lookup...")
+        taxonomy_by_col_id = {}
+        for tax in Taxonomy.objects.filter(source=self.source).select_related('source'):
+            taxonomy_by_col_id[tax.source_taxon_id] = tax
+        logger.info(f"Loaded {len(taxonomy_by_col_id)} taxonomy records for lookup")
+
+        batch_size = 1000
+        batch = []
+        imported_count = 0
+        skipped_count = 0
+        error_count = 0
+        last_log_count = 0
+
+        logger.info("Starting to read VernacularName.tsv...")
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f, delimiter='\t')
+
+            for row_num, row in enumerate(reader, start=2):
+                try:
+                    taxon_id = row.get('col:taxonID', '')
+                    name = row.get('col:name', '').strip()
+                    language = row.get('col:language', 'en').strip()  # Default to English
+                    country = row.get('col:country', '').strip()
+
+                    # Skip if missing required fields
+                    if not taxon_id or not name:
+                        skipped_count += 1
+                        continue
+
+                    # Look up taxonomy object
+                    taxonomy = taxonomy_by_col_id.get(taxon_id)
+                    if not taxonomy:
+                        # Taxon ID not in our taxonomy table - skip
+                        skipped_count += 1
+                        continue
+
+                    # Parse preferred status
+                    is_preferred = False
+                    preferred_raw = row.get('col:preferred', '').strip().lower()
+                    if preferred_raw in ('true', '1', 'yes', 't'):
+                        is_preferred = True
+
+                    # Normalize language code (truncate to 10 chars max)
+                    if len(language) > 10:
+                        language = language[:10]
+
+                    # Normalize country code (truncate to 2 chars max)
+                    if len(country) > 2:
+                        country = country[:2].upper()
+
+                    # Create CommonName object
+                    common_name = CommonName(
+                        taxonomy=taxonomy,
+                        name=name,
+                        language=language,
+                        country=country,
+                        is_preferred=is_preferred,
+                        source=self.source
+                    )
+                    batch.append(common_name)
+                    imported_count += 1
+
+                    # Bulk create when batch is full
+                    if len(batch) >= batch_size:
+                        try:
+                            CommonName.objects.bulk_create(batch, ignore_conflicts=True)
+                        except Exception as e:
+                            logger.error(f"Bulk create failed: {e}")
+                            error_count += len(batch)
+                        batch = []
+
+                        # Log progress every 10k records
+                        if imported_count - last_log_count >= 10000:
+                            logger.info(
+                                f"Progress: Imported {imported_count:,} common names, "
+                                f"Skipped {skipped_count:,}, Errors {error_count}"
+                            )
+                            last_log_count = imported_count
+
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"Error processing row {row_num}: {str(e)[:100]}")
+                    continue
+
+            # Create remaining records
+            if batch:
+                try:
+                    CommonName.objects.bulk_create(batch, ignore_conflicts=True)
+                except Exception as e:
+                    logger.error(f"Final bulk create failed: {e}")
+                    error_count += len(batch)
+
+        # Final statistics
+        final_count = CommonName.objects.filter(source=self.source).count()
+
+        logger.info("=" * 80)
+        logger.info("VERNACULAR NAME PARSING COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Common names imported:     {imported_count:,}")
+        logger.info(f"Skipped (missing refs):    {skipped_count:,}")
+        logger.info(f"Errors:                    {error_count}")
+        logger.info(f"Successfully saved to DB:  {final_count:,}")
+        logger.info("✓ Vernacular name parsing completed successfully")
 
     def validate_record(self, record):
         """Validate COL record"""
