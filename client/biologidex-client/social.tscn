@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://b3v8k7nan2wq1"]
 
-[ext_resource type="Script" path="res://social.gd" id="1_social"]
+[ext_resource type="Script" uid="uid://drvee8tn2gnm" path="res://social.gd" id="1_social"]
 
 [node name="Social" type="Control"]
 layout_mode = 3
@@ -42,7 +42,7 @@ layout_mode = 2
 [node name="BackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
 custom_minimum_size = Vector2(60, 44)
 layout_mode = 2
-text = "Back"
+text = "<<"
 
 [node name="Title" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
 layout_mode = 2
@@ -64,13 +64,13 @@ theme_override_constants/separation = 5
 
 [node name="YourCodeLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/YourFriendCodeSection"]
 layout_mode = 2
-text = "Your Friend Code:"
 theme_type_variation = &"HeaderMedium"
+text = "Your Friend Code:"
 
 [node name="FriendCodeDisplay" type="Label" parent="Panel/MarginContainer/VBoxContainer/YourFriendCodeSection"]
 layout_mode = 2
-text = "Loading..."
 theme_override_font_sizes/font_size = 24
+text = "Loading..."
 
 [node name="HSeparator3" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -81,8 +81,8 @@ theme_override_constants/separation = 10
 
 [node name="AddFriendLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/AddFriendSection"]
 layout_mode = 2
-text = "Add Friend by Code"
 theme_type_variation = &"HeaderMedium"
+text = "Add Friend by Code"
 
 [node name="InputContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/AddFriendSection"]
 layout_mode = 2
@@ -102,7 +102,6 @@ text = "Add Friend"
 
 [node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/AddFriendSection"]
 layout_mode = 2
-text = ""
 
 [node name="HSeparator2" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -110,9 +109,11 @@ layout_mode = 2
 [node name="TabContainer" type="TabContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
+current_tab = 0
 
 [node name="Friends" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/TabContainer"]
 layout_mode = 2
+metadata/_tab_index = 0
 
 [node name="FriendsList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/TabContainer/Friends"]
 layout_mode = 2
@@ -122,6 +123,7 @@ theme_override_constants/separation = 10
 [node name="Pending" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/TabContainer"]
 visible = false
 layout_mode = 2
+metadata/_tab_index = 1
 
 [node name="PendingList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/TabContainer/Pending"]
 layout_mode = 2
