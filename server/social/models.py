@@ -78,24 +78,29 @@ class Friendship(models.Model):
 
     @classmethod
     def get_friends(cls, user):
-        """Get all friends of a user."""
+        """Get all friends of a user, excluding admin users."""
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
         # Get IDs of friends
         friend_ids = cls.get_friend_ids(user)
 
-        # Return User queryset
-        return User.objects.filter(id__in=friend_ids)
+        # Return User queryset, excluding superusers (admin)
+        return User.objects.filter(id__in=friend_ids, is_superuser=False)
 
     @classmethod
     def get_friend_ids(cls, user):
-        """Get list of friend user IDs."""
+        """Get list of friend user IDs, excluding admin users."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
         # Friends where user sent request
         sent_friend_ids = list(
             cls.objects.filter(
                 from_user=user,
                 status='accepted'
+            ).exclude(
+                to_user__is_superuser=True
             ).values_list('to_user_id', flat=True)
         )
 
@@ -104,6 +109,8 @@ class Friendship(models.Model):
             cls.objects.filter(
                 to_user=user,
                 status='accepted'
+            ).exclude(
+                from_user__is_superuser=True
             ).values_list('from_user_id', flat=True)
         )
 
@@ -111,10 +118,12 @@ class Friendship(models.Model):
 
     @classmethod
     def get_pending_requests(cls, user):
-        """Get pending friend requests for a user (requests they received)."""
+        """Get pending friend requests for a user (requests they received), excluding admin."""
         return cls.objects.filter(
             to_user=user,
             status='pending'
+        ).exclude(
+            from_user__is_superuser=True
         ).select_related('from_user')
 
     @classmethod

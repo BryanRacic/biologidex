@@ -4,6 +4,7 @@ extends Control
 # UI References
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
+@onready var friend_code_display: Label = $Panel/MarginContainer/VBoxContainer/YourFriendCodeSection/FriendCodeDisplay
 @onready var friend_code_input: LineEdit = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/FriendCodeInput
 @onready var add_button: Button = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/AddButton
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/AddFriendSection/StatusLabel
@@ -44,6 +45,9 @@ func _ready() -> void:
 	# Create confirmation dialog
 	_setup_confirmation_dialog()
 
+	# Load friend code
+	_load_friend_code()
+
 	# Load initial data
 	_load_friends()
 	_load_pending_requests()
@@ -55,6 +59,28 @@ func _setup_confirmation_dialog() -> void:
 	confirmation_dialog.dialog_text = "Are you sure you want to remove this friend?"
 	confirmation_dialog.confirmed.connect(_confirm_remove_friend)
 	add_child(confirmation_dialog)
+
+
+func _load_friend_code() -> void:
+	"""Load the current user's friend code"""
+	print("[Social] Loading friend code...")
+	APIManager.auth.get_friend_code(_on_friend_code_loaded)
+
+
+func _on_friend_code_loaded(response: Dictionary, code: int) -> void:
+	"""Handle friend code response"""
+	if code == 200:
+		var friend_code: String = response.get("friend_code", "")
+		if not friend_code.is_empty():
+			friend_code_display.text = friend_code
+			print("[Social] Friend code loaded: ", friend_code)
+		else:
+			friend_code_display.text = "Error loading code"
+			print("[Social] ERROR: Friend code empty in response")
+	else:
+		friend_code_display.text = "Error loading code"
+		var error_msg: String = response.get("error", "Failed to load friend code")
+		print("[Social] ERROR loading friend code: ", error_msg)
 
 
 func _on_back_pressed() -> void:

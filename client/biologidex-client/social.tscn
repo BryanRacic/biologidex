@@ -58,6 +58,23 @@ text = "Refresh"
 [node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
+[node name="YourFriendCodeSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="YourCodeLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/YourFriendCodeSection"]
+layout_mode = 2
+text = "Your Friend Code:"
+theme_type_variation = &"HeaderMedium"
+
+[node name="FriendCodeDisplay" type="Label" parent="Panel/MarginContainer/VBoxContainer/YourFriendCodeSection"]
+layout_mode = 2
+text = "Loading..."
+theme_override_font_sizes/font_size = 24
+
+[node name="HSeparator3" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
 [node name="AddFriendSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 10

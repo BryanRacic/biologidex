@@ -115,3 +115,28 @@ func _on_refresh_error(error: APITypes.APIError, context: Dictionary) -> void:
 	token_refresh_failed.emit(error)
 	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
+
+## Get current user's friend code
+## Returns: {friend_code, username}
+func get_friend_code(callback: Callable = Callable()) -> void:
+	_log("Getting user's friend code")
+
+	var req_config = _create_request_config(true)
+	var context = {"callback": callback}
+
+	api_client.request_get(
+		config.ENDPOINTS_USER["friend_code"],
+		_on_friend_code_success.bind(context),
+		_on_friend_code_error.bind(context),
+		req_config
+	)
+
+func _on_friend_code_success(response: Dictionary, context: Dictionary) -> void:
+	_log("Friend code retrieved successfully")
+	if context.callback and context.callback.is_valid():
+		context.callback.call(response, 200)
+
+func _on_friend_code_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "get_friend_code")
+	if context.callback and context.callback.is_valid():
+		context.callback.call({"error": error.message}, error.code)
