@@ -57,7 +57,8 @@
     - Will be the image displayed on the tree
 - If multiple dex entries on same node
   - New window with each dex entry
-
+- [WIP] common names not loaded in db
+  - Add option to just load common names
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
