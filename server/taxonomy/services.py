@@ -442,27 +442,58 @@ class TaxonomyService:
     @classmethod
     def search_taxonomy(
         cls,
-        query: str,
+        query: str = '',
+        genus: str = '',
+        species: str = '',
+        common_name: str = '',
         rank: Optional[str] = None,
         kingdom: Optional[str] = None,
         limit: int = 20
     ) -> List[Taxonomy]:
         """
-        Search taxonomy database
+        Search taxonomy database with field-specific or general search
 
         Args:
-            query: Search term
+            query: General search term (searches across all fields)
+            genus: Search by genus field specifically
+            species: Search by species epithet field specifically
+            common_name: Search by common name specifically
             rank: Filter by rank (e.g., 'species', 'genus')
             kingdom: Filter by kingdom
             limit: Maximum results
         """
-        # Build search query
-        search_q = (
-            Q(scientific_name__icontains=query) |
-            Q(genus__icontains=query) |
-            Q(common_names__name__icontains=query)
-        )
+        # Build search query with Q objects
+        search_queries = []
 
+        # Field-specific searches (exact field matching with icontains)
+        if genus:
+            search_queries.append(Q(genus__icontains=genus))
+
+        if species:
+            search_queries.append(Q(specific_epithet__icontains=species))
+
+        if common_name:
+            search_queries.append(Q(common_names__name__icontains=common_name))
+
+        # General query searches across multiple fields
+        if query:
+            search_queries.append(
+                Q(scientific_name__icontains=query) |
+                Q(genus__icontains=query) |
+                Q(specific_epithet__icontains=query) |
+                Q(common_names__name__icontains=query)
+            )
+
+        # Combine all search queries with AND logic (all must match)
+        if not search_queries:
+            return []
+
+        # Combine search queries with AND
+        combined_search = search_queries[0]
+        for q in search_queries[1:]:
+            combined_search &= q
+
+        # Additional filters
         filters = Q(status__in=['accepted', 'provisional'])
 
         if rank:
@@ -472,9 +503,11 @@ class TaxonomyService:
             filters &= Q(kingdom__iexact=kingdom)
 
         results = Taxonomy.objects.filter(
-            search_q & filters
+            combined_search & filters
         ).select_related(
             'source', 'rank'
+        ).prefetch_related(
+            'common_names'
         ).distinct().order_by(
             '-completeness_score',
             'scientific_name'

@@ -9,6 +9,8 @@ signal taxonomy_received(taxonomy: Dictionary)
 signal taxonomy_failed(error: APITypes.APIError)
 
 ## Search taxonomy database
+## Can search by specific fields (genus, species, common_name) or general query
+## All provided search fields will be combined with AND logic
 func search(
 	query: String = "",
 	genus: String = "",
@@ -21,31 +23,28 @@ func search(
 ) -> void:
 	_log("Searching taxonomy database")
 
-	# Build search query - combine all search fields into 'q' parameter
-	var search_terms = []
-	if not genus.is_empty():
-		search_terms.append(genus)
-	if not species.is_empty():
-		search_terms.append(species)
-	if not common_name.is_empty():
-		search_terms.append(common_name)
-	if not query.is_empty():
-		search_terms.append(query)
-
-	var search_query = " ".join(search_terms).strip_edges()
-
-	if search_query.is_empty():
-		_log("ERROR: Search query is empty")
+	# Validate at least one search parameter
+	if query.is_empty() and genus.is_empty() and species.is_empty() and common_name.is_empty():
+		_log("ERROR: At least one search parameter is required")
 		var error = APITypes.APIError.new()
 		error.code = 400
-		error.message = "Search query cannot be empty"
+		error.message = "At least one search parameter is required (query, genus, species, or common_name)"
 		search_failed.emit(error)
 		if callback and callback.is_valid():
 			callback.call({"error": error.message}, 400)
 		return
 
-	var params = {"q": search_query, "limit": str(limit)}
+	# Build params with field-specific searches
+	var params = {"limit": str(limit)}
 
+	if not query.is_empty():
+		params["q"] = query
+	if not genus.is_empty():
+		params["genus"] = genus
+	if not species.is_empty():
+		params["species"] = species
+	if not common_name.is_empty():
+		params["common_name"] = common_name
 	if not rank.is_empty():
 		params["rank"] = rank
 	if not kingdom.is_empty():

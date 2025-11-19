@@ -28,24 +28,36 @@ class TaxonomyViewSet(viewsets.ReadOnlyModelViewSet):
         Search taxonomy database
 
         Query params:
-        - q: Search term (required)
+        - q: General search term (optional) - searches across all fields
+        - genus: Search by genus (optional)
+        - species: Search by species epithet (optional)
+        - common_name: Search by common name (optional)
         - rank: Filter by rank (optional)
         - kingdom: Filter by kingdom (optional)
         - limit: Maximum results (default: 20, max: 100)
+
+        Note: At least one search parameter (q, genus, species, or common_name) is required
         """
         query = request.query_params.get('q', '').strip()
+        genus = request.query_params.get('genus', '').strip()
+        species = request.query_params.get('species', '').strip()
+        common_name = request.query_params.get('common_name', '').strip()
         rank = request.query_params.get('rank')
         kingdom = request.query_params.get('kingdom')
         limit = min(int(request.query_params.get('limit', 20)), 100)
 
-        if not query:
+        # Require at least one search parameter
+        if not any([query, genus, species, common_name]):
             return Response(
-                {'error': 'Query parameter "q" is required'},
+                {'error': 'At least one search parameter is required (q, genus, species, or common_name)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         results = TaxonomyService.search_taxonomy(
             query=query,
+            genus=genus,
+            species=species,
+            common_name=common_name,
             rank=rank,
             kingdom=kingdom,
             limit=limit

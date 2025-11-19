@@ -23,23 +23,25 @@ func set_taxonomy_data(data: Dictionary) -> void:
 
 func _update_display() -> void:
 	"""Update the visual display with taxonomy data"""
-	# Scientific name (bold, primary)
 	var scientific_name = taxonomy_data.get("scientific_name", "Unknown")
-	scientific_name_label.text = scientific_name
 
-	# Common name (secondary)
+	# Get common name
+	var common_name = ""
 	var common_names = taxonomy_data.get("common_names", [])
 	if common_names is Array and common_names.size() > 0:
-		# Get first common name
 		var first_common = common_names[0]
-		var common_name = ""
 		if typeof(first_common) == TYPE_DICTIONARY:
 			common_name = first_common.get("name", "")
 		else:
 			common_name = str(first_common)
-		common_name_label.text = common_name
-		common_name_label.visible = not common_name.is_empty()
+
+	# Display as "Common Name - Scientific Name" format
+	if not common_name.is_empty():
+		scientific_name_label.text = common_name + " - " + scientific_name
+		common_name_label.visible = false
 	else:
+		# Fallback to just scientific name if no common name
+		scientific_name_label.text = scientific_name
 		common_name_label.visible = false
 
 	# Taxonomic hierarchy (tertiary)
