@@ -21,9 +21,6 @@ var social: SocialService
 var dex: DexService
 var animals: AnimalsService
 
-# Base URL (for backward compatibility)
-const BASE_URL = "https://biologidex.io/api/v1"
-
 func _ready() -> void:
 	_initialize_core()
 	_initialize_services()

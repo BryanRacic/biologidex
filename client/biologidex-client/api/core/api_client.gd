@@ -253,23 +253,19 @@ func _execute_request(request: APITypes.QueuedRequest) -> void:
 			error_wrapper
 		)
 	elif request.body is String and not request.body.is_empty():
-		# JSON request
-		var error = http_client.http_request.request(
-			request.url,
-			request.headers,
-			request.method,
-			request.body
-		)
+		# JSON request - parse the body back to dictionary for make_json_request
+		var json = JSON.new()
+		var parse_result = json.parse(request.body)
+		var data = json.data if parse_result == OK else {}
 
-		if error != OK:
-			var error_msg = "Failed to make request: %s" % error
-			var api_error = APITypes.APIError.new(0, error_msg, error_msg)
-			error_wrapper.call(api_error)
-		else:
-			# Store callbacks
-			http_client.http_request.set_meta("success_callback", success_wrapper)
-			http_client.http_request.set_meta("error_callback", error_wrapper)
-			http_client.http_request.set_meta("request_url", request.url)
+		http_client.make_json_request(
+			request.method,
+			request.url,
+			data,
+			success_wrapper,
+			error_wrapper,
+			Array(request.headers).filter(func(h): return not h.begins_with("Content-Type:"))
+		)
 	else:
 		# GET or DELETE request
 		http_client.http_get(request.url, success_wrapper, error_wrapper, Array(request.headers))

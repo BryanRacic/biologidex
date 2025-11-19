@@ -3,6 +3,7 @@ class_name HTTPClientCore
 
 ## HTTPClientCore - Low-level HTTP request handling
 ## Manages raw HTTP operations, response parsing, and platform-specific configurations
+## Uses a pool of HTTPRequest nodes to support concurrent requests
 
 const APITypes = preload("res://api/core/api_types.gd")
 
@@ -10,21 +11,60 @@ signal request_started(url: String, method: String)
 signal request_completed(url: String, response_code: int, body: Dictionary)
 signal request_failed(url: String, error: String)
 
-var http_request: HTTPRequest
+# Pool configuration
+const POOL_SIZE = 3  # Match MAX_CONCURRENT_REQUESTS from APIConfig
+
+# HTTPRequest pool
+var http_request_pool: Array[HTTPRequest] = []
+var available_requests: Array[HTTPRequest] = []
+
+# Legacy single request for backward compatibility
+var http_request: HTTPRequest:
+	get:
+		return _get_available_request()
 
 func _ready() -> void:
-	# Create HTTPRequest node
-	http_request = HTTPRequest.new()
-	add_child(http_request)
-	http_request.request_completed.connect(_on_request_completed)
+	# Create pool of HTTPRequest nodes
+	for i in range(POOL_SIZE):
+		var req = HTTPRequest.new()
+		req.name = "HTTPRequest_%d" % i
+		add_child(req)
+		req.request_completed.connect(_on_request_completed.bind(req))
 
-	# Disable gzip decompression in web builds to avoid double decompression
-	# (browsers already decompress gzip responses automatically)
+		# Disable gzip decompression in web builds to avoid double decompression
+		# (browsers already decompress gzip responses automatically)
+		if OS.get_name() == "Web":
+			req.accept_gzip = false
+
+		http_request_pool.append(req)
+		available_requests.append(req)
+
 	if OS.get_name() == "Web":
-		http_request.accept_gzip = false
-		print("[HTTPClient] Web build detected - disabled gzip decompression")
+		print("[HTTPClient] Web build detected - disabled gzip decompression for all %d request nodes" % POOL_SIZE)
 
-	print("[HTTPClient] Initialized")
+	print("[HTTPClient] Initialized with %d HTTPRequest nodes in pool" % POOL_SIZE)
+
+## Get an available HTTPRequest from pool
+func _get_available_request() -> HTTPRequest:
+	if available_requests.size() > 0:
+		return available_requests[0]
+	# If none available, return first one (fallback for legacy code)
+	return http_request_pool[0] if http_request_pool.size() > 0 else null
+
+## Acquire a request from the pool
+func _acquire_request() -> HTTPRequest:
+	if available_requests.size() > 0:
+		var req = available_requests.pop_front()
+		return req
+	return null
+
+## Release a request back to the pool
+func _release_request(req: HTTPRequest) -> void:
+	if req and req not in available_requests:
+		# Clear metadata
+		for meta_key in req.get_meta_list():
+			req.remove_meta(meta_key)
+		available_requests.append(req)
 
 ## Convert HTTPClient.Method enum to string
 func _method_to_string(method: HTTPClient.Method) -> String:
@@ -53,6 +93,15 @@ func make_json_request(
 	error_callback: Callable,
 	custom_headers: Array = []
 ) -> int:
+	var req = _acquire_request()
+	if not req:
+		var error_msg = "No available HTTPRequest nodes in pool"
+		_log_error(url, error_msg)
+		request_failed.emit(url, error_msg)
+		if error_callback:
+			error_callback.call(APITypes.APIError.new(0, error_msg, error_msg))
+		return ERR_BUSY
+
 	var headers = PackedStringArray(["Content-Type: application/json"])
 	for header in custom_headers:
 		headers.append(header)
@@ -63,7 +112,7 @@ func make_json_request(
 	_log_request(method_str, url, data)
 	request_started.emit(url, method_str)
 
-	var error = http_request.request(url, headers, method, body)
+	var error = req.request(url, headers, method, body)
 
 	if error != OK:
 		var error_msg = "Failed to make request: %s" % error
@@ -71,12 +120,13 @@ func make_json_request(
 		request_failed.emit(url, error_msg)
 		if error_callback:
 			error_callback.call(APITypes.APIError.new(0, error_msg, error_msg))
+		_release_request(req)
 		return error
 
 	# Store callbacks for response handling
-	http_request.set_meta("success_callback", success_callback)
-	http_request.set_meta("error_callback", error_callback)
-	http_request.set_meta("request_url", url)
+	req.set_meta("success_callback", success_callback)
+	req.set_meta("error_callback", error_callback)
+	req.set_meta("request_url", url)
 
 	return OK
 
@@ -90,11 +140,20 @@ func make_raw_request(
 	error_callback: Callable,
 	log_data: Dictionary = {}
 ) -> int:
+	var req = _acquire_request()
+	if not req:
+		var error_msg = "No available HTTPRequest nodes in pool"
+		_log_error(url, error_msg)
+		request_failed.emit(url, error_msg)
+		if error_callback:
+			error_callback.call(APITypes.APIError.new(0, error_msg, error_msg))
+		return ERR_BUSY
+
 	var method_str = _method_to_string(method)
 	_log_request(method_str, url, log_data)
 	request_started.emit(url, method_str)
 
-	var error = http_request.request_raw(url, headers, method, body)
+	var error = req.request_raw(url, headers, method, body)
 
 	if error != OK:
 		var error_msg = "Failed to make request: %s" % error
@@ -102,12 +161,13 @@ func make_raw_request(
 		request_failed.emit(url, error_msg)
 		if error_callback:
 			error_callback.call(APITypes.APIError.new(0, error_msg, error_msg))
+		_release_request(req)
 		return error
 
 	# Store callbacks for response handling
-	http_request.set_meta("success_callback", success_callback)
-	http_request.set_meta("error_callback", error_callback)
-	http_request.set_meta("request_url", url)
+	req.set_meta("success_callback", success_callback)
+	req.set_meta("error_callback", error_callback)
+	req.set_meta("request_url", url)
 
 	return OK
 
@@ -118,6 +178,15 @@ func http_get(
 	error_callback: Callable,
 	custom_headers: Array = []
 ) -> int:
+	var req = _acquire_request()
+	if not req:
+		var error_msg = "No available HTTPRequest nodes in pool"
+		_log_error(url, error_msg)
+		request_failed.emit(url, error_msg)
+		if error_callback:
+			error_callback.call(APITypes.APIError.new(0, error_msg, error_msg))
+		return ERR_BUSY
+
 	var headers = PackedStringArray()
 	for header in custom_headers:
 		headers.append(header)
@@ -125,7 +194,7 @@ func http_get(
 	_log_request("GET", url, {})
 	request_started.emit(url, "GET")
 
-	var error = http_request.request(url, headers, HTTPClient.METHOD_GET)
+	var error = req.request(url, headers, HTTPClient.METHOD_GET)
 
 	if error != OK:
 		var error_msg = "Failed to make request: %s" % error
@@ -133,12 +202,13 @@ func http_get(
 		request_failed.emit(url, error_msg)
 		if error_callback:
 			error_callback.call(APITypes.APIError.new(0, error_msg, error_msg))
+		_release_request(req)
 		return error
 
 	# Store callbacks for response handling
-	http_request.set_meta("success_callback", success_callback)
-	http_request.set_meta("error_callback", error_callback)
-	http_request.set_meta("request_url", url)
+	req.set_meta("success_callback", success_callback)
+	req.set_meta("error_callback", error_callback)
+	req.set_meta("request_url", url)
 
 	return OK
 
@@ -208,10 +278,10 @@ func build_multipart_body_with_fields(boundary: String, fields: Array) -> Packed
 	return packet
 
 ## Handle HTTP request completion
-func _on_request_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	var url: String = http_request.get_meta("request_url", "unknown")
-	var success_callback: Callable = http_request.get_meta("success_callback")
-	var error_callback: Callable = http_request.get_meta("error_callback")
+func _on_request_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, req: HTTPRequest) -> void:
+	var url: String = req.get_meta("request_url", "unknown")
+	var success_callback: Callable = req.get_meta("success_callback")
+	var error_callback: Callable = req.get_meta("error_callback")
 
 	# Parse response body
 	var response_text := body.get_string_from_utf8()
@@ -251,6 +321,9 @@ func _on_request_completed(_result: int, response_code: int, _headers: PackedStr
 
 		if error_callback:
 			error_callback.call(api_error)
+
+	# Release request back to pool
+	_release_request(req)
 
 ## Logging functions
 func _log_request(method: String, url: String, data: Dictionary) -> void:

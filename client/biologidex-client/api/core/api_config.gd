@@ -30,7 +30,7 @@ const ENDPOINTS_AUTH = {
 const ENDPOINTS_USER = {
 	"register": "/users/",
 	"me": "/users/me/",
-	"friend_code": "/users/friend-code/",
+	"friend_code": "/users/friend_code/",
 	"lookup_friend_code": "/users/lookup_friend_code/",
 }
 
