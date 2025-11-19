@@ -73,13 +73,14 @@ class TaxonomyMinimalSerializer(serializers.ModelSerializer):
     """Minimal serializer for taxonomy - used in lists"""
     source_name = serializers.CharField(source='source.short_code', read_only=True)
     rank_name = serializers.CharField(source='rank.name', read_only=True)
+    common_names = CommonNameSerializer(many=True, read_only=True)
 
     class Meta:
         model = Taxonomy
         fields = [
             'id', 'scientific_name', 'rank_name', 'status',
             'kingdom', 'phylum', 'class_name', 'order', 'family', 'genus',
-            'source_name', 'completeness_score'
+            'source_name', 'completeness_score', 'common_names'
         ]
 
 
