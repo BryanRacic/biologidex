@@ -57,8 +57,18 @@
     - Will be the image displayed on the tree
 - If multiple dex entries on same node
   - New window with each dex entry
-- [WIP] common names not loaded in db
-  - Add option to just load common names
+- New dex entry flow
+  - First upload image -> image conversion -> download converted image
+    - option to rotate image
+      - (in future can crop imag )
+      - finalize image
+    - run analysis on image
+      - from server w/ rotations applied
+    - post analysis
+      - if many animals returned -> select which animal
+      - allow for manually selecting new animal ID
+    - Dex creation w/ selected animal ID
+
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
