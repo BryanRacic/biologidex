@@ -293,30 +293,6 @@ func _on_update_entry_error(error: APITypes.APIError, context: Dictionary) -> vo
         context.callback.call({"error": error.message}, error.code)
 ```
 
-## Testing Plan
-
-### Unit Tests
-1. TaxonomyService search functionality
-2. Manual entry popup data validation
-3. DexEntry update API endpoint
-4. Animal replacement logic
-
-### Integration Tests
-1. Camera scene → Manual Entry → Update flow
-2. Dex scene → Edit → Update flow
-3. Search with various parameter combinations
-4. Error handling for network failures
-5. Duplicate animal handling
-
-### User Acceptance Tests
-1. Successfully search for animals by genus/species
-2. Successfully search for animals by common name
-3. Select and submit a different taxonomic record
-4. Verify dex entry is updated correctly
-5. Verify duplicate animals are handled (existing animal reused)
-6. Test with no search results
-7. Test with network errors
-
 ## Error Handling
 
 ### Client Side
@@ -408,12 +384,6 @@ func _on_update_entry_error(error: APITypes.APIError, context: Dictionary) -> vo
    - Add edit button
    - Pre-populate data
    - Test workflow
-
-6. **Testing & Bug Fixes** (4 hours)
-   - Unit tests
-   - Integration tests
-   - Bug fixes
-
 **Total Estimate**: 22 hours
 
 ## Future Enhancements

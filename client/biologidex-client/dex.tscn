@@ -103,5 +103,11 @@ layout_mode = 2
 size_flags_horizontal = 4
 text = "Next"
 
+[node name="EditButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Edit Entry"
+
 [node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2

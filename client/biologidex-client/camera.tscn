@@ -118,6 +118,13 @@ size_flags_horizontal = 4
 disabled = true
 text = "Upload & Analyze"
 
+[node name="ManualEntryButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Manual Entry"
+
 [node name="LoadingSpinner" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 layout_mode = 2
 text = "⏳ Processing..."

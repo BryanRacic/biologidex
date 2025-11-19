@@ -5,6 +5,7 @@ extends Control
 
 @onready var select_photo_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/SelectPhotoButton
 @onready var upload_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/UploadButton
+@onready var manual_entry_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ManualEntryButton
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/StatusLabel
 @onready var progress_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ProgressLabel
 @onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/LoadingSpinner
@@ -23,6 +24,7 @@ var selected_file_name: String = ""
 var selected_file_type: String = ""
 var selected_file_data: PackedByteArray = PackedByteArray()
 var current_job_id: String = ""
+var current_dex_entry_id: String = ""
 var status_check_timer: Timer
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
@@ -80,6 +82,7 @@ func _ready() -> void:
 	# Connect buttons
 	select_photo_button.pressed.connect(_on_select_photo_pressed)
 	upload_button.pressed.connect(_on_upload_pressed)
+	manual_entry_button.pressed.connect(_on_manual_entry_pressed)
 	rotate_image_button.pressed.connect(_on_rotate_image_pressed)
 	back_button.pressed.connect(_on_back_pressed)
 
@@ -724,6 +727,10 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 			_create_server_dex_entry(animal_id, current_job_id)
 		else:
 			print("[Camera] WARNING: Missing creation_index or animal ID, not saving to dex")
+			# Show manual entry button even if we don't have complete animal details
+			upload_button.visible = false
+			manual_entry_button.visible = true
+			manual_entry_button.disabled = false
 	else:
 		print("[Camera] WARNING: No animal_details, not saving to dex")
 
@@ -759,8 +766,14 @@ func _create_server_dex_entry(animal_id: String, vision_job_id: String) -> void:
 func _on_dex_entry_created(response: Dictionary, code: int) -> void:
 	"""Handle dex entry creation response"""
 	if code == 200 or code == 201:
-		var entry_id = response.get("id", "unknown")
-		print("[Camera] Server-side dex entry created: ", entry_id)
+		var entry_id = response.get("id", "")
+		current_dex_entry_id = str(entry_id) if entry_id else ""
+		print("[Camera] Server-side dex entry created: ", current_dex_entry_id)
+
+		# Show manual entry button after successful creation
+		upload_button.visible = false
+		manual_entry_button.visible = true
+		manual_entry_button.disabled = false
 	else:
 		var error_msg = response.get("error", "Unknown error")
 		print("[Camera] WARNING: Failed to create server-side dex entry: ", error_msg)
@@ -864,3 +877,57 @@ func _load_cached_image(url: String) -> Image:
 				return image
 
 	return null
+
+
+func _on_manual_entry_pressed() -> void:
+	"""Open manual entry popup for taxonomic search"""
+	print("[Camera] Opening manual entry popup")
+
+	# Create and configure popup
+	var popup_scene = load("res://components/manual_entry_popup.tscn")
+	if not popup_scene:
+		print("[Camera] ERROR: Could not load manual entry popup scene")
+		return
+
+	var popup = popup_scene.instantiate()
+
+	# Set current dex entry if available
+	if not current_dex_entry_id.is_empty():
+		popup.current_dex_entry_id = current_dex_entry_id
+		print("[Camera] Set dex entry ID: ", current_dex_entry_id)
+
+	# Connect signals
+	popup.entry_updated.connect(_on_manual_entry_updated)
+	popup.popup_closed.connect(_on_manual_entry_closed)
+
+	# Add to scene and show
+	add_child(popup)
+	popup.popup_centered(Vector2(600, 500))
+
+
+func _on_manual_entry_updated(taxonomy_data: Dictionary) -> void:
+	"""Handle manual entry update"""
+	print("[Camera] Manual entry updated with taxonomy: ", taxonomy_data.get("scientific_name", ""))
+
+	# Update the displayed record label if we have animal details
+	var animal_details = taxonomy_data.get("animal_details", {})
+	if not animal_details.is_empty():
+		var scientific_name = animal_details.get("scientific_name", "")
+		var common_name = animal_details.get("common_name", "")
+
+		var display_text = scientific_name
+		if not common_name.is_empty():
+			display_text += " - " + common_name
+
+		if display_text.length() > 0:
+			record_label.text = display_text
+			result_label.text = display_text
+			result_label.add_theme_color_override("font_color", Color.GREEN)
+
+	status_label.text = "Entry updated successfully!"
+	status_label.add_theme_color_override("font_color", Color.GREEN)
+
+
+func _on_manual_entry_closed() -> void:
+	"""Handle manual entry popup closed"""
+	print("[Camera] Manual entry popup closed")

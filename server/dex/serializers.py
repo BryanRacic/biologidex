@@ -121,12 +121,20 @@ class DexEntryUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DexEntry
         fields = [
+            'animal',
             'notes',
             'customizations',
             'visibility',
             'is_favorite',
             'location_name',
         ]
+
+    def validate_animal(self, value):
+        """Validate that the animal exists"""
+        from animals.models import Animal
+        if not Animal.objects.filter(id=value.id).exists():
+            raise serializers.ValidationError("Animal does not exist")
+        return value
 
 
 class DexEntrySyncSerializer(serializers.ModelSerializer):

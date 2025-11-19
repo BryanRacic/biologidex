@@ -75,6 +75,15 @@ const ENDPOINTS_ANIMALS = {
 	"lookup_or_create": "/animals/lookup_or_create/",
 }
 
+# Taxonomy endpoints
+const ENDPOINTS_TAXONOMY = {
+	"search": "/taxonomy/search/",
+	"validate": "/taxonomy/validate/",
+	"detail": "/taxonomy/%s/",  # Format with taxonomy ID
+	"lineage": "/taxonomy/%s/lineage/",  # Format with taxonomy ID
+	"children": "/taxonomy/%s/children/",  # Format with taxonomy ID
+}
+
 ## Build full URL from endpoint path
 func build_url(endpoint: String) -> String:
 	if endpoint.begins_with("http"):

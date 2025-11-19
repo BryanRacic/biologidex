@@ -108,6 +108,43 @@ class DexEntryViewSet(viewsets.ModelViewSet):
             return DexEntryUpdateSerializer
         return DexEntrySerializer
 
+    def perform_update(self, serializer):
+        """
+        Handle DexEntry updates with animal replacement logic.
+
+        When the animal field is updated:
+        1. Check if user already has a dex entry for the new animal
+        2. If yes, delete the current entry (deduplicate)
+        3. If no, update the current entry with the new animal
+        """
+        # Check if animal is being updated
+        if 'animal' in serializer.validated_data:
+            new_animal = serializer.validated_data['animal']
+            current_entry = serializer.instance
+            user = current_entry.owner
+
+            # Check if user already has this animal in their dex
+            existing_entry = DexEntry.objects.filter(
+                owner=user,
+                animal=new_animal
+            ).exclude(id=current_entry.id).first()
+
+            if existing_entry:
+                # User already has this animal - delete current entry
+                # The existing entry will remain
+                print(f"[DexEntry] User {user.username} already has animal {new_animal.id}, "
+                      f"deleting duplicate entry {current_entry.id}")
+                current_entry.delete()
+                # Invalidate cache
+                invalidate_user_dex_cache(str(user.id))
+                return  # Don't save, we deleted it
+
+        # Normal update
+        serializer.save()
+
+        # Invalidate cache on update
+        invalidate_user_dex_cache(str(serializer.instance.owner.id))
+
     @action(detail=False, methods=['get'])
     def my_entries(self, request):
         """Get current user's dex entries."""

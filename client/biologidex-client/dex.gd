@@ -10,6 +10,7 @@ extends Control
 @onready var simple_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/Image
 @onready var previous_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer/PreviousButton
 @onready var next_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer/NextButton
+@onready var edit_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/EditButton
 
 # TODO: Add these UI elements to dex.tscn:
 # @onready var user_selector: OptionButton = $Panel/MarginContainer/VBoxContainer/Header/UserSelector
@@ -37,6 +38,7 @@ func _ready() -> void:
 	back_button.pressed.connect(_on_back_pressed)
 	previous_button.pressed.connect(_on_previous_pressed)
 	next_button.pressed.connect(_on_next_pressed)
+	edit_button.pressed.connect(_on_edit_pressed)
 
 	# Connect to database signals
 	DexDatabase.record_added.connect(_on_record_added_multi_user)
@@ -388,3 +390,115 @@ func _on_friends_overview_received(friends: Array) -> void:
 			available_users[friend_id] = username + "'s Dex"
 
 	# TODO: Update user selector dropdown with updated names
+
+
+func _on_edit_pressed() -> void:
+	"""Open manual entry popup for editing current dex entry"""
+	if current_index < 0:
+		print("[Dex] Cannot edit: No record selected")
+		return
+
+	# Only allow editing own dex
+	if current_user_id != "self":
+		print("[Dex] Cannot edit: Can only edit your own dex entries")
+		return
+
+	print("[Dex] Opening manual entry for editing record #", current_index)
+
+	# Get current record data
+	var record := DexDatabase.get_record_for_user(current_index, current_user_id)
+	if record.is_empty():
+		print("[Dex] ERROR: Could not find record")
+		return
+
+	# We need to get the server-side dex entry ID
+	# For now, we'll need to fetch this from the server or store it in the database
+	# This is a limitation - we need to track the dex entry ID
+	# For the MVP, we'll need to sync and get the entry ID from the server
+
+	# Get entry ID from synced data
+	# We'll need to query the server for the entry ID based on the animal creation_index
+	_get_entry_id_for_edit(record)
+
+
+func _get_entry_id_for_edit(record: Dictionary) -> void:
+	"""Get the server-side dex entry ID for editing"""
+	var creation_index = record.get("creation_index", -1)
+	if creation_index < 0:
+		print("[Dex] ERROR: Invalid creation index")
+		return
+
+	# Fetch own entries to find the one matching this creation_index
+	# We'll use the sync endpoint to get all our entries
+	APIManager.dex.get_my_entries(_on_my_entries_for_edit.bind(creation_index, record))
+
+
+func _on_my_entries_for_edit(response: Dictionary, code: int, creation_index: int, record: Dictionary) -> void:
+	"""Handle my entries response for editing"""
+	if code != 200:
+		print("[Dex] ERROR: Failed to fetch entries for editing")
+		return
+
+	var entries = response.get("results", [])
+	var entry_id = ""
+
+	# Find the entry matching our creation index
+	for entry in entries:
+		var animal_details = entry.get("animal_details", {})
+		if animal_details.get("creation_index", -1) == creation_index:
+			entry_id = str(entry.get("id", ""))
+			break
+
+	if entry_id.is_empty():
+		print("[Dex] ERROR: Could not find dex entry ID for this animal")
+		return
+
+	print("[Dex] Found dex entry ID: ", entry_id)
+
+	# Now open the manual entry popup
+	_open_manual_entry_popup(entry_id, record)
+
+
+func _open_manual_entry_popup(entry_id: String, record: Dictionary) -> void:
+	"""Open the manual entry popup with current data"""
+	# Create popup
+	var popup_scene = load("res://components/manual_entry_popup.tscn")
+	if not popup_scene:
+		print("[Dex] ERROR: Could not load manual entry popup scene")
+		return
+
+	var popup = popup_scene.instantiate()
+
+	# Pre-populate with current animal data
+	popup.prefill_data = {
+		"genus": record.get("genus", ""),
+		"species": record.get("species", ""),
+		"common_name": record.get("common_name", "")
+	}
+
+	# Set the dex entry ID for updating
+	popup.current_dex_entry_id = entry_id
+
+	# Connect signals
+	popup.entry_updated.connect(_on_edit_entry_updated)
+	popup.popup_closed.connect(_on_edit_popup_closed)
+
+	# Show popup
+	add_child(popup)
+	popup.popup_centered(Vector2(600, 500))
+
+
+func _on_edit_entry_updated(_taxonomy_data: Dictionary) -> void:
+	"""Handle entry update from manual entry popup"""
+	print("[Dex] Entry updated with new taxonomy")
+
+	# Refresh current display
+	_display_record(current_index)
+
+	# Trigger sync to update from server
+	trigger_sync()
+
+
+func _on_edit_popup_closed() -> void:
+	"""Handle edit popup closed"""
+	print("[Dex] Edit popup closed")

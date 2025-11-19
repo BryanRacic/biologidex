@@ -22,6 +22,10 @@ signal sync_user_failed(user_id: String, error_message: String)
 signal friends_overview_received(friends: Array)
 signal friends_overview_failed(error: APITypes.APIError)
 
+## Entry update signals
+signal entry_updated(entry_data: Dictionary)
+signal entry_update_failed(error: APITypes.APIError)
+
 ## Create a new dex entry
 func create_entry(
 	animal_id: String,
@@ -151,6 +155,38 @@ func _on_toggle_favorite_success(response: Dictionary, context: Dictionary) -> v
 func _on_toggle_favorite_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "toggle_favorite")
 	favorite_toggle_failed.emit(error)
+	if context.callback and context.callback.is_valid():
+		context.callback.call({"error": error.message}, error.code)
+
+## Update a dex entry (e.g., change animal, notes, visibility)
+func update_entry(
+	entry_id: String,
+	update_data: Dictionary,
+	callback: Callable = Callable()
+) -> void:
+	_log("Updating dex entry: %s" % entry_id)
+
+	var endpoint = config.ENDPOINTS_DEX["entries"] + entry_id + "/"
+	var req_config = _create_request_config()
+	var context = {"entry_id": entry_id, "callback": callback}
+
+	api_client.patch(
+		endpoint,
+		update_data,
+		_on_update_entry_success.bind(context),
+		_on_update_entry_error.bind(context),
+		req_config
+	)
+
+func _on_update_entry_success(response: Dictionary, context: Dictionary) -> void:
+	_log("Dex entry updated successfully: %s" % context.entry_id)
+	entry_updated.emit(response)
+	if context.callback and context.callback.is_valid():
+		context.callback.call(response, 200)
+
+func _on_update_entry_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "update_entry")
+	entry_update_failed.emit(error)
 	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 

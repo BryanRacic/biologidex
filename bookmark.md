@@ -52,7 +52,12 @@
   - retry if image id seems inaccurate
     - try different model/modify prompt
   - manually lookup by common/scientific name
- 
+- Feed of all friends new dex entries (sort by most liked vs newest)
+  - Everyone can upvote a dex entry
+    - Will be the image displayed on the tree
+- If multiple dex entries on same node
+  - New window with each dex entry
+
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done

@@ -1,0 +1,139 @@
+[gd_scene load_steps=2 format=3 uid="uid://bhk8v4kam2x3r"]
+
+[ext_resource type="Script" path="res://components/manual_entry_popup.gd" id="1_manual_entry"]
+
+[node name="ManualEntryPopup" type="PopupPanel"]
+title = "Manual Entry"
+initial_position = 2
+size = Vector2i(600, 500)
+script = ExtResource("1_manual_entry")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 2
+offset_right = 600.0
+offset_bottom = 500.0
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Header" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "Search Taxonomic Database"
+
+[node name="CloseButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "X"
+
+[node name="SearchForm" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="GenusContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/SearchForm"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="GenusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/SearchForm/GenusContainer"]
+layout_mode = 2
+text = "Genus:"
+
+[node name="GenusInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/SearchForm/GenusContainer"]
+layout_mode = 2
+placeholder_text = "Enter genus name"
+
+[node name="SpeciesContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/SearchForm"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SpeciesLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/SearchForm/SpeciesContainer"]
+layout_mode = 2
+text = "Species:"
+
+[node name="SpeciesInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/SearchForm/SpeciesContainer"]
+layout_mode = 2
+placeholder_text = "Enter species name"
+
+[node name="CommonNameContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/SearchForm"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CommonNameLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/SearchForm/CommonNameContainer"]
+layout_mode = 2
+text = "Common Name:"
+
+[node name="CommonNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/SearchForm/CommonNameContainer"]
+layout_mode = 2
+placeholder_text = "Enter common name"
+
+[node name="ButtonContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/SearchForm"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SearchButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/SearchForm/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Search"
+
+[node name="BackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/SearchForm/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Back"
+
+[node name="ResultsContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="ResultsLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+text = "Results:"
+visible = false
+
+[node name="LoadingLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 1, 1)
+text = "Searching..."
+visible = false
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ResultsList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="SelectionContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SelectedLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/SelectionContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 1, 0.8, 1)
+text = "Selected: None"
+
+[node name="SubmitButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/SelectionContainer"]
+layout_mode = 2
+text = "Submit"
+disabled = true
