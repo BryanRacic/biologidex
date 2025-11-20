@@ -99,16 +99,31 @@ def process_analysis_job(self, job_id: str, transformations: dict = None):
             raw_response_str = raw_response_str[:500] + "... (truncated)"
         logger.debug(f"[CV RESPONSE] Raw response structure: {raw_response_str}")
 
-        # Parse the prediction to extract animal information
-        animal = parse_and_create_animal(
+        # Parse the prediction to extract ALL detected animals
+        detected_animals_data = parse_and_create_animals(
             result['prediction'],
             user=job.user
         )
 
+        # Prepare detected_animals for storage (remove Animal instances, keep IDs)
+        detected_animals_json = []
+        for animal_data in detected_animals_data:
+            detected_animals_json.append({
+                "scientific_name": animal_data["scientific_name"],
+                "common_name": animal_data["common_name"],
+                "confidence": animal_data["confidence"],
+                "animal_id": animal_data["animal_id"],
+                "is_new": animal_data["is_new"]
+            })
+
+        # For backward compatibility, set identified_animal to first detection
+        first_animal = detected_animals_data[0]["animal"] if detected_animals_data else None
+
         # Mark job as completed
         job.mark_completed(
             parsed_prediction=result['prediction'],
-            identified_animal=animal,
+            identified_animal=first_animal,  # Legacy field
+            detected_animals=detected_animals_json,  # New field
             cost_usd=result['cost_usd'],
             processing_time=result['processing_time'],
             raw_response=result['raw_response'],
@@ -118,7 +133,8 @@ def process_analysis_job(self, job_id: str, transformations: dict = None):
 
         logger.info(
             f"AnalysisJob {job_id} completed successfully. "
-            f"Animal: {animal.scientific_name if animal else 'None'}"
+            f"Detected {len(detected_animals_data)} animals. "
+            f"First: {first_animal.scientific_name if first_animal else 'None'}"
         )
 
     except Exception as e:
@@ -135,95 +151,143 @@ def process_analysis_job(self, job_id: str, transformations: dict = None):
             job.mark_failed(str(e))
 
 
-def parse_and_create_animal(prediction: str, user) -> Animal:
+def parse_and_create_animals(prediction: str, user) -> list:
     """
-    Parse CV prediction and create/retrieve Animal record using taxonomy system.
+    Parse CV prediction and create/retrieve ALL detected Animal records.
 
-    Expected format: "Genus species [subspecies] (common name)"
+    This replaces the single-animal parse_and_create_animal function.
+    Supports multiple animals separated by '|' delimiter.
+
+    Expected format: "Genus species [subspecies] (common name) [| Genus2 species2 ...]"
 
     Args:
-        prediction: Prediction string from CV service
+        prediction: Prediction string from CV service (can contain multiple animals)
         user: User who submitted the image (for created_by field)
 
     Returns:
-        Animal instance if successfully parsed and created/found, None otherwise
+        List of dicts containing animal data:
+        [
+            {
+                "animal": Animal instance or None,
+                "scientific_name": str,
+                "common_name": str,
+                "confidence": float (0.0 for now),
+                "is_new": bool,
+                "message": str (debug info)
+            },
+            ...
+        ]
+        Returns empty list if no animals found.
     """
     if not prediction or prediction.strip().upper() == "NO ANIMALS FOUND":
         logger.info("No animals found in image")
-        return None
+        return []
 
-    try:
-        # Parse the prediction
-        # Expected formats:
-        # - "*Genus species* (common name)" - with markdown italics
-        # - "Genus species (common name)"
-        # - "Genus, species (common name)"
-        # - "Genus species subspecies (common name)" - with subspecies
-        # - Multiple animals separated by newlines or commas
+    # Split by pipe delimiter for multiple animals
+    animal_entries = [entry.strip() for entry in prediction.split('|') if entry.strip()]
 
-        # Take first animal if multiple
-        first_line = prediction.split('\n')[0].strip()
+    if not animal_entries:
+        logger.info("No valid animal entries after splitting")
+        return []
 
-        # Remove markdown formatting (asterisks, underscores)
-        first_line = re.sub(r'[*_]', '', first_line)
+    results = []
 
-        # Extract scientific name and common name
-        # Pattern: Genus species [subspecies] (optional common name)
-        # Improved pattern to capture genus, species, subspecies separately
-        pattern = r'([A-Z][a-z]+)[,\s]+([a-z]+)(?:\s+([a-z]+))?\s*(?:\(([^)]+)\))?'
-        match = re.search(pattern, first_line)
+    for idx, entry in enumerate(animal_entries):
+        try:
+            # Remove markdown formatting (asterisks, underscores)
+            entry = re.sub(r'[*_]', '', entry)
 
-        if not match:
-            logger.warning(f"Could not parse prediction: {prediction}")
-            return None
+            # Extract scientific name and common name
+            # Pattern: Genus species [subspecies] (optional common name)
+            pattern = r'([A-Z][a-z]+)[,\s]+([a-z]+)(?:\s+([a-z]+))?\s*(?:\(([^)]+)\))?'
+            match = re.search(pattern, entry)
 
-        genus = match.group(1)
-        species = match.group(2)
-        subspecies = match.group(3) if match.group(3) else None
-        common_name = match.group(4).strip() if match.group(4) else ""
+            if not match:
+                logger.warning(f"Could not parse animal entry {idx + 1}: {entry}")
+                continue
 
-        # Build scientific name
-        if subspecies:
-            scientific_name = f"{genus} {species} {subspecies}"
-        else:
-            scientific_name = f"{genus} {species}"
+            genus = match.group(1)
+            species = match.group(2)
+            subspecies = match.group(3) if match.group(3) else None
+            common_name = match.group(4).strip() if match.group(4) else ""
 
-        logger.info(
-            f"[CV PARSING] Successfully parsed prediction:\n"
-            f"  Original: {first_line}\n"
-            f"  Genus: {genus}\n"
-            f"  Species: {species}\n"
-            f"  Subspecies: {subspecies}\n"
-            f"  Common name: {common_name}\n"
-            f"  Scientific name: {scientific_name}"
-        )
+            # Build scientific name
+            if subspecies:
+                scientific_name = f"{genus} {species} {subspecies}"
+            else:
+                scientific_name = f"{genus} {species}"
 
-        # Use taxonomy-aware animal service for lookup/creation
-        from animals.services import AnimalService
+            logger.info(
+                f"[CV PARSING] Animal {idx + 1}/{len(animal_entries)}:\n"
+                f"  Original: {entry}\n"
+                f"  Genus: {genus}\n"
+                f"  Species: {species}\n"
+                f"  Subspecies: {subspecies}\n"
+                f"  Common name: {common_name}\n"
+                f"  Scientific name: {scientific_name}"
+            )
 
-        animal, created, message = AnimalService.lookup_or_create_from_cv(
-            genus=genus,
-            species=species,
-            subspecies=subspecies,
-            common_name=common_name,
-            confidence=0.0  # CV confidence will be set separately in AnalysisJob
-        )
+            # Use taxonomy-aware animal service for lookup/creation
+            from animals.services import AnimalService
 
-        if animal:
-            # Set created_by if this is a newly created animal
-            if created and user:
-                animal.created_by = user
-                animal.save(update_fields=['created_by'])
+            animal, created, message = AnimalService.lookup_or_create_from_cv(
+                genus=genus,
+                species=species,
+                subspecies=subspecies,
+                common_name=common_name,
+                confidence=0.0  # CV confidence will be set separately
+            )
 
-            logger.info(f"{'Created' if created else 'Found'} animal: {animal} - {message}")
-            return animal
-        else:
-            logger.warning(f"Failed to create animal: {message}")
-            return None
+            if animal:
+                # Set created_by if this is a newly created animal
+                if created and user:
+                    animal.created_by = user
+                    animal.save(update_fields=['created_by'])
 
-    except Exception as e:
-        logger.error(f"Error parsing prediction: {e}", exc_info=True)
-        return None
+                results.append({
+                    "animal": animal,
+                    "animal_id": str(animal.id),
+                    "scientific_name": scientific_name,
+                    "common_name": common_name,
+                    "confidence": 0.9 - (idx * 0.1),  # Decreasing confidence for multiple detections
+                    "is_new": created,
+                    "message": message
+                })
+
+                logger.info(f"{'Created' if created else 'Found'} animal: {animal} - {message}")
+            else:
+                logger.warning(f"Failed to create animal: {message}")
+                # Still add to results even if animal creation failed
+                results.append({
+                    "animal": None,
+                    "animal_id": None,
+                    "scientific_name": scientific_name,
+                    "common_name": common_name,
+                    "confidence": 0.9 - (idx * 0.1),
+                    "is_new": False,
+                    "message": f"Failed: {message}"
+                })
+
+        except Exception as e:
+            logger.error(f"Error parsing animal entry {idx + 1}: {e}", exc_info=True)
+            continue
+
+    logger.info(f"Parsed {len(results)} animals from prediction")
+    return results
+
+
+# Legacy function for backward compatibility - calls new function and returns first
+def parse_and_create_animal(prediction: str, user) -> Animal:
+    """
+    DEPRECATED: Legacy single-animal parser.
+    Use parse_and_create_animals() for new code.
+
+    Returns first animal from multiple detections for backward compatibility.
+    """
+    animals = parse_and_create_animals(prediction, user)
+    if animals and len(animals) > 0:
+        return animals[0].get("animal")
+    return None
 
 
 @shared_task

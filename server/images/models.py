@@ -4,8 +4,10 @@ Centralized repository for processed images with transformation tracking.
 """
 import uuid
 import hashlib
+from datetime import timedelta
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -154,3 +156,103 @@ class ProcessedImage(models.Model):
         if not self.processed_checksum and self.processed_file:
             self.processed_checksum = self.calculate_checksum(self.processed_file)
         super().save(*args, **kwargs)
+
+
+class ImageConversion(models.Model):
+    """
+    Temporary storage for image conversions.
+    Images are converted to dex-compatible format and stored temporarily
+    until they are used in a vision analysis job.
+    Auto-deleted after 30 minutes via Celery cleanup task.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # User who uploaded the image
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='image_conversions',
+        help_text=_('User who uploaded this image for conversion')
+    )
+
+    # Image files
+    original_image = models.ImageField(
+        upload_to='conversions/originals/%Y/%m/%d/',
+        help_text=_('Original uploaded image file')
+    )
+    converted_image = models.ImageField(
+        upload_to='conversions/processed/%Y/%m/%d/',
+        help_text=_('Converted dex-compatible image (PNG, max 2560x2560)')
+    )
+
+    # Metadata
+    original_format = models.CharField(
+        max_length=10,
+        help_text=_('Original file format (JPEG, PNG, etc.)')
+    )
+    original_size = models.JSONField(
+        help_text=_('Original dimensions as [width, height]')
+    )
+    converted_size = models.JSONField(
+        help_text=_('Converted dimensions as [width, height]')
+    )
+
+    # Transformations applied during initial conversion
+    transformations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_('Transformations applied during conversion (rotation, crop, etc.)')
+    )
+
+    # Checksum for deduplication
+    checksum = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text=_('SHA256 checksum of converted image')
+    )
+
+    # Timestamps and expiry
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        help_text=_('Expiration time for automatic cleanup (30 minutes from creation)')
+    )
+
+    # Track if this conversion has been used in a vision job
+    used_in_job = models.BooleanField(
+        default=False,
+        help_text=_('Whether this conversion has been used to create a vision job')
+    )
+
+    class Meta:
+        db_table = 'image_conversions'
+        verbose_name = _('Image Conversion')
+        verbose_name_plural = _('Image Conversions')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['checksum']),
+            models.Index(fields=['used_in_job']),
+        ]
+
+    def __str__(self):
+        return f"ImageConversion {self.id} - {self.user.username} ({'used' if self.used_in_job else 'pending'})"
+
+    def save(self, *args, **kwargs):
+        """Override save to set expiration time if not set."""
+        if not self.expires_at:
+            # Set expiration to 30 minutes from now
+            self.expires_at = timezone.now() + timedelta(minutes=30)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self):
+        """Check if this conversion has expired."""
+        return timezone.now() > self.expires_at
+
+    def delete_files(self):
+        """Delete the associated image files."""
+        if self.original_image:
+            self.original_image.delete(save=False)
+        if self.converted_image:
+            self.converted_image.delete(save=False)

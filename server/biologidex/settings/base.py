@@ -198,6 +198,20 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 
+# Celery Beat Schedule
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-expired-image-conversions': {
+        'task': 'images.tasks.cleanup_expired_conversions',
+        'schedule': crontab(minute='*/10'),  # Every 10 minutes
+    },
+    'cleanup-unused-image-conversions': {
+        'task': 'images.tasks.cleanup_unused_conversions',
+        'schedule': crontab(hour='*/2', minute=0),  # Every 2 hours
+    },
+}
+
 # Cache Configuration
 CACHES = {
     'default': {

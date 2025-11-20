@@ -146,6 +146,76 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(job)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'])
+    def select_animal(self, request, pk=None):
+        """
+        Select an animal from multiple detected animals.
+
+        POST /api/v1/vision/jobs/{id}/select_animal/
+        Body: {"animal_index": 0} or {"animal_id": "uuid"}
+
+        Updates the selected_animal_index field to indicate which animal
+        the user selected from the detected_animals list.
+        """
+        job = self.get_object()
+
+        if not job.detected_animals or len(job.detected_animals) == 0:
+            return Response(
+                {'error': 'No animals detected in this job'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Accept either animal_index or animal_id
+        animal_index = request.data.get('animal_index')
+        animal_id = request.data.get('animal_id')
+
+        if animal_index is None and not animal_id:
+            return Response(
+                {'error': 'Either animal_index or animal_id must be provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # If animal_id provided, find the index
+        if animal_id:
+            found_index = None
+            for idx, animal_data in enumerate(job.detected_animals):
+                if animal_data.get('animal_id') == str(animal_id):
+                    found_index = idx
+                    break
+
+            if found_index is None:
+                return Response(
+                    {'error': 'Animal ID not found in detected animals'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            animal_index = found_index
+
+        # Validate index
+        if animal_index < 0 or animal_index >= len(job.detected_animals):
+            return Response(
+                {'error': f'Invalid animal_index. Must be 0-{len(job.detected_animals) - 1}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update selected_animal_index
+        job.selected_animal_index = animal_index
+        selected_animal_data = job.detected_animals[animal_index]
+
+        # Update identified_animal (legacy field) to point to selected animal
+        if selected_animal_data.get('animal_id'):
+            from animals.models import Animal
+            try:
+                selected_animal = Animal.objects.get(id=selected_animal_data['animal_id'])
+                job.identified_animal = selected_animal
+            except Animal.DoesNotExist:
+                pass
+
+        job.save(update_fields=['selected_animal_index', 'identified_animal'])
+
+        serializer = self.get_serializer(job)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get statistics about user's analysis jobs."""

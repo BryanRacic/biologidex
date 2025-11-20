@@ -27,10 +27,22 @@ class AnalysisJob(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # Input
+    # Input - New conversion-based approach
+    source_conversion = models.ForeignKey(
+        'images.ImageConversion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='analysis_jobs',
+        help_text=_('Source image conversion (new workflow)')
+    )
+
+    # Input - Legacy direct upload (deprecated, will be removed)
     image = models.ImageField(
         upload_to='vision/analysis/original/%Y/%m/',
-        help_text=_('Original uploaded image')
+        null=True,
+        blank=True,
+        help_text=_('DEPRECATED: Original uploaded image (legacy workflow)')
     )
     dex_compatible_image = models.ImageField(
         upload_to='vision/analysis/dex_compatible/%Y/%m/',
@@ -50,6 +62,14 @@ class AnalysisJob(models.Model):
         default='pending',
         help_text=_('Status of image standardization')
     )
+
+    # Post-conversion transformations (applied after initial conversion)
+    post_conversion_transformations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_('Client-side transformations applied after image conversion (rotation, etc.)')
+    )
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -81,7 +101,7 @@ class AnalysisJob(models.Model):
         help_text=_('Image detail level for vision models')
     )
 
-    # Results
+    # Results - Multiple Animals Support
     raw_response = models.JSONField(
         null=True,
         blank=True,
@@ -89,20 +109,38 @@ class AnalysisJob(models.Model):
     )
     parsed_prediction = models.TextField(
         blank=True,
-        help_text=_('Parsed prediction text')
+        help_text=_('Parsed prediction text (first animal or all animals separated by |)')
     )
+
+    # Legacy single animal (deprecated - kept for backward compatibility)
     identified_animal = models.ForeignKey(
         Animal,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='analysis_jobs',
-        help_text=_('Identified animal (if successfully matched)')
+        help_text=_('DEPRECATED: First identified animal (legacy single-animal workflow)')
     )
     confidence_score = models.FloatField(
         null=True,
         blank=True,
-        help_text=_('Confidence score (0-1) if available')
+        help_text=_('Confidence score (0-1) for first/selected animal')
+    )
+
+    # New multiple animals support
+    detected_animals = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_(
+            'List of all detected animals with metadata. '
+            'Format: [{"scientific_name": str, "common_name": str, '
+            '"confidence": float, "animal_id": uuid, "is_new": bool}, ...]'
+        )
+    )
+    selected_animal_index = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=_('Index of the animal selected by user from detected_animals list')
     )
 
     # Metrics

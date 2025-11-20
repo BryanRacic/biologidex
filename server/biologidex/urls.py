@@ -45,6 +45,9 @@ urlpatterns = [
         # Graph/taxonomic Tree
         path('graph/', include('graph.urls')),
 
+        # Images
+        path('images/', include('images.urls')),
+
         # Taxonomy
         path('', include('taxonomy.urls')),
     ])),
