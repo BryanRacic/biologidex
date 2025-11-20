@@ -369,7 +369,6 @@ func _on_button_pressed() -> void:
 - **File Size**: No file exceeds 300 lines
 - **Cyclomatic Complexity**: No method exceeds complexity of 10
 - **Coupling**: No class depends on more than 5 other classes
-- **Test Coverage**: Minimum 70% code coverage
 
 ### Performance Metrics
 - **Memory Usage**: 50% reduction in baseline memory usage
@@ -391,12 +390,6 @@ func _on_button_pressed() -> void:
 - **Week 3**: Scene refactoring (camera, dex)
 - **Week 4**: State management and performance
 - **Week 5**: Testing, documentation, and migration
-
-### Resources Required
-- **Development**: 1 senior developer full-time
-- **Code Review**: 4 hours per week from second developer
-- **Testing**: 8 hours in week 5
-- **Documentation**: 8 hours in week 5
 
 ## Conclusion
 
