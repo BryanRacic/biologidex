@@ -68,7 +68,10 @@
       - if many animals returned -> select which animal
       - allow for manually selecting new animal ID
     - Dex creation w/ selected animal ID
-
+- evaluate server implementation
+  - Remove unused code, outdated features
+  - Identify inefficiant or non-optimal solutions/algorithmns
+  - Identify potential security/privacy issues
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done
