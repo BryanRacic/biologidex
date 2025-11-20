@@ -170,7 +170,7 @@ func update_entry(
 	var req_config = _create_request_config()
 	var context = {"entry_id": entry_id, "callback": callback}
 
-	api_client.patch(
+	api_client.put(
 		endpoint,
 		update_data,
 		_on_update_entry_success.bind(context),
@@ -298,7 +298,9 @@ func _process_sync_entries(entries: Array, user_id: String, server_time: String,
 			"image_checksum": entry.get("image_checksum", ""),
 			"dex_compatible_url": entry.get("dex_compatible_url", ""),
 			"updated_at": entry.get("updated_at", ""),
-			"cached_image_path": ""  # Will be set after download
+			"cached_image_path": "",  # Will be set after download
+			"animal_id": entry.get("animal_id", ""),  # Store animal UUID for editing
+			"dex_entry_id": entry.get("id", "")  # Store dex entry ID for editing
 		}
 
 		# Check if image needs downloading
@@ -307,6 +309,21 @@ func _process_sync_entries(entries: Array, user_id: String, server_time: String,
 		if needs_download and not record["dex_compatible_url"].is_empty():
 			# Download image asynchronously
 			await _download_and_cache_image(record, user_id)
+
+		# Check if this dex_entry_id exists with a different creation_index (animal was changed)
+		var dex_entry_id = record.get("dex_entry_id", "")
+		var new_creation_index = record.get("creation_index", -1)
+		if not dex_entry_id.is_empty() and new_creation_index >= 0:
+			# Search all records to find if this dex_entry_id exists elsewhere
+			var all_indices = DexDatabase.get_sorted_indices_for_user(user_id)
+			for old_index in all_indices:
+				var existing = DexDatabase.get_record_for_user(old_index, user_id)
+				if existing.get("dex_entry_id", "") == dex_entry_id and old_index != new_creation_index:
+					# Found old record with same dex_entry_id but different creation_index
+					# Delete it since the animal was changed
+					_log("Removing old record #%d (animal changed to #%d)" % [old_index, new_creation_index])
+					DexDatabase.remove_record(old_index, user_id)
+					break
 
 		# Add to database (with updated cached_image_path)
 		DexDatabase.add_record_from_dict(record, user_id)

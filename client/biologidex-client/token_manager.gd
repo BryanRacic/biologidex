@@ -88,6 +88,14 @@ func get_user_data() -> Dictionary:
 	return user_data
 
 
+func get_user_id() -> String:
+	"""
+	Get current user ID from user_data
+	"""
+	var id_value = user_data.get("id", "")
+	return str(id_value) if id_value else ""
+
+
 func update_access_token(new_access: String) -> void:
 	"""
 	Update access token after refresh

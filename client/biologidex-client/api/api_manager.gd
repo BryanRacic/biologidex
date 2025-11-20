@@ -21,6 +21,7 @@ var social: SocialService
 var dex: DexService
 var animals: AnimalsService
 var taxonomy: TaxonomyService
+var images: ImageService
 
 func _ready() -> void:
 	_initialize_core()
@@ -50,8 +51,9 @@ func _initialize_services() -> void:
 	dex = DexService.new(api_client, config)
 	animals = AnimalsService.new(api_client, config)
 	taxonomy = TaxonomyService.new(api_client, config)
+	images = ImageService.new(api_client, config)
 
-	print("[APIManager] Services initialized: auth, vision, tree, social, dex, animals, taxonomy")
+	print("[APIManager] Services initialized: auth, vision, tree, social, dex, animals, taxonomy, images")
 
 ## Connect signals for backward compatibility
 func _connect_signals() -> void:

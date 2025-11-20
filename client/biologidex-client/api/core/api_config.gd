@@ -40,6 +40,14 @@ const ENDPOINTS_VISION = {
 	"job_detail": "/vision/jobs/%s/",  # Format with job ID
 	"completed": "/vision/jobs/completed/",
 	"retry": "/vision/jobs/%s/retry/",  # Format with job ID
+	"select_animal": "/vision/jobs/%s/select_animal/",  # Format with job ID
+}
+
+# Image conversion endpoints
+const ENDPOINTS_IMAGES = {
+	"convert": "/images/convert/",
+	"download": "/images/convert/%s/download/",  # Format with conversion ID
+	"conversion_detail": "/images/convert/%s/",  # Format with conversion ID
 }
 
 # Dex endpoints

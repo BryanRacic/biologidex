@@ -142,6 +142,7 @@ class DexEntrySyncSerializer(serializers.ModelSerializer):
     Serializer for syncing dex entries to client.
     Includes image metadata for comparison.
     """
+    animal_id = serializers.UUIDField(source='animal.id', read_only=True)
     scientific_name = serializers.CharField(source='animal.scientific_name', read_only=True)
     common_name = serializers.CharField(source='animal.common_name', read_only=True)
     creation_index = serializers.IntegerField(source='animal.creation_index', read_only=True)
@@ -155,6 +156,7 @@ class DexEntrySyncSerializer(serializers.ModelSerializer):
         model = DexEntry
         fields = [
             'id',
+            'animal_id',
             'creation_index',
             'scientific_name',
             'common_name',

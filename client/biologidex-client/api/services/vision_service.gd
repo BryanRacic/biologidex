@@ -66,6 +66,72 @@ func _on_create_vision_job_error(error: APITypes.APIError, context: Dictionary) 
 	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 
+## Create vision job from pre-converted image (NEW WORKFLOW)
+## Requires: Authorization Bearer token
+## Returns: AnalysisJob object
+func create_vision_job_from_conversion(
+	conversion_id: String,
+	callback: Callable = Callable(),
+	post_conversion_transformations: Dictionary = {}
+) -> void:
+	_log("Creating vision job from conversion: %s" % conversion_id)
+
+	var data = {
+		"conversion_id": conversion_id
+	}
+
+	# Add post-conversion transformations if provided
+	if post_conversion_transformations.size() > 0:
+		_log("Including post-conversion transformations: %s" % JSON.stringify(post_conversion_transformations))
+		data["post_conversion_transformations"] = post_conversion_transformations
+
+	var req_config = _create_request_config()
+	var context = {"callback": callback}
+
+	api_client.post(
+		config.ENDPOINTS_VISION["jobs"],
+		data,
+		_on_create_vision_job_success.bind(context),
+		_on_create_vision_job_error.bind(context),
+		req_config
+	)
+
+## Select an animal from multiple detected animals
+## Requires: Authorization Bearer token
+## Returns: Updated AnalysisJob object
+func select_animal(
+	job_id: String,
+	animal_index: int,
+	callback: Callable = Callable()
+) -> void:
+	_log("Selecting animal %d for job: %s" % [animal_index, job_id])
+
+	var endpoint = _format_endpoint(config.ENDPOINTS_VISION["select_animal"], [job_id])
+	var data = {
+		"animal_index": animal_index
+	}
+
+	var req_config = _create_request_config()
+	var context = {"job_id": job_id, "animal_index": animal_index, "callback": callback}
+
+	api_client.post(
+		endpoint,
+		data,
+		_on_select_animal_success.bind(context),
+		_on_select_animal_error.bind(context),
+		req_config
+	)
+
+func _on_select_animal_success(response: Dictionary, context: Dictionary) -> void:
+	_log("Animal selected successfully for job %s" % context.job_id)
+	if context.callback and context.callback.is_valid():
+		context.callback.call(response, 200)
+
+func _on_select_animal_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "select_animal")
+	if context.callback and context.callback.is_valid():
+		context.callback.call({"error": error.message}, error.code)
+
 ## Check status of vision analysis job
 ## Requires: Authorization Bearer token
 ## Returns: AnalysisJob object

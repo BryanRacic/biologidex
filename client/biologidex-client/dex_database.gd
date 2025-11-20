@@ -166,6 +166,27 @@ func add_record_from_dict(record: Dictionary, user_id: String = "self") -> void:
 		record_added_legacy.emit(creation_index)
 
 
+## Remove a record from the database
+func remove_record(creation_index: int, user_id: String = "self") -> void:
+	if not dex_data.has(user_id):
+		return
+
+	# Remove from records
+	if dex_data[user_id].has(creation_index):
+		dex_data[user_id].erase(creation_index)
+
+	# Remove from sorted indices
+	if sorted_indices_per_user.has(user_id):
+		var indices: Array = sorted_indices_per_user[user_id]
+		var pos := indices.find(creation_index)
+		if pos >= 0:
+			indices.remove_at(pos)
+			sorted_indices_per_user[user_id] = indices
+
+	print("[DexDatabase] Removed record #%d for user '%s'" % [creation_index, user_id])
+	save_database(user_id)
+
+
 ## Get a specific record by creation_index (backwards compatible)
 func get_record(creation_index: int) -> Dictionary:
 	return get_record_for_user(creation_index, current_user_id)

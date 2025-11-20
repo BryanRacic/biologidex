@@ -73,6 +73,7 @@ class RequestConfig extends RefCounted:
 	var retry_on_failure: bool = true
 	var requires_auth: bool = true
 	var priority: int = 0  # Higher priority = processed first
+	var expect_binary: bool = false  # Set to true for binary responses (images, etc.)
 
 	func _init() -> void:
 		pass

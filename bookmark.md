@@ -57,21 +57,20 @@
     - Will be the image displayed on the tree
 - If multiple dex entries on same node
   - New window with each dex entry
-- New dex entry flow
-  - First upload image -> image conversion -> download converted image
-    - option to rotate image
-      - (in future can crop imag )
-      - finalize image
-    - run analysis on image
-      - from server w/ rotations applied
-    - post analysis
-      - if many animals returned -> select which animal
-      - allow for manually selecting new animal ID
-    - Dex creation w/ selected animal ID
+    - Each entry displays the username of the original author
 - evaluate server implementation
   - Remove unused code, outdated features
   - Identify inefficiant or non-optimal solutions/algorithmns
   - Identify potential security/privacy issues
+- Refactor & reorganize client code
+  - features
+    - all abstract features & scripts not associated with a single scene file
+      - ex. `features/server_interface` contains `api` and `token` dirs (`token` dir contains `token_manager.py`)
+  - scenes
+    - all features/scripts and scenes organized by page/view/scene on the client side
+      - ex. `scenes/social/` dir contains `social.gd` and `social.tscn`, but all the actual API calls/token handling is abstracted into the `server_interface/api/social/` directory.
+      - ex. `scenes/tree/` dir contains `tree.gd` and `tree.tscn` but calls `features/cache/tree_cache.gd` which inherits from a basic `features/cache/cache.gd` script. All the API calls/request handling is handled in the `server_interface/api/tree` directory *(which may call specific API toolings outside of it's directory, like `get_animals` which might require using the `features/server_interface/api/animals/` functions)*. All generic tree/graph generation should be handled by generic `features/graph/` or `features/tree/` scripts, which are used by the specific `scenes/tree/` scripts/scenes *(extensible incase there are multiple types of trees/graphs in the future)* 
+- Alow users to delete a dex entry on the edit page
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
 Creating server_web_run ... done

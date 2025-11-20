@@ -365,8 +365,30 @@ func _on_sync_user_completed(user_id: String, entries_updated: int) -> void:
 		print("[Dex] Sync completed: %d entries updated" % entries_updated)
 		# TODO: Hide progress bar, enable sync button, show success message
 
+		# If we just edited an entry and it was synced, find and display the updated record
+		if not pending_edit_dex_entry_id.is_empty():
+			print("[Dex] Looking for updated record with dex_entry_id: ", pending_edit_dex_entry_id)
+
+			# Search all records to find the one with this dex_entry_id
+			var all_indices = DexDatabase.get_sorted_indices_for_user(current_user_id)
+			for index in all_indices:
+				var record = DexDatabase.get_record_for_user(index, current_user_id)
+				if record.get("dex_entry_id", "") == pending_edit_dex_entry_id:
+					print("[Dex] Found updated record at index #%d" % index)
+					current_index = index
+					_display_record(current_index)
+					pending_edit_dex_entry_id = ""  # Clear the pending edit
+					return
+
+			print("[Dex] WARNING: Could not find updated record after sync")
+			pending_edit_dex_entry_id = ""
+
 		# Refresh display if we were showing empty state
-		if current_index < 0 and entries_updated > 0:
+		elif current_index < 0 and entries_updated > 0:
+			_load_first_record()
+		# Or if the current record no longer exists (was deleted/changed)
+		elif current_index >= 0 and not DexDatabase.has_record_for_user(current_index, current_user_id):
+			print("[Dex] Current record #%d no longer exists, loading first record" % current_index)
 			_load_first_record()
 
 
@@ -428,12 +450,21 @@ func _get_entry_id_for_edit(record: Dictionary) -> void:
 		print("[Dex] ERROR: Invalid creation index")
 		return
 
+	# Check if we already have the dex_entry_id stored locally
+	var entry_id = record.get("dex_entry_id", "")
+	if not entry_id.is_empty():
+		print("[Dex] Using stored dex_entry_id: ", entry_id)
+		_open_manual_entry_popup(entry_id, record)
+		return
+
+	# If not stored locally, fetch from server
+	print("[Dex] dex_entry_id not stored locally, fetching from server...")
 	# Fetch own entries to find the one matching this creation_index
 	# We'll use the sync endpoint to get all our entries
 	APIManager.dex.get_my_entries(_on_my_entries_for_edit.bind(creation_index, record))
 
 
-func _on_my_entries_for_edit(response: Dictionary, code: int, creation_index: int, record: Dictionary) -> void:
+func _on_my_entries_for_edit(response: Dictionary, code: int, _creation_index: int, record: Dictionary) -> void:
 	"""Handle my entries response for editing"""
 	if code != 200:
 		print("[Dex] ERROR: Failed to fetch entries for editing")
@@ -442,18 +473,29 @@ func _on_my_entries_for_edit(response: Dictionary, code: int, creation_index: in
 	var entries = response.get("results", [])
 	var entry_id = ""
 
-	# Find the entry matching our creation index
+	# Get the animal_id from the local record to match with server
+	var local_animal_id = record.get("animal_id", "")
+
+	# Find the entry matching our animal_id
 	for entry in entries:
-		var animal_details = entry.get("animal_details", {})
-		if animal_details.get("creation_index", -1) == creation_index:
+		var server_animal_id = entry.get("animal", "")
+		if not local_animal_id.is_empty() and server_animal_id == local_animal_id:
 			entry_id = str(entry.get("id", ""))
+			print("[Dex] Matched by animal_id: ", local_animal_id)
 			break
 
 	if entry_id.is_empty():
 		print("[Dex] ERROR: Could not find dex entry ID for this animal")
+		print("[Dex] Local animal_id: ", local_animal_id)
+		print("[Dex] Hint: This entry may have been created before animal_id tracking was added")
 		return
 
 	print("[Dex] Found dex entry ID: ", entry_id)
+
+	# Store the entry_id in local database for future use
+	record["dex_entry_id"] = entry_id
+	DexDatabase.add_record_from_dict(record, current_user_id)
+	print("[Dex] Stored dex_entry_id in local database for future edits")
 
 	# Now open the manual entry popup
 	_open_manual_entry_popup(entry_id, record)
@@ -488,12 +530,17 @@ func _open_manual_entry_popup(entry_id: String, record: Dictionary) -> void:
 	popup.popup_centered(Vector2(600, 500))
 
 
+# Track which dex_entry_id was just edited (to find it after sync if creation_index changes)
+var pending_edit_dex_entry_id: String = ""
+
 func _on_edit_entry_updated(_taxonomy_data: Dictionary) -> void:
 	"""Handle entry update from manual entry popup"""
 	print("[Dex] Entry updated with new taxonomy")
 
-	# Refresh current display
-	_display_record(current_index)
+	# Store the dex_entry_id of the record we just edited
+	var record = DexDatabase.get_record_for_user(current_index, current_user_id)
+	pending_edit_dex_entry_id = record.get("dex_entry_id", "")
+	print("[Dex] Stored pending_edit_dex_entry_id: ", pending_edit_dex_entry_id)
 
 	# Trigger sync to update from server
 	trigger_sync()

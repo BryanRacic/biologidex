@@ -264,11 +264,12 @@ func _execute_request(request: APITypes.QueuedRequest) -> void:
 			data,
 			success_wrapper,
 			error_wrapper,
-			Array(request.headers).filter(func(h): return not h.begins_with("Content-Type:"))
+			Array(request.headers).filter(func(h): return not h.begins_with("Content-Type:")),
+			request.config.expect_binary
 		)
 	else:
 		# GET or DELETE request
-		http_client.http_get(request.url, success_wrapper, error_wrapper, Array(request.headers))
+		http_client.http_get(request.url, success_wrapper, error_wrapper, Array(request.headers), request.config.expect_binary)
 
 ## Handle successful request completion
 func _on_request_success(data: Dictionary, request: APITypes.QueuedRequest) -> void:

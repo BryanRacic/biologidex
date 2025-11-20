@@ -19,10 +19,26 @@ extends Control
 @onready var bordered_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/Image
 @onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
 
+# State machine for camera workflow
+enum CameraState {
+	IDLE,                    # No image selected
+	IMAGE_SELECTED,          # User selected file from disk
+	IMAGE_CONVERTING,        # Uploading to /images/convert/
+	IMAGE_READY,             # Downloaded converted image, can rotate/analyze
+	ANALYZING,               # CV analysis in progress
+	ANALYSIS_COMPLETE,       # Analysis done, have results
+	ANIMAL_SELECTION,        # Multiple animals detected, showing selection UI
+	COMPLETED                # Final state, dex entry created
+}
+
+var current_state: CameraState = CameraState.IDLE
+
 var file_access_web: FileAccessWeb
 var selected_file_name: String = ""
 var selected_file_type: String = ""
 var selected_file_data: PackedByteArray = PackedByteArray()
+var conversion_id: String = ""                # UUID from image conversion
+var converted_image_data: PackedByteArray     # Downloaded PNG data
 var current_job_id: String = ""
 var current_dex_entry_id: String = ""
 var status_check_timer: Timer
@@ -32,9 +48,11 @@ var unsupported_format_warning: bool = false
 var dex_compatible_url: String = ""
 var cached_dex_image: Image = null
 
-# Image rotation state
-var current_rotation: int = 0  # Track rotation angle (0, 90, 180, 270)
-var pending_transformations: Dictionary = {}  # Track all image modifications
+# Image rotation state (client-side only, sent with CV analysis)
+var total_rotation: int = 0  # Cumulative rotation angle (0, 90, 180, 270)
+var detected_animals: Array = []              # List from CV analysis
+var selected_animal_index: int = -1           # User's choice
+var pending_animal_details: Dictionary = {}   # Animal data from CV, pending dex entry creation
 
 # Test image cycling for editor mode
 const TEST_IMAGES: Array[String] = [
@@ -94,7 +112,9 @@ func _ready() -> void:
 
 func _reset_ui() -> void:
 	"""Reset UI to initial state"""
+	current_state = CameraState.IDLE
 	upload_button.disabled = true
+	upload_button.text = "Upload & Convert"
 	loading_spinner.visible = false
 	record_image.visible = false
 	simple_image.visible = false
@@ -106,8 +126,11 @@ func _reset_ui() -> void:
 	selected_file_name = ""
 	selected_file_type = ""
 	selected_file_data = PackedByteArray()
-	current_rotation = 0
-	pending_transformations = {}
+	conversion_id = ""
+	converted_image_data = PackedByteArray()
+	total_rotation = 0
+	detected_animals = []
+	selected_animal_index = -1
 
 	# Show initial buttons
 	select_photo_button.visible = true
@@ -116,15 +139,17 @@ func _reset_ui() -> void:
 
 
 func _on_rotate_image_pressed() -> void:
-	"""Rotate image 90 degrees clockwise"""
-	current_rotation = (current_rotation + 90) % 360
+	"""Rotate image 90 degrees clockwise - only works in IMAGE_READY state"""
+	if current_state != CameraState.IMAGE_READY and current_state != CameraState.IMAGE_SELECTED:
+		return
+
+	total_rotation = (total_rotation + 90) % 360
 	_apply_rotation_to_preview()
-	pending_transformations["rotation"] = current_rotation
-	print("[Camera] Rotated to %d degrees" % current_rotation)
+	print("[Camera] Rotated to %d degrees" % total_rotation)
 
 
 func _apply_rotation_to_preview() -> void:
-	"""Apply pixel-level rotation to the image preview using Image.rotate_90()"""
+	"""Apply visual rotation to the displayed converted image"""
 	# Get the current texture and extract the image
 	var current_texture := simple_image.texture as ImageTexture
 	if not current_texture:
@@ -143,29 +168,24 @@ func _apply_rotation_to_preview() -> void:
 	var new_texture := ImageTexture.create_from_image(image)
 	simple_image.texture = new_texture
 
-	# Update the file data with the rotated image
-	# Save as PNG to match the original upload format expectations
-	selected_file_data = image.save_png_to_buffer()
-	selected_file_type = "image/png"
-	print("[Camera] Updated file data with rotated image: %d bytes" % selected_file_data.size())
+	# Update cached image (this is what we'll use for dex entry)
+	cached_dex_image = image
 
 	# Update dimensions (they swap with each 90° rotation)
 	var temp: float = current_image_width
 	current_image_width = current_image_height
 	current_image_height = temp
 
-	print("[Camera] Rotated image to %dx%d" % [current_image_width, current_image_height])
+	print("[Camera] Rotated display to %dx%d (total rotation: %d degrees)" % [current_image_width, current_image_height, total_rotation])
 
-	# Update aspect ratio for the bordered container (for future use after CV analysis)
+	# Update aspect ratio for the bordered container (for future use)
 	if current_image_height > 0.0:
 		var aspect_ratio: float = current_image_width / current_image_height
 		bordered_container.ratio = aspect_ratio
-		print("[Camera] Updated aspect ratio: ", aspect_ratio)
 
 	# Note: We don't call _update_record_image_size() here because:
 	# - simple_image is visible (not bordered_container)
 	# - simple_image uses stretch_mode = 5 (Keep Aspect Centered) which handles sizing automatically
-	# - Calling _update_record_image_size() would force incorrect dimensions on the container
 
 
 func _on_select_photo_pressed() -> void:
@@ -244,8 +264,8 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 		instruction_label.visible = false
 		rotate_image_button.visible = true
 		rotate_image_button.disabled = false  # Re-enable rotation button
-		current_rotation = 0  # Reset rotation
-		pending_transformations = {}  # Clear transformations
+		total_rotation = 0  # Reset rotation
+		current_state = CameraState.IMAGE_SELECTED  # Update state
 
 	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
 
@@ -377,8 +397,8 @@ func _load_test_image() -> void:
 		instruction_label.visible = false
 		rotate_image_button.visible = true
 		rotate_image_button.disabled = false  # Re-enable rotation button
-		current_rotation = 0  # Reset rotation
-		pending_transformations = {}  # Clear transformations
+		total_rotation = 0  # Reset rotation
+		current_state = CameraState.IMAGE_SELECTED  # Update state
 	else:
 		# Show warning in UI (not just console)
 		print("[Camera] WARNING: Could not load test image for preview, but file data loaded")
@@ -417,80 +437,189 @@ func _update_record_image_size() -> void:
 
 
 func _on_upload_pressed() -> void:
-	"""Upload selected photo for CV analysis"""
-	if selected_file_data.size() == 0:
-		print("[Camera] ERROR: No file selected")
-		return
+	"""Handle upload button press based on current state"""
+	match current_state:
+		CameraState.IMAGE_SELECTED:
+			if selected_file_data.size() == 0:
+				print("[Camera] ERROR: No file selected")
+				return
+			_start_image_conversion()  # Step 1: Upload & Convert
+		CameraState.IMAGE_READY:
+			_start_cv_analysis()       # Step 2: Analyze
+		CameraState.COMPLETED:
+			_create_dex_entry()        # Step 3: Create Dex Entry
+		_:
+			push_error("[Camera] Upload pressed in invalid state: %s" % current_state)
 
-	print("[Camera] Starting upload...")
 
-	# Update UI for upload
+func _start_image_conversion() -> void:
+	"""Step 1: Upload image for conversion"""
+	print("[Camera] Starting image conversion...")
+	current_state = CameraState.IMAGE_CONVERTING
+
+	# Update UI
 	upload_button.disabled = true
 	select_photo_button.disabled = true
 	rotate_image_button.disabled = true
 	loading_spinner.visible = true
-	status_label.text = "Uploading image..."
+	status_label.text = "Uploading and converting image..."
 	status_label.add_theme_color_override("font_color", Color.WHITE)
 	result_label.text = ""
 
-	# Get access token
-	var access_token := TokenManager.get_access_token()
-
-	# NOTE: We DON'T send transformations because rotation is applied client-side
-	# using Image.rotate_90(), which updates selected_file_data with the rotated image.
-	# The uploaded image is already in the correct orientation.
-	APIManager.create_vision_job(
+	# Call conversion API
+	APIManager.images.convert_image(
 		selected_file_data,
 		selected_file_name,
 		selected_file_type,
-		access_token,
-		_on_upload_completed
-		# No transformations parameter - rotation already applied to image data
+		_on_image_converted
 	)
 
-	if current_rotation > 0:
-		print("[Camera] Uploading pre-rotated image (%d degrees applied client-side)" % current_rotation)
-	else:
-		print("[Camera] Uploading original image (no rotation)")
 
-
-func _on_upload_completed(response: Dictionary, code: int) -> void:
-	"""Handle upload completion"""
-	if code == 200 or code == 201:
-		# Upload successful, job created (service layer normalizes 201 to 200)
-		var id_value = response.get("id")
-		current_job_id = "" if id_value == null else str(id_value)
-
-		var status_value = response.get("status")
-		var job_status: String = "unknown" if status_value == null else str(status_value)
-
-		print("[Camera] Upload successful! Job ID: ", current_job_id, " Status: ", job_status)
-
-		status_label.text = "Upload successful! Analyzing image..."
-		status_label.add_theme_color_override("font_color", Color.GREEN)
-
-		# Start polling for job status
-		_start_status_polling()
-	else:
-		# Upload failed
-		var error_msg := "Upload failed"
-
-		if response.has("detail"):
-			error_msg = str(response["detail"])
-		elif response.has("error"):
-			error_msg = str(response["error"])
-		elif code == 401:
-			error_msg = "Authentication failed. Please login again."
-		elif code == 0:
-			error_msg = "Cannot connect to server"
-
-		print("[Camera] Upload failed: ", error_msg)
-
-		status_label.text = "Upload failed: %s" % error_msg
+func _on_image_converted(response: Dictionary, code: int) -> void:
+	"""Handle image conversion completion"""
+	if code != 201 and code != 200:
+		# Conversion failed
+		var error_msg = response.get("error", "Conversion failed")
+		print("[Camera] Conversion failed: ", error_msg)
+		status_label.text = "Conversion failed: %s" % error_msg
 		status_label.add_theme_color_override("font_color", Color.RED)
 		loading_spinner.visible = false
 		upload_button.disabled = false
 		select_photo_button.disabled = false
+		rotate_image_button.disabled = false
+		current_state = CameraState.IMAGE_SELECTED
+		return
+
+	# Store conversion ID
+	conversion_id = response.get("id", "")
+	print("[Camera] Image converted! ID: ", conversion_id)
+
+	status_label.text = "Downloading converted image..."
+
+	# Download converted image
+	APIManager.images.download_converted_image(
+		conversion_id,
+		_on_converted_image_downloaded
+	)
+
+
+func _on_converted_image_downloaded(response: Dictionary, code: int) -> void:
+	"""Handle downloaded converted image"""
+	if code != 200:
+		var error_msg = response.get("error", "Download failed")
+		print("[Camera] Download failed: ", error_msg)
+		status_label.text = "Download failed: %s" % error_msg
+		status_label.add_theme_color_override("font_color", Color.RED)
+		loading_spinner.visible = false
+		upload_button.disabled = false
+		select_photo_button.disabled = false
+		rotate_image_button.disabled = false
+		current_state = CameraState.IMAGE_SELECTED
+		return
+
+	# Get image data
+	converted_image_data = response.get("data", PackedByteArray())
+
+	if converted_image_data.size() == 0:
+		print("[Camera] ERROR: Empty converted image data")
+		status_label.text = "Error: Empty image data"
+		status_label.add_theme_color_override("font_color", Color.RED)
+		loading_spinner.visible = false
+		upload_button.disabled = false
+		select_photo_button.disabled = false
+		rotate_image_button.disabled = false
+		current_state = CameraState.IMAGE_SELECTED
+		return
+
+	# Load and display converted image
+	var image := Image.new()
+	var load_error := image.load_png_from_buffer(converted_image_data)
+
+	if load_error != OK:
+		print("[Camera] ERROR: Could not load converted image")
+		status_label.text = "Error loading converted image"
+		status_label.add_theme_color_override("font_color", Color.RED)
+		loading_spinner.visible = false
+		upload_button.disabled = false
+		select_photo_button.disabled = false
+		rotate_image_button.disabled = false
+		current_state = CameraState.IMAGE_SELECTED
+		return
+
+	# CRITICAL: Replace the preview with the converted image
+	var texture := ImageTexture.create_from_image(image)
+	simple_image.texture = texture
+	current_image_width = float(image.get_width())
+	current_image_height = float(image.get_height())
+
+	# Store the converted image for later use (dex entry creation)
+	cached_dex_image = image
+
+	print("[Camera] Converted image loaded and displayed: %dx%d" % [current_image_width, current_image_height])
+
+	# Update UI for IMAGE_READY state
+	current_state = CameraState.IMAGE_READY
+	loading_spinner.visible = false
+	status_label.text = "Image ready! Rotate if needed, then click Analyze."
+	status_label.add_theme_color_override("font_color", Color.GREEN)
+	upload_button.disabled = false
+	upload_button.text = "Analyze Image"
+	select_photo_button.disabled = false
+	rotate_image_button.disabled = false
+	total_rotation = 0  # Reset rotation tracker
+
+
+func _start_cv_analysis() -> void:
+	"""Step 2: Submit for CV analysis"""
+	if conversion_id.is_empty():
+		print("[Camera] ERROR: No conversion_id available")
+		return
+
+	print("[Camera] Starting CV analysis...")
+	current_state = CameraState.ANALYZING
+
+	# Update UI
+	upload_button.disabled = true
+	select_photo_button.disabled = true
+	rotate_image_button.disabled = true
+	loading_spinner.visible = true
+	status_label.text = "Analyzing image..."
+	status_label.add_theme_color_override("font_color", Color.WHITE)
+
+	# Build post-conversion transformations
+	var post_transformations = {}
+	if total_rotation > 0:
+		post_transformations["rotation"] = total_rotation
+		print("[Camera] Sending rotation: %d degrees" % total_rotation)
+
+	# Call vision API with conversion_id
+	APIManager.vision.create_vision_job_from_conversion(
+		conversion_id,
+		_on_vision_job_created,
+		post_transformations
+	)
+
+
+func _on_vision_job_created(response: Dictionary, code: int) -> void:
+	"""Handle vision job creation"""
+	if code != 200 and code != 201:
+		var error_msg = response.get("error", "Failed to create vision job")
+		print("[Camera] Vision job creation failed: ", error_msg)
+		status_label.text = "Analysis failed: %s" % error_msg
+		status_label.add_theme_color_override("font_color", Color.RED)
+		loading_spinner.visible = false
+		upload_button.disabled = false
+		upload_button.text = "Analyze Image"
+		select_photo_button.disabled = false
+		rotate_image_button.disabled = false
+		current_state = CameraState.IMAGE_READY
+		return
+
+	current_job_id = str(response.get("id", ""))
+	print("[Camera] Vision job created: ", current_job_id)
+
+	# Start polling
+	_start_status_polling()
 
 
 func _start_status_polling() -> void:
@@ -549,96 +678,125 @@ func _on_status_checked(response: Dictionary, code: int) -> void:
 
 
 func _handle_completed_job(job_data: Dictionary) -> void:
-	"""Handle completed analysis job"""
+	"""Handle completed analysis job - support multiple animal detection"""
 	print("[Camera] Analysis complete!")
+	current_state = CameraState.ANALYSIS_COMPLETE
 
 	loading_spinner.visible = false
 	status_label.text = "Analysis complete!"
 	status_label.add_theme_color_override("font_color", Color.GREEN)
 
-	# Extract results - handle all potential null values
-	var prediction_value = job_data.get("parsed_prediction")
-	var prediction: String = "Unknown" if prediction_value == null else str(prediction_value)
+	# Extract detected animals list (NEW multi-animal support)
+	var detected_animals_value = job_data.get("detected_animals", [])
+	if typeof(detected_animals_value) == TYPE_ARRAY:
+		detected_animals = detected_animals_value
+	else:
+		detected_animals = []
 
+	print("[Camera] Detected %d animals" % detected_animals.size())
+
+	# Handle results based on animal count
+	if detected_animals.size() == 0:
+		# No animals detected - allow manual entry
+		status_label.text = "No animals detected"
+		status_label.add_theme_color_override("font_color", Color.ORANGE)
+		result_label.text = "Try manual entry or upload a different image"
+		upload_button.visible = false
+		manual_entry_button.visible = true
+		manual_entry_button.disabled = false
+		select_photo_button.disabled = false
+		rotate_image_button.visible = false
+		return
+	elif detected_animals.size() == 1:
+		# Single animal - auto-select and continue
+		selected_animal_index = 0
+		print("[Camera] Single animal detected, auto-selecting")
+	else:
+		# Multiple animals - show selection UI
+		current_state = CameraState.ANIMAL_SELECTION
+		_show_animal_selection_popup()
+		return
+
+	# Process the selected animal (either single or user-selected)
+	_process_selected_animal(job_data)
+
+
+func _show_animal_selection_popup() -> void:
+	"""Show popup for selecting from multiple detected animals"""
+	print("[Camera] Showing animal selection popup for %d animals" % detected_animals.size())
+
+	# TODO: Create proper AnimalSelectionPopup component
+	# For now, auto-select first animal as fallback
+	print("[Camera] WARNING: Animal selection popup not implemented yet, auto-selecting first")
+	selected_animal_index = 0
+
+	# Call select_animal API
+	APIManager.vision.select_animal(
+		current_job_id,
+		selected_animal_index,
+		_on_animal_selected
+	)
+
+
+func _on_animal_selected(response: Dictionary, code: int) -> void:
+	"""Handle animal selection response"""
+	if code != 200:
+		var error_msg = response.get("error", "Selection failed")
+		print("[Camera] Animal selection failed: ", error_msg)
+		status_label.text = "Selection failed: %s" % error_msg
+		status_label.add_theme_color_override("font_color", Color.RED)
+		upload_button.disabled = false
+		select_photo_button.disabled = false
+		return
+
+	print("[Camera] Animal selected successfully")
+	_process_selected_animal(response)
+
+
+func _process_selected_animal(job_data: Dictionary) -> void:
+	"""Display CV results and show 'Create Dex Entry' button (without showing dex image yet)"""
+	print("[Camera] Displaying analysis results")
+
+	# Get selected animal data from detected_animals array
+	var animal_details: Dictionary = {}
+	if selected_animal_index >= 0 and selected_animal_index < detected_animals.size():
+		animal_details = detected_animals[selected_animal_index]
+		print("[Camera] Processing selected animal at index %d" % selected_animal_index)
+
+		# Merge with root animal_details if available (has creation_index and full data)
+		var root_animal_details = job_data.get("animal_details")
+		if root_animal_details != null and typeof(root_animal_details) == TYPE_DICTIONARY:
+			# Check if the animal IDs match
+			var detected_id = animal_details.get("animal_id", "")
+			var root_id = root_animal_details.get("id", "")
+			if detected_id == root_id:
+				# Merge: root has creation_index, detected has confidence
+				print("[Camera] Merging detected_animals with root animal_details")
+				animal_details = root_animal_details.duplicate()
+				# Keep the animal_id field from detected_animals for consistency
+				animal_details["animal_id"] = detected_id
+	else:
+		# Fallback to legacy animal_details field (backward compatibility)
+		var animal_details_value = job_data.get("animal_details")
+		if animal_details_value != null and typeof(animal_details_value) == TYPE_DICTIONARY:
+			animal_details = animal_details_value
+			# Ensure animal_id field exists
+			if not animal_details.has("animal_id") and animal_details.has("id"):
+				animal_details["animal_id"] = animal_details["id"]
+			print("[Camera] Using legacy animal_details field")
+
+	# Extract animal information
 	var confidence_value = job_data.get("confidence_score")
 	var confidence: float = 0.0
 	if confidence_value != null:
 		confidence = float(confidence_value)
 
-	# Handle null animal_details
-	var animal_details_value = job_data.get("animal_details")
-	var animal_details: Dictionary = {}
-	if animal_details_value != null and typeof(animal_details_value) == TYPE_DICTIONARY:
-		animal_details = animal_details_value
-
-	print("[Camera] Prediction: ", prediction)
 	print("[Camera] Confidence: ", confidence)
 	print("[Camera] Animal details: ", animal_details)
 
-	# Download and cache dex-compatible image
-	var dex_url_value = job_data.get("dex_compatible_url")
-	if dex_url_value != null and str(dex_url_value).length() > 0:
-		dex_compatible_url = str(dex_url_value)
-		print("[Camera] Dex-compatible URL found: ", dex_compatible_url)
-		status_label.text = "Downloading processed image..."
-
-		# Try to load from cache first
-		cached_dex_image = _load_cached_image(dex_compatible_url)
-
-		if cached_dex_image == null:
-			# Download and cache
-			await _download_and_cache_dex_image(dex_compatible_url)
-		else:
-			print("[Camera] Using cached dex-compatible image")
-	else:
-		print("[Camera] WARNING: No dex_compatible_url in response, using preview image")
-		status_label.text = "Analysis complete! (using preview image)"
-
-	# Determine which image to display
-	var display_image: Image = null
-	if cached_dex_image != null:
-		display_image = cached_dex_image
-		print("[Camera] Using dex-compatible image for display")
-	elif simple_image.texture != null:
-		# Fallback to preview image if dex image not available
-		display_image = simple_image.texture.get_image()
-		print("[Camera] Using preview image for display")
-
-	# Switch from simple preview to bordered display with label
-	if display_image != null:
-		var texture := ImageTexture.create_from_image(display_image)
-		bordered_image.texture = texture
-
-		# Calculate aspect ratio from the image and UPDATE current dimensions
-		var img_width: float = float(display_image.get_width())
-		var img_height: float = float(display_image.get_height())
-
-		# Update current image dimensions for sizing calculations
-		current_image_width = img_width
-		current_image_height = img_height
-
-		if img_height > 0.0:
-			var aspect_ratio: float = img_width / img_height
-			bordered_container.ratio = aspect_ratio
-			print("[Camera] Image aspect ratio: ", aspect_ratio, " (", img_width, "x", img_height, ")")
-
-		# Hide simple preview, show bordered version
-		simple_image.visible = false
-		bordered_container.visible = true
-		record_image.visible = true  # Ensure parent is visible
-
-		# Update RecordImage's minimum size to accommodate the aspect ratio
-		await get_tree().process_frame
-		_update_record_image_size()
-
-	# Update RecordLabel with animal information
+	# Extract names for display
 	var common_name: String = ""
 	var scientific_name: String = ""
-	var kingdom: String = ""
-	var phylum: String = ""
-	var animal_class: String = ""
-	var order: String = ""
-	var family: String = ""
 
 	if animal_details.size() > 0:
 		var common_name_value = animal_details.get("common_name")
@@ -647,46 +805,8 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 		var scientific_name_value = animal_details.get("scientific_name")
 		scientific_name = "" if scientific_name_value == null else str(scientific_name_value)
 
-		var kingdom_value = animal_details.get("kingdom")
-		kingdom = "" if kingdom_value == null else str(kingdom_value)
-
-		var phylum_value = animal_details.get("phylum")
-		phylum = "" if phylum_value == null else str(phylum_value)
-
-		var class_value = animal_details.get("class_name")
-		animal_class = "" if class_value == null else str(class_value)
-
-		var order_value = animal_details.get("order")
-		order = "" if order_value == null else str(order_value)
-
-		var family_value = animal_details.get("family")
-		family = "" if family_value == null else str(family_value)
-
-		# Format: "Scientific name - common name"
-		var record_text := ""
-
-		# Use scientific name
-		if scientific_name.length() > 0:
-			record_text = scientific_name
-
-		# Add common name
-		if common_name.length() > 0:
-			if record_text.length() > 0:
-				record_text += " - " + common_name
-			else:
-				record_text = common_name
-
-		# Fallback if no data
-		if record_text.length() == 0:
-			record_text = "Unknown"
-
-		record_label.text = record_text
-		print("[Camera] Updated RecordLabel: ", record_text)
-
-	# Display detailed results - use same format as RecordLabel
+	# Display results text only (keep simple preview visible)
 	var result_text := ""
-
-	# Format: "Scientific name - common name"
 	if scientific_name.length() > 0:
 		result_text = scientific_name
 		if common_name.length() > 0:
@@ -699,55 +819,189 @@ func _handle_completed_job(job_data: Dictionary) -> void:
 	result_label.text = result_text.strip_edges()
 	result_label.add_theme_color_override("font_color", Color.GREEN)
 
-	# Save to local dex database if we have all required info
-	if animal_details.size() > 0:
-		var creation_index_value = animal_details.get("creation_index")
-		var animal_id_value = animal_details.get("id")
+	# Update status and show "Create Dex Entry" button
+	status_label.text = "Analysis complete! Click 'Create Dex Entry' to save."
+	status_label.add_theme_color_override("font_color", Color.GREEN)
+	loading_spinner.visible = false
 
-		if creation_index_value != null and animal_id_value != null:
-			var creation_index: int = int(creation_index_value)
-			var animal_id: String = str(animal_id_value)  # Animal ID is UUID string
-
-			# Get the cached image path
-			var cached_path := ""
-			if dex_compatible_url.length() > 0:
-				cached_path = "user://dex_cache/" + dex_compatible_url.md5_text() + ".png"
-
-			# Add to local database
-			DexDatabase.add_record(
-				creation_index,
-				scientific_name,
-				common_name,
-				cached_path
-			)
-
-			print("[Camera] Saved to local dex database: #", creation_index)
-
-			# Create server-side dex entry for syncing
-			_create_server_dex_entry(animal_id, current_job_id)
-		else:
-			print("[Camera] WARNING: Missing creation_index or animal ID, not saving to dex")
-			# Show manual entry button even if we don't have complete animal details
-			upload_button.visible = false
-			manual_entry_button.visible = true
-			manual_entry_button.disabled = false
-	else:
-		print("[Camera] WARNING: No animal_details, not saving to dex")
-
-	# Re-enable buttons for another upload
+	# Change upload button to "Create Dex Entry"
+	upload_button.text = "Create Dex Entry"
 	upload_button.disabled = false
-	select_photo_button.disabled = false
+	upload_button.visible = true
 
-	# Reset UI to initial state - show select/instruction, hide rotation
-	select_photo_button.visible = true
-	instruction_label.visible = true
+	# Store animal data for dex entry creation (don't show dex image yet)
+	current_dex_entry_id = ""  # Reset
+	pending_animal_details = animal_details  # Store for later dex entry creation
+
+	# Keep simple preview visible, hide rotation button
+	select_photo_button.visible = false
 	rotate_image_button.visible = false
+	manual_entry_button.visible = true  # Allow manual correction
 
-	# In editor mode, increment test image index (but don't auto-load)
-	# User must press SelectPhotoButton again to load next image
-	if OS.has_feature("editor"):
-		current_test_image_index += 1
-		print("[Camera] Editor mode: Test image %d uploaded. Press 'Select Photo' to load next image." % current_test_image_index)
+	current_state = CameraState.COMPLETED
+
+
+func _display_dex_image(scientific_name: String, common_name: String) -> void:
+	"""Display the bordered dex image with animal label"""
+	print("[Camera] Displaying bordered dex image")
+
+	# Use the cached_dex_image we already have (from converted download + rotation)
+	var display_image: Image = cached_dex_image
+
+	if display_image != null:
+		var texture := ImageTexture.create_from_image(display_image)
+		bordered_image.texture = texture
+
+		# Calculate aspect ratio from the image
+		var img_width: float = float(display_image.get_width())
+		var img_height: float = float(display_image.get_height())
+
+		# Update dimensions
+		current_image_width = img_width
+		current_image_height = img_height
+
+		if img_height > 0.0:
+			var aspect_ratio: float = img_width / img_height
+			bordered_container.ratio = aspect_ratio
+			print("[Camera] Image aspect ratio: ", aspect_ratio, " (", img_width, "x", img_height, ")")
+
+		# Format label: "Scientific name - common name"
+		var record_text := ""
+		if scientific_name.length() > 0:
+			record_text = scientific_name
+		if common_name.length() > 0:
+			if record_text.length() > 0:
+				record_text += " - " + common_name
+			else:
+				record_text = common_name
+		if record_text.length() == 0:
+			record_text = "Unknown"
+
+		record_label.text = record_text
+		print("[Camera] Updated RecordLabel: ", record_text)
+
+		# Hide simple preview, show bordered version
+		simple_image.visible = false
+		bordered_container.visible = true
+		record_image.visible = true
+
+		# Update RecordImage's minimum size
+		await get_tree().process_frame
+		_update_record_image_size()
+
+
+func _create_dex_entry() -> void:
+	"""Step 3: Create dex entry with vision_job linkage and display bordered dex image"""
+	print("[Camera] Creating dex entry...")
+
+	# Get animal ID from pending_animal_details
+	# Note: detected_animals uses "animal_id", but manual entry uses "id"
+	var animal_id_value = pending_animal_details.get("animal_id")
+	if animal_id_value == null:
+		animal_id_value = pending_animal_details.get("id")
+
+	if animal_id_value == null:
+		print("[Camera] ERROR: No animal ID in pending details")
+		print("[Camera] pending_animal_details keys: ", pending_animal_details.keys())
+		status_label.text = "Error: Missing animal data"
+		status_label.add_theme_color_override("font_color", Color.RED)
+		return
+
+	var animal_id: String = str(animal_id_value)
+	var creation_index: int = int(pending_animal_details.get("creation_index", 0))
+	var scientific_name: String = str(pending_animal_details.get("scientific_name", ""))
+	var common_name: String = str(pending_animal_details.get("common_name", ""))
+
+	# NOW display the bordered dex image with label
+	_display_dex_image(scientific_name, common_name)
+
+	# Update UI
+	upload_button.disabled = true
+	loading_spinner.visible = true
+	status_label.text = "Creating dex entry..."
+	status_label.add_theme_color_override("font_color", Color.WHITE)
+
+	# Save image to local cache
+	var cached_path := ""
+	if cached_dex_image != null:
+		# Save to user://dex_cache/{user_id}/
+		var user_id = TokenManager.get_user_id()
+		var cache_dir = "user://dex_cache/%s/" % user_id
+		var dir = DirAccess.open("user://dex_cache/")
+		if not dir:
+			dir = DirAccess.open("user://")
+			dir.make_dir("dex_cache")
+			dir = DirAccess.open("user://dex_cache/")
+		if not dir.dir_exists(user_id):
+			dir.make_dir(user_id)
+
+		# Use creation_index for filename
+		cached_path = "%s%d.png" % [cache_dir, creation_index]
+		var png_data = cached_dex_image.save_png_to_buffer()
+		var file = FileAccess.open(cached_path, FileAccess.WRITE)
+		if file:
+			file.store_buffer(png_data)
+			file.close()
+			print("[Camera] Saved image to cache: ", cached_path)
+
+	# Add to local database with animal_id for future matching
+	var record_dict = {
+		"creation_index": creation_index,
+		"scientific_name": scientific_name,
+		"common_name": common_name,
+		"cached_image_path": cached_path,
+		"animal_id": animal_id  # Store for matching with server entries
+	}
+	DexDatabase.add_record_from_dict(record_dict, "self")
+	print("[Camera] Added to local database: #%d with animal_id: %s" % [creation_index, animal_id])
+
+	# Create server-side entry with vision_job linkage
+	APIManager.dex.create_entry(
+		animal_id,
+		current_job_id,  # vision_job_id
+		"",  # notes
+		"friends",  # visibility
+		_on_dex_entry_final_created
+	)
+
+
+func _on_dex_entry_final_created(response: Dictionary, code: int) -> void:
+	"""Handle final dex entry creation"""
+	loading_spinner.visible = false
+
+	if code == 200 or code == 201:
+		current_dex_entry_id = str(response.get("id", ""))
+		print("[Camera] Dex entry created successfully: ", current_dex_entry_id)
+
+		# Update local database with server entry ID for future editing
+		var creation_index = int(pending_animal_details.get("creation_index", 0))
+		if creation_index > 0:
+			var user_id = TokenManager.get_user_id()
+			var record = DexDatabase.get_record_for_user(creation_index, user_id)
+			if not record.is_empty():
+				record["dex_entry_id"] = current_dex_entry_id
+				DexDatabase.add_record_from_dict(record, user_id)
+				print("[Camera] Stored dex_entry_id in local database")
+
+		status_label.text = "Dex entry created!"
+		status_label.add_theme_color_override("font_color", Color.GREEN)
+
+		# Show success and allow new upload
+		upload_button.visible = false
+		select_photo_button.visible = true
+		select_photo_button.disabled = false
+		instruction_label.visible = true
+
+		# In editor mode, increment test image index
+		if OS.has_feature("editor"):
+			current_test_image_index += 1
+			print("[Camera] Test image complete. Press 'Select Photo' for next image.")
+	else:
+		var error_msg = response.get("error", "Unknown error")
+		print("[Camera] Failed to create dex entry: ", error_msg)
+		status_label.text = "Failed to create entry: %s" % error_msg
+		status_label.add_theme_color_override("font_color", Color.RED)
+		upload_button.disabled = false
 
 
 func _create_server_dex_entry(animal_id: String, vision_job_id: String) -> void:
@@ -906,25 +1160,34 @@ func _on_manual_entry_pressed() -> void:
 
 
 func _on_manual_entry_updated(taxonomy_data: Dictionary) -> void:
-	"""Handle manual entry update"""
+	"""Handle manual entry update - updates pending_animal_details for later dex creation"""
 	print("[Camera] Manual entry updated with taxonomy: ", taxonomy_data.get("scientific_name", ""))
 
-	# Update the displayed record label if we have animal details
-	var animal_details = taxonomy_data.get("animal_details", {})
+	# Update pending_animal_details with the new animal data
+	# The taxonomy_data contains the full animal record from the lookup_or_create call
+	var animal_details = taxonomy_data.get("animal", {})
+	if animal_details.is_empty():
+		# Fallback: use taxonomy_data directly if no nested animal field
+		animal_details = taxonomy_data
+
 	if not animal_details.is_empty():
+		# Update pending_animal_details so when user clicks "Create Dex Entry", it uses the new animal
+		pending_animal_details = animal_details
+		print("[Camera] Updated pending_animal_details with manual selection")
+
 		var scientific_name = animal_details.get("scientific_name", "")
 		var common_name = animal_details.get("common_name", "")
 
+		# Update the result label to show new selection
 		var display_text = scientific_name
 		if not common_name.is_empty():
 			display_text += " - " + common_name
 
 		if display_text.length() > 0:
-			record_label.text = display_text
 			result_label.text = display_text
 			result_label.add_theme_color_override("font_color", Color.GREEN)
 
-	status_label.text = "Entry updated successfully!"
+	status_label.text = "Selection updated! Click 'Create Dex Entry' to save."
 	status_label.add_theme_color_override("font_color", Color.GREEN)
 
 

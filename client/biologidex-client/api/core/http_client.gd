@@ -91,7 +91,8 @@ func make_json_request(
 	data: Dictionary,
 	success_callback: Callable,
 	error_callback: Callable,
-	custom_headers: Array = []
+	custom_headers: Array = [],
+	expect_binary: bool = false
 ) -> int:
 	var req = _acquire_request()
 	if not req:
@@ -127,6 +128,7 @@ func make_json_request(
 	req.set_meta("success_callback", success_callback)
 	req.set_meta("error_callback", error_callback)
 	req.set_meta("request_url", url)
+	req.set_meta("expect_binary", expect_binary)
 
 	return OK
 
@@ -176,7 +178,8 @@ func http_get(
 	url: String,
 	success_callback: Callable,
 	error_callback: Callable,
-	custom_headers: Array = []
+	custom_headers: Array = [],
+	expect_binary: bool = false
 ) -> int:
 	var req = _acquire_request()
 	if not req:
@@ -209,6 +212,7 @@ func http_get(
 	req.set_meta("success_callback", success_callback)
 	req.set_meta("error_callback", error_callback)
 	req.set_meta("request_url", url)
+	req.set_meta("expect_binary", expect_binary)
 
 	return OK
 
@@ -278,25 +282,33 @@ func build_multipart_body_with_fields(boundary: String, fields: Array) -> Packed
 	return packet
 
 ## Handle HTTP request completion
-func _on_request_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, req: HTTPRequest) -> void:
+func _on_request_completed(_result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, req: HTTPRequest) -> void:
 	var url: String = req.get_meta("request_url", "unknown")
 	var success_callback: Callable = req.get_meta("success_callback")
 	var error_callback: Callable = req.get_meta("error_callback")
+	var expect_binary: bool = req.get_meta("expect_binary", false)
 
-	# Parse response body
-	var response_text := body.get_string_from_utf8()
 	var response_data := {}
 
-	if response_text.length() > 0:
-		var json := JSON.new()
-		var parse_result := json.parse(response_text)
-		if parse_result == OK:
-			response_data = json.data
-		else:
-			response_data = {"raw": response_text}
+	# Check if response is binary (image, etc.)
+	if expect_binary or _is_binary_response(headers):
+		# Return raw binary data
+		response_data = {"data": body}
+		_log_binary_response(url, response_code, body.size())
+	else:
+		# Parse response body as JSON
+		var response_text := body.get_string_from_utf8()
 
-	# Log response
-	_log_response(url, response_code, response_data)
+		if response_text.length() > 0:
+			var json := JSON.new()
+			var parse_result := json.parse(response_text)
+			if parse_result == OK:
+				response_data = json.data
+			else:
+				response_data = {"raw": response_text}
+
+		# Log response
+		_log_response(url, response_code, response_data)
 
 	# Handle response
 	if response_code >= 200 and response_code < 300:
@@ -343,3 +355,22 @@ func _log_error(url: String, error: String) -> void:
 	print("[HTTPClient] === ERROR ===")
 	print("[HTTPClient] URL: ", url)
 	print("[HTTPClient] Error: ", error)
+
+func _log_binary_response(url: String, code: int, size: int) -> void:
+	print("[HTTPClient] === RESPONSE (BINARY) ===")
+	print("[HTTPClient] URL: ", url)
+	print("[HTTPClient] Status: ", code)
+	print("[HTTPClient] Body: Binary data (%d bytes)" % size)
+
+func _is_binary_response(headers: PackedStringArray) -> bool:
+	"""Check if response is binary based on Content-Type header"""
+	for header in headers:
+		var header_lower = header.to_lower()
+		if header_lower.begins_with("content-type:"):
+			# Check for image types
+			if "image/" in header_lower:
+				return true
+			# Check for octet-stream
+			if "application/octet-stream" in header_lower:
+				return true
+	return false

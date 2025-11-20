@@ -180,25 +180,13 @@ func _on_submit_pressed() -> void:
 
 	print("[ManualEntryPopup] Submitting selection")
 
-	# If we have a dex entry ID, update it
-	if not current_dex_entry_id.is_empty():
-		_update_dex_entry()
-	else:
-		# Just emit the taxonomy data for the caller to handle
-		entry_updated.emit(selected_taxonomy)
-		_close_popup()
+	# Always look up or create an Animal record from the taxonomy selection
+	# This ensures we have a valid animal_id to use for dex entry creation
+	_lookup_or_create_animal()
 
-func _update_dex_entry() -> void:
-	"""Update the dex entry with the new animal"""
-	# Get the taxonomy ID to look up or create the animal
-	var taxonomy_id = selected_taxonomy.get("id", "")
 
-	if taxonomy_id.is_empty():
-		_show_error("Invalid taxonomy selection")
-		return
-
-	# First, we need to look up or create an Animal from this taxonomy
-	# We'll use the animals service to do this
+func _lookup_or_create_animal() -> void:
+	"""Look up or create an Animal from the selected taxonomy"""
 	var scientific_name = selected_taxonomy.get("scientific_name", "")
 	var common_names = selected_taxonomy.get("common_names", [])
 	var common_name = ""
@@ -245,18 +233,25 @@ func _on_animal_lookup_completed(response: Dictionary, code: int) -> void:
 		_show_error("Failed to get animal ID")
 		return
 
-	print("[ManualEntryPopup] Animal ready, updating dex entry: ", animal_id)
+	print("[ManualEntryPopup] Animal ready: ", animal_id)
 
-	# Now update the dex entry with this animal
-	var update_data = {
-		"animal": animal_id
-	}
+	# If we have a dex entry ID, update the existing entry
+	if not current_dex_entry_id.is_empty():
+		print("[ManualEntryPopup] Updating existing dex entry: ", current_dex_entry_id)
+		var update_data = {
+			"animal": animal_id
+		}
 
-	APIManager.dex.update_entry(
-		current_dex_entry_id,
-		update_data,
-		_on_dex_entry_updated
-	)
+		APIManager.dex.update_entry(
+			current_dex_entry_id,
+			update_data,
+			_on_dex_entry_updated
+		)
+	else:
+		# No dex entry yet - just emit the animal data for the caller to handle
+		print("[ManualEntryPopup] Emitting animal data for pending dex entry")
+		entry_updated.emit({"animal": animal})
+		_close_popup()
 
 func _on_dex_entry_updated(response: Dictionary, code: int) -> void:
 	"""Handle dex entry update response"""

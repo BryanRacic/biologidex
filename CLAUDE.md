@@ -9,11 +9,14 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-11-18)
+## Status (2025-11-20)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
 - ✅ Taxonomic tree visualization with Walker-Buchheim O(n) layout algorithm
+- ✅ Two-step image upload workflow (convert → download → analyze)
+- ✅ Multiple animal detection support with selection API
+- ✅ Client-side image rotation with post-conversion transformations
 
 ---
 
@@ -50,11 +53,14 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - AspectRatioContainer: `layout_mode = 1` with anchors
 - Touch targets: min 44×44px for mobile
 
-**Images**:
-- Camera: Upload native format → server converts → download dex-compatible PNG (max 2560x2560)
-- Image rotation: Use `Image.rotate_90(CLOCKWISE)` for pixel-level rotation, update dimensions
+**Images & Camera Workflow (Updated 2025-11-20)**:
+- **Two-step upload workflow**:
+  1. Client uploads → `/images/convert/` → Server converts to PNG → Returns conversion_id
+  2. Client downloads converted PNG, can rotate/preview → Submits to `/vision/jobs/` with conversion_id
+- **State machine** (camera.gd): IDLE → IMAGE_SELECTED → IMAGE_CONVERTING → IMAGE_READY → ANALYZING → ANALYSIS_COMPLETE → (ANIMAL_SELECTION) → COMPLETED
+- Image rotation: Client-side using `Image.rotate_90(CLOCKWISE)`, sent as `post_conversion_transformations`
+- Multiple animal detection: Backend returns `detected_animals` array, client auto-selects if 1, shows selection UI if >1
 - Never call `_update_record_image_size()` during rotation of simple preview
-- Update `current_image_width/height` when changing displayed image
 - RecordImage: Dual display (simple TextureRect + bordered AspectRatioContainer)
 
 **Multi-User Dex (v2.0)**:
@@ -84,13 +90,32 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **NameRelation**: Synonym relationships from COL `NameRelation.tsv` (spelling corrections, basionyms, etc.)
 - **DexEntry**: User↔Animal, `visibility` (private/friends/public), `customizations` JSONField, image fields (original/processed/source_vision_job)
 - **Friendship**: Bidirectional, status (pending/accepted/rejected/blocked), helpers: `are_friends()`, `get_friends()`, `get_friend_ids()`
-- **AnalysisJob**: CV tracking, `image` (original), `dex_compatible_image` (PNG ≤2560px), status, cost/tokens
-- **ProcessedImage** (images app): Transformations, versioning, SHA256 checksums, EXIF data
+- **AnalysisJob**: CV tracking with **NEW multi-animal support**:
+  - `source_conversion` FK to ImageConversion (new workflow)
+  - `image` (DEPRECATED - legacy direct upload)
+  - `dex_compatible_image` (PNG ≤2560px)
+  - `detected_animals` JSONField list (all CV detections)
+  - `selected_animal_index` (user's choice from multiple)
+  - `post_conversion_transformations` (client-side rotation, etc.)
+  - Legacy `identified_animal` FK (first/selected animal for backward compat)
+- **ImageConversion** (images app): Temporary image storage (30-min TTL):
+  - `original_image`, `converted_image` (dex-compatible PNG)
+  - `transformations` applied during conversion
+  - `checksum` SHA256 for deduplication
+  - `used_in_job` flag, `expires_at` timestamp
+  - Auto-cleanup via Celery (every 10 min)
+- **ProcessedImage** (images app): Long-term transformations, versioning, SHA256 checksums, EXIF data
 
-**CV Pipeline & Taxonomy Matching**:
+**CV Pipeline & Taxonomy Matching (Updated 2025-11-20)**:
+- **NEW Two-Step Upload Workflow**:
+  1. Client → `POST /images/convert/` → Server converts → Returns conversion_id
+  2. Client downloads converted PNG, displays with rotation
+  3. Client → `POST /vision/jobs/` with conversion_id + post_conversion_transformations
+  4. Server uses pre-converted image, applies final transforms, runs CV
+- **Multiple Animal Detection**: `parse_and_create_animals()` returns list, supports pipe-delimited (`|`) format
 - ImageProcessor: Converts to PNG (RGBA→RGB white bg), resizes >2560px, metadata
 - OpenAIVisionService: GPT-4 (`max_tokens`) vs GPT-5+ (`max_completion_tokens`)
-- Celery task: ImageProcessor → Vision API → parse/create Animal
+- Celery task: ImageProcessor → Vision API → parse ALL animals → store in `detected_animals`
 - EnhancedImageProcessor (images): EXIF rotation, transformations, deduplication
 
 **Taxonomy Matching** (`taxonomy/services.py:lookup_or_create_from_cv`):
@@ -114,7 +139,8 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **Animals**: `/animals/` (list), `/lookup_or_create/` (CV pipeline)
 **Dex**: `/dex/entries/` (create), `/my_entries/`, `/favorites/`, `/{id}/toggle_favorite/`, `/sync_entries/` (cached 5m), `/user/{id}/entries/` (multi-user), `/friends_overview/` (cached 2m), `/batch_sync/`
 **Social**: `/social/friendships/` (CRUD), `/friends/`, `/pending/`, `/send_request/`, `/{id}/respond/`, `/{id}/unfriend/`
-**Vision**: `/vision/jobs/` (create w/transforms), `/{id}/` (status), `/completed/`, `/{id}/retry/`
+**Vision**: `/vision/jobs/` (create w/conversion_id), `/{id}/` (status), `/{id}/select_animal/` (multi-animal), `/completed/`, `/{id}/retry/`
+**Images**: `/images/convert/` (upload & convert), `/images/convert/{id}/download/` (get PNG), `/images/convert/{id}/` (metadata)
 **Graph**: `/graph/taxonomic-tree/` (cached), `/invalidate-cache/`
 
 ## Critical Details
