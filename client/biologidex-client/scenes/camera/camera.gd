@@ -443,7 +443,7 @@ func _on_create_dex_entry() -> void:
 		"cached_image_path": cached_path,
 		"animal_id": animal_id,
 		"owner_username": TokenManager.get_username(),
-		"catch_date": Time.get_datetime_string_from_system(false, true)  # ISO 8601 format
+		"catch_date": Time.get_datetime_string_from_system(false, false)  # ISO 8601 format with T separator
 	}
 	DexDatabase.add_record_from_dict(record_dict, "self")
 	print("[Camera] Added to local database: #%d" % creation_index)
@@ -515,18 +515,19 @@ func _show_dex_record_card() -> void:
 	if not species_line:
 		species_line = "Unknown Species"
 
-	# Format catch info (username and date)
+	# Format catch info (username and date on separate lines)
 	var username = TokenManager.get_username()
-	var catch_date = Time.get_datetime_string_from_system(false, true)  # ISO 8601 format
-	var catch_info = username if username else "Unknown User"
+	var catch_date = Time.get_datetime_string_from_system(false, false)  # ISO 8601 format with T separator
+	var username_line = username if username else "Unknown User"
 
 	# Format date nicely (take just the date part)
+	var date_line = ""
 	var date_parts = catch_date.split("T")
 	if date_parts.size() > 0:
-		catch_info += " - " + date_parts[0]
+		date_line = date_parts[0]
 
-	# Combine lines
-	record_label.text = species_line + "\n" + catch_info
+	# Combine lines: species, username, date
+	record_label.text = species_line + "\n" + username_line + "\n" + date_line
 
 	print("[Camera] Showing dex record card: ", species_line)
 

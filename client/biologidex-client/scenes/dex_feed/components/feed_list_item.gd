@@ -52,16 +52,18 @@ func _populate_ui() -> void:
 		if not common.is_empty():
 			species_line += " - %s" % common
 
-		# Format catch info (username and date)
-		var catch_info := owner
+		# Format catch info (username and date on separate lines)
+		var username_line := owner
+
+		var date_line := ""
 		if not catch_date.is_empty():
 			# Format date nicely (take just the date part, not time)
 			var date_parts := catch_date.split("T")
 			if date_parts.size() > 0:
-				catch_info += " - " + date_parts[0]
+				date_line = date_parts[0]
 
-		# Combine lines
-		record_label.text = species_line + "\n" + catch_info
+		# Combine lines: species, username, date
+		record_label.text = species_line + "\n" + username_line + "\n" + date_line
 
 	# Set tooltip with full info
 	var tooltip_info := "%s" % scientific

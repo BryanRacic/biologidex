@@ -184,21 +184,22 @@ func _update_record_label(record: Dictionary) -> void:
 	else:
 		species_line = "Unknown"
 
-	# Format catch info line (username and date)
-	var catch_info := ""
+	# Format catch info (username and date on separate lines)
+	var username_line := ""
 	if username.length() > 0:
-		catch_info = username
+		username_line = username
 	else:
-		catch_info = "Unknown User"
+		username_line = "Unknown User"
 
+	var date_line := ""
 	if catch_date.length() > 0:
 		# Format date nicely (take just the date part, not time)
 		var date_parts := catch_date.split("T")
 		if date_parts.size() > 0:
-			catch_info += " - " + date_parts[0]
+			date_line = date_parts[0]
 
-	# Combine lines
-	record_label.text = species_line + "\n" + catch_info
+	# Combine lines: species, username, date
+	record_label.text = species_line + "\n" + username_line + "\n" + date_line
 
 
 func _load_and_display_image(path: String) -> void:

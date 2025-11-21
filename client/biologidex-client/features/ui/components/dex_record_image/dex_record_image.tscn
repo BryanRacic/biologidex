@@ -59,8 +59,9 @@ theme_override_constants/margin_bottom = 25
 [node name="RecordLabel" type="Label" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
 layout_mode = 2
 text = "Genus species - common name
-Username - catchdate "
+Username  catchdate "
 label_settings = SubResource("LabelSettings_yeq50")
+horizontal_alignment = 2
 
 [node name="Image" type="TextureRect" parent="."]
 layout_mode = 1
