@@ -51,10 +51,10 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_eheay")
 
 [node name="RecordTextMargin" type="MarginContainer" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground"]
 layout_mode = 2
-theme_override_constants/margin_left = 25
-theme_override_constants/margin_top = 25
-theme_override_constants/margin_right = 25
-theme_override_constants/margin_bottom = 25
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
 
 [node name="RecordLabel" type="Label" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
 layout_mode = 2
