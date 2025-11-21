@@ -11,18 +11,19 @@ config_version=5
 [application]
 
 config/name="biologidex-client"
-run/main_scene="res://login.tscn"
+run/main_scene="res://scenes/login/login.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
-NavigationManager="*res://navigation_manager.gd"
-TokenManager="*res://token_manager.gd"
-APIManager="*res://api/api_manager.gd"
-DexDatabase="*res://dex_database.gd"
-TreeCache="*res://tree_cache.gd"
-SyncManager="*res://sync_manager.gd"
+Bootstrap="*res://bootstrap.gd"
+NavigationManager="*res://features/navigation/navigation_manager.gd"
+TokenManager="*res://features/server_interface/auth/token_manager.gd"
+APIManager="*res://features/server_interface/api/api_manager.gd"
+DexDatabase="*res://features/database/dex_database.gd"
+TreeCache="*res://features/tree/tree_cache.gd"
+SyncManager="*res://features/database/sync_manager.gd"
 
 [display]
 

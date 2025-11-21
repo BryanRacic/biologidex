@@ -1,0 +1,60 @@
+[gd_scene load_steps=2 format=3 uid="uid://bgr7lhm8n3wk5"]
+
+[ext_resource type="Script" path="res://components/friend_list_item.gd" id="1_friend_item"]
+
+[node name="FriendListItem" type="Panel"]
+custom_minimum_size = Vector2(0, 100)
+script = ExtResource("1_friend_item")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="InfoContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="UsernameLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+layout_mode = 2
+text = "Username"
+theme_type_variation = &"HeaderLarge"
+
+[node name="StatsLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+layout_mode = 2
+text = "0 catches, 0 unique species"
+
+[node name="FriendCodeLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+layout_mode = 2
+text = "Code: ABC12345"
+
+[node name="ActionsContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ViewDexButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "View Dex"
+
+[node name="ViewTreeButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "View Tree"
+
+[node name="RemoveButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "Remove"
