@@ -1,79 +1,19 @@
-[gd_scene load_steps=2 format=3 uid="uid://bgr7lhm8n3wk5"]
+[gd_scene load_steps=3 format=3 uid="uid://bgr7lhm8n3wk5"]
 
 [ext_resource type="Script" path="res://scenes/dex_feed/components/feed_list_item.gd" id="1_feed_item"]
+[ext_resource type="PackedScene" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="2_record"]
 
-[node name="FeedListItem" type="PanelContainer"]
-custom_minimum_size = Vector2(0, 200)
+[node name="FeedListItem" type="Button"]
+custom_minimum_size = Vector2(0, 400)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
 script = ExtResource("1_feed_item")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
-layout_mode = 2
-theme_override_constants/margin_left = 15
-theme_override_constants/margin_top = 15
-theme_override_constants/margin_right = 15
-theme_override_constants/margin_bottom = 15
-
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="HeaderRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="UserName" type="Label" parent="MarginContainer/VBoxContainer/HeaderRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Username"
-theme_type_variation = &"HeaderMedium"
-
-[node name="CatchDate" type="Label" parent="MarginContainer/VBoxContainer/HeaderRow"]
-layout_mode = 2
-text = "01/01/2025"
-
-[node name="FavoriteButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-text = "☆"
-
-[node name="ContentRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 15
-
-[node name="DexImageContainer" type="AspectRatioContainer" parent="MarginContainer/VBoxContainer/ContentRow"]
-custom_minimum_size = Vector2(200, 0)
-layout_mode = 2
-ratio = 1.0
-
-[node name="DexImage" type="TextureRect" parent="MarginContainer/VBoxContainer/ContentRow/DexImageContainer"]
-layout_mode = 2
-expand_mode = 1
-stretch_mode = 5
-
-[node name="InfoPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 5
-
-[node name="ScientificName" type="Label" parent="MarginContainer/VBoxContainer/ContentRow/InfoPanel"]
-layout_mode = 2
-text = "Scientific Name"
-theme_type_variation = &"HeaderMedium"
-
-[node name="CommonName" type="Label" parent="MarginContainer/VBoxContainer/ContentRow/InfoPanel"]
-layout_mode = 2
-text = "Common Name"
-
-[node name="DexNumber" type="Label" parent="MarginContainer/VBoxContainer/ContentRow/InfoPanel"]
-layout_mode = 2
-text = "#001"
-
-[node name="ActionRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="ViewInDexButton" type="Button" parent="MarginContainer/VBoxContainer/ActionRow"]
-custom_minimum_size = Vector2(120, 44)
-layout_mode = 2
-text = "View in Dex"
+[node name="DexRecordImage" parent="." instance=ExtResource("2_record")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2

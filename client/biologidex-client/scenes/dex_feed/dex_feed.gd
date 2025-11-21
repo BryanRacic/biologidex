@@ -37,7 +37,6 @@ var is_syncing: bool = false
 signal feed_loaded(entry_count: int)
 signal sync_started()
 signal sync_completed()
-signal entry_favorited(entry_id: String, is_favorite: bool)
 
 
 func _ready() -> void:
@@ -289,7 +288,9 @@ func _load_feed_entries() -> void:
 		var friend_entries: Array = DexDatabase.get_all_records_for_user(friend_id)
 		var friend_info: Dictionary = friends_data.get(friend_id, {})
 
+		print("[DexFeed] Loading %d entries for friend: %s" % [friend_entries.size(), friend_info.get("username", "Unknown")])
 		for entry in friend_entries:
+			print("[DexFeed] Entry #%d cached_path: '%s'" % [entry.get("creation_index", -1), entry.get("cached_image_path", "")])
 			var feed_entry := _create_feed_entry(entry, friend_id, friend_info)
 			feed_entries.append(feed_entry)
 
@@ -369,8 +370,7 @@ func _add_feed_item(entry: Dictionary) -> void:
 	item.setup(entry)
 
 	# Connect signals
-	item.favorite_toggled.connect(_on_entry_favorite_toggled)
-	item.view_in_dex_pressed.connect(_on_view_in_dex)
+	item.item_pressed.connect(_on_view_in_dex)
 
 
 func _clear_feed_display() -> void:
@@ -394,14 +394,6 @@ func _display_empty_state() -> void:
 	empty_label.custom_minimum_size = Vector2(400, 200)
 
 	feed_container.add_child(empty_label)
-
-
-func _on_entry_favorite_toggled(entry_id: String, is_favorite: bool) -> void:
-	"""Handle favorite toggle for a feed entry"""
-	print("[DexFeed] Toggling favorite for entry: %s" % entry_id)
-	# Note: This would toggle the user's own favorite status for a friend's entry
-	# For now, we'll just emit the signal
-	entry_favorited.emit(entry_id, is_favorite)
 
 
 func _on_view_in_dex(entry: Dictionary) -> void:

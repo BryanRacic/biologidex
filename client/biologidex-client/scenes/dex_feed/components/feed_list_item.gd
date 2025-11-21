@@ -1,37 +1,33 @@
-extends PanelContainer
+extends Button
 ## FeedListItem - Display a single entry in the dex feed
 
 # Entry data
 var entry_data: Dictionary = {}
 
 # UI References
-@onready var user_name: Label = $MarginContainer/VBoxContainer/HeaderRow/UserName
-@onready var catch_date: Label = $MarginContainer/VBoxContainer/HeaderRow/CatchDate
-@onready var favorite_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FavoriteButton
-@onready var dex_image_container: AspectRatioContainer = $MarginContainer/VBoxContainer/ContentRow/DexImageContainer
-@onready var dex_image: TextureRect = $MarginContainer/VBoxContainer/ContentRow/DexImageContainer/DexImage
-@onready var scientific_name: Label = $MarginContainer/VBoxContainer/ContentRow/InfoPanel/ScientificName
-@onready var common_name: Label = $MarginContainer/VBoxContainer/ContentRow/InfoPanel/CommonName
-@onready var dex_number: Label = $MarginContainer/VBoxContainer/ContentRow/InfoPanel/DexNumber
-@onready var view_button: Button = $MarginContainer/VBoxContainer/ActionRow/ViewInDexButton
+@onready var dex_record_image: Control = $DexRecordImage
+@onready var dex_image_container: AspectRatioContainer = $DexRecordImage/ImageBorderAspectRatio
+@onready var bordered_image: TextureRect = $DexRecordImage/ImageBorderAspectRatio/ImageBorder/Image
+@onready var simple_image: TextureRect = $DexRecordImage/Image
+@onready var record_label: Label = $DexRecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
 
 # Services
 var DexDatabase
 
 # Signals
-signal favorite_toggled(entry_id: String, is_favorite: bool)
-signal view_in_dex_pressed(entry: Dictionary)
+signal item_pressed(entry: Dictionary)
 
 
 func _ready() -> void:
 	# Initialize services
 	DexDatabase = get_node("/root/DexDatabase")
 
-	# Connect button signals
-	if favorite_button:
-		favorite_button.pressed.connect(_on_favorite_button_pressed)
-	if view_button:
-		view_button.pressed.connect(_on_view_button_pressed)
+	# Hide the simple image overlay (we only want the bordered version)
+	if simple_image:
+		simple_image.visible = false
+
+	# Connect button press
+	pressed.connect(_on_item_pressed)
 
 
 func setup(entry: Dictionary) -> void:
@@ -43,53 +39,42 @@ func setup(entry: Dictionary) -> void:
 
 func _populate_ui() -> void:
 	"""Populate UI elements with entry data"""
-	# User name
-	if user_name:
-		user_name.text = entry_data.get("owner_username", "Unknown")
+	var scientific: String = entry_data.get("scientific_name", "Unknown Species")
+	var common: String = entry_data.get("common_name", "")
+	var owner: String = entry_data.get("owner_username", "Unknown")
+	var creation_index: int = entry_data.get("creation_index", -1)
 
-	# Catch date
-	if catch_date:
-		var date_string: String = entry_data.get("catch_date", "")
-		catch_date.text = _format_date(date_string)
+	# Set record label
+	if record_label:
+		var label_text := scientific
+		if not common.is_empty():
+			label_text += " - %s" % common
+		record_label.text = label_text
 
-	# Scientific name
-	if scientific_name:
-		scientific_name.text = entry_data.get("scientific_name", "Unknown Species")
+	# Set tooltip with full info including owner
+	var tooltip_info := "%s" % scientific
+	if not common.is_empty():
+		tooltip_info += " (%s)" % common
+	tooltip_info += "\n#%03d - Caught by %s" % [creation_index, owner]
 
-	# Common name
-	if common_name:
-		var common: String = entry_data.get("common_name", "")
-		if common.is_empty():
-			common_name.text = ""
-			common_name.visible = false
-		else:
-			common_name.text = common
-			common_name.visible = true
-
-	# Dex number
-	if dex_number:
-		var creation_index: int = entry_data.get("creation_index", -1)
-		if creation_index >= 0:
-			dex_number.text = "#%03d" % creation_index
-		else:
-			dex_number.text = "#???"
-
-	# Favorite button
-	_update_favorite_button(entry_data.get("is_favorite", false))
+	tooltip_text = tooltip_info
 
 
 func _load_image() -> void:
 	"""Load the image from cache or download if necessary"""
 	var cached_path: String = entry_data.get("cached_image_path", "")
+	print("[FeedListItem] Loading image, cached_path: ", cached_path)
 
 	# Try to load from cache first
 	if not cached_path.is_empty() and FileAccess.file_exists(cached_path):
+		print("[FeedListItem] Loading from cache: ", cached_path)
 		_load_image_from_path(cached_path)
 		return
 
 	# If not cached, try to download
 	var image_url: String = entry_data.get("dex_compatible_url", "")
 	if not image_url.is_empty():
+		print("[FeedListItem] Cache miss, downloading: ", image_url)
 		_download_image(image_url)
 	else:
 		_set_placeholder_image()
@@ -97,11 +82,18 @@ func _load_image() -> void:
 
 func _load_image_from_path(path: String) -> void:
 	"""Load image from local file path"""
+	print("[FeedListItem] Loading from path: ", path)
+	print("[FeedListItem] bordered_image is null: ", bordered_image == null)
+
 	var image := Image.load_from_file(path)
 	if image:
+		print("[FeedListItem] Image loaded successfully, size: ", image.get_size())
 		var texture := ImageTexture.create_from_image(image)
-		if dex_image:
-			dex_image.texture = texture
+		if bordered_image:
+			bordered_image.texture = texture
+			print("[FeedListItem] Texture set to bordered_image")
+		else:
+			print("[FeedListItem] ERROR: bordered_image is null!")
 	else:
 		print("[FeedListItem] Failed to load image from: ", path)
 		_set_placeholder_image()
@@ -147,83 +139,47 @@ func _on_image_downloaded(result: int, response_code: int, headers: PackedString
 		return
 
 	# Display the image
+	print("[FeedListItem] Downloaded image size: ", image.get_size())
 	var texture := ImageTexture.create_from_image(image)
-	if dex_image:
-		dex_image.texture = texture
+	if bordered_image:
+		bordered_image.texture = texture
+		print("[FeedListItem] Texture set to bordered_image from download")
+	else:
+		print("[FeedListItem] ERROR: bordered_image is null in download callback!")
 
 	# Cache the image for future use
 	var owner_id: String = entry_data.get("owner_id", "")
 	var image_url: String = entry_data.get("dex_compatible_url", "")
+	var creation_index: int = entry_data.get("creation_index", -1)
 
-	if not owner_id.is_empty() and not image_url.is_empty():
+	if not owner_id.is_empty() and not image_url.is_empty() and creation_index >= 0:
 		var cached_path: String = DexDatabase.cache_image(image_url, body, owner_id)
 		entry_data["cached_image_path"] = cached_path
 		print("[FeedListItem] Image cached at: ", cached_path)
 
+		# Update the DexDatabase record with the cached path
+		var record: Dictionary = DexDatabase.get_record_for_user(creation_index, owner_id)
+		if not record.is_empty():
+			record["cached_image_path"] = cached_path
+			DexDatabase.add_record_from_dict(record, owner_id)
+			print("[FeedListItem] Updated DexDatabase record with cached path")
+
+			# Verify the update worked
+			var updated_record: Dictionary = DexDatabase.get_record_for_user(creation_index, owner_id)
+			print("[FeedListItem] Verified cached_path in DB: ", updated_record.get("cached_image_path", "EMPTY"))
+
 
 func _set_placeholder_image() -> void:
 	"""Set a placeholder image when real image is unavailable"""
-	if dex_image:
+	if bordered_image:
 		# Create a simple placeholder texture
 		var placeholder_image := Image.create(256, 256, false, Image.FORMAT_RGB8)
 		placeholder_image.fill(Color(0.2, 0.2, 0.2))  # Dark gray
 		var texture := ImageTexture.create_from_image(placeholder_image)
-		dex_image.texture = texture
+		bordered_image.texture = texture
 
 
-func _format_date(iso_date: String) -> String:
-	"""Convert ISO date to readable format"""
-	if iso_date.is_empty():
-		return "Unknown date"
-
-	# Parse ISO format: YYYY-MM-DDTHH:MM:SS.sssZ
-	var parts := iso_date.split("T")
-	if parts.size() == 0:
-		return iso_date
-
-	var date_part := parts[0]
-	var date_components := date_part.split("-")
-
-	if date_components.size() != 3:
-		return iso_date
-
-	var year := date_components[0]
-	var month := date_components[1]
-	var day := date_components[2]
-
-	# Return format: MM/DD/YYYY
-	return "%s/%s/%s" % [month, day, year]
-
-
-func _update_favorite_button(is_favorite: bool) -> void:
-	"""Update the favorite button appearance"""
-	if not favorite_button:
-		return
-
-	if is_favorite:
-		favorite_button.text = "★"  # Filled star
-		favorite_button.modulate = Color.YELLOW
-	else:
-		favorite_button.text = "☆"  # Empty star
-		favorite_button.modulate = Color.WHITE
-
-
-func _on_favorite_button_pressed() -> void:
-	"""Handle favorite button press"""
-	var entry_id: String = entry_data.get("dex_entry_id", "")
-	if entry_id.is_empty():
-		print("[FeedListItem] ERROR: No entry ID for favorite toggle")
-		return
-
-	# Toggle favorite state locally
-	entry_data["is_favorite"] = not entry_data.get("is_favorite", false)
-	_update_favorite_button(entry_data["is_favorite"])
-
-	# Emit signal for parent to handle API call
-	favorite_toggled.emit(entry_id, entry_data["is_favorite"])
-
-
-func _on_view_button_pressed() -> void:
-	"""Handle view in dex button press"""
-	print("[FeedListItem] View in dex pressed for entry #%d" % entry_data.get("creation_index", -1))
-	view_in_dex_pressed.emit(entry_data)
+func _on_item_pressed() -> void:
+	"""Handle item button press"""
+	print("[FeedListItem] Item pressed for entry #%d" % entry_data.get("creation_index", -1))
+	item_pressed.emit(entry_data)
