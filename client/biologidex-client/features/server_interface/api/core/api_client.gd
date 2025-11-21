@@ -4,9 +4,9 @@ class_name APIClient
 ## APIClient - High-level API client with authentication, retry, and queue management
 ## Provides common functionality for all API services
 
-const HTTPClientCore = preload("res://api/core/http_client.gd")
-const APIConfig = preload("res://api/core/api_config.gd")
-const APITypes = preload("res://api/core/api_types.gd")
+const HTTPClientCore = preload("res://features/server_interface/api/core/http_client.gd")
+const APIConfig = preload("res://features/server_interface/api/core/api_config.gd")
+const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 
 var http_client
 var config

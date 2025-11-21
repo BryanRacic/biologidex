@@ -3,6 +3,7 @@ extends Control
 # Create Account scene - Handles user registration
 # Shows registration form and creates new account via API
 
+# UI Elements
 @onready var email_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/EmailField/EmailInput
 @onready var username_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/UsernameField/UsernameInput
 @onready var password_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/PasswordField/PasswordInput
@@ -11,11 +12,20 @@ extends Control
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/StatusLabel
 @onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/LoadingSpinner
 
+# Services (accessed via ServiceLocator)
+var token_manager
+var api_manager
+var navigation_manager
+
+# State
 var is_loading: bool = false
 
 
 func _ready() -> void:
 	print("[CreateAccount] Scene loaded")
+
+	# Get services from ServiceLocator
+	_initialize_services()
 
 	# Hide loading spinner initially
 	loading_spinner.visible = false
@@ -29,6 +39,17 @@ func _ready() -> void:
 
 	# Focus on first field
 	email_input.grab_focus()
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	token_manager = get_node_or_null("/root/TokenManager")
+	api_manager = get_node_or_null("/root/APIManager")
+	navigation_manager = get_node_or_null("/root/NavigationManager")
+
+	if not token_manager or not api_manager or not navigation_manager:
+		push_error("[CreateAccount] Failed to initialize required services")
+		return
 
 
 func _on_create_acct_button_pressed() -> void:
@@ -92,7 +113,7 @@ func _perform_registration(username: String, email: String, password: String, pa
 	print("[CreateAccount] Attempting registration for user: ", username)
 	_set_loading(true, "Creating account...")
 
-	APIManager.register(username, email, password, password_confirm, func(response: Dictionary, code: int):
+	api_manager.register(username, email, password, password_confirm, func(response: Dictionary, code: int):
 		if code == 200 or code == 201:
 			# Successful registration (service layer normalizes 201 to 200)
 			print("[CreateAccount] Registration successful!")
@@ -150,7 +171,7 @@ func _perform_auto_login(username: String, password: String) -> void:
 	print("[CreateAccount] Auto-login after registration")
 	_set_loading(true, "Logging in...")
 
-	APIManager.login(username, password, func(response: Dictionary, code: int):
+	api_manager.login(username, password, func(response: Dictionary, code: int):
 		if code == 200:
 			# Successful login
 			print("[CreateAccount] Auto-login successful!")
@@ -166,7 +187,7 @@ func _perform_auto_login(username: String, password: String) -> void:
 
 			if access.length() > 0 and refresh.length() > 0:
 				# Save tokens
-				TokenManager.save_login(access, refresh, user)
+				token_manager.save_login(access, refresh, user)
 
 				# Clear all input fields for security
 				email_input.text = ""
@@ -195,13 +216,13 @@ func _navigate_to_home() -> void:
 	"""Navigate to home scene after successful registration and login"""
 	print("[CreateAccount] Navigating to home scene")
 	# Clear navigation history since this is a fresh login
-	NavigationManager.navigate_to("res://home.tscn", true)
+	navigation_manager.navigate_to("res://scenes/home/home.tscn", true)
 
 
 func _navigate_to_login() -> void:
 	"""Navigate back to login scene"""
 	print("[CreateAccount] Navigating to login scene")
-	NavigationManager.navigate_to("res://login.tscn", true)
+	navigation_manager.navigate_to("res://scenes/login/login.tscn", true)
 
 
 func _set_loading(loading: bool, message: String = "") -> void:

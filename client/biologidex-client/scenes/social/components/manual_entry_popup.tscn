@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bhk8v4kam2x3r"]
 
-[ext_resource type="Script" path="res://components/manual_entry_popup.gd" id="1_manual_entry"]
+[ext_resource type="Script" path="res://scenes/social/components/manual_entry_popup.gd" id="1_manual_entry"]
 
 [node name="ManualEntryPopup" type="PopupPanel"]
 title = "Manual Entry"

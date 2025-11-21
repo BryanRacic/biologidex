@@ -11,14 +11,6 @@ var image_cache: ImageCache
 var http_cache: HTTPCache
 var request_manager: RequestManager
 
-# Legacy singletons (will be migrated)
-var token_manager: Node
-var api_manager: Node
-var navigation_manager: Node
-var dex_database: Node
-var sync_manager: Node
-var tree_cache: Node
-
 func _ready() -> void:
 	print("BiologiDex: Initializing application...")
 
@@ -29,9 +21,6 @@ func _ready() -> void:
 	_initialize_caching_layer()
 	_initialize_http_layer()
 	_initialize_state_management()
-
-	# Initialize legacy singletons (backward compatibility)
-	_initialize_legacy_services()
 
 	# Register all services
 	_register_services()
@@ -80,15 +69,9 @@ func _initialize_state_management() -> void:
 	add_child(app_state)
 	print("  ✓ AppState initialized")
 
-## Initialize legacy services for backward compatibility
-func _initialize_legacy_services() -> void:
-	# These will be loaded as autoloads but we'll store references
-	# and eventually migrate them to the new architecture
-	print("  ✓ Legacy services will be loaded via autoload")
-
 ## Register all services in the service locator
 func _register_services() -> void:
-	# Register new services
+	# Register core services
 	service_locator.register_service("ServiceLocator", service_locator)
 	service_locator.register_service("AppState", app_state)
 	service_locator.register_service("HTTPRequestPool", http_pool)
@@ -96,50 +79,33 @@ func _register_services() -> void:
 	service_locator.register_service("HTTPCache", http_cache)
 	service_locator.register_service("RequestManager", request_manager)
 
-	# Register legacy services (these are autoloaded)
-	# We'll register them when they become available
-	call_deferred("_register_legacy_services")
+	# Register autoloaded services (deferred to ensure they're loaded)
+	call_deferred("_register_autoloaded_services")
 
 	print("  ✓ Services registered in ServiceLocator")
 
-## Register legacy autoloaded services (deferred)
-func _register_legacy_services() -> void:
+## Register autoloaded services (deferred)
+func _register_autoloaded_services() -> void:
 	# Wait one frame for autoloads to be ready
 	await get_tree().process_frame
 
-	# Get references to legacy autoloads
+	# Register autoloads in ServiceLocator
 	if has_node("/root/TokenManager"):
-		token_manager = get_node("/root/TokenManager")
-		service_locator.register_service("TokenManager", token_manager)
+		service_locator.register_service("TokenManager", get_node("/root/TokenManager"))
 
 	if has_node("/root/APIManager"):
-		api_manager = get_node("/root/APIManager")
-		service_locator.register_service("APIManager", api_manager)
+		service_locator.register_service("APIManager", get_node("/root/APIManager"))
 
 	if has_node("/root/NavigationManager"):
-		navigation_manager = get_node("/root/NavigationManager")
-		service_locator.register_service("NavigationManager", navigation_manager)
+		service_locator.register_service("NavigationManager", get_node("/root/NavigationManager"))
 
 	if has_node("/root/DexDatabase"):
-		dex_database = get_node("/root/DexDatabase")
-		service_locator.register_service("DexDatabase", dex_database)
+		service_locator.register_service("DexDatabase", get_node("/root/DexDatabase"))
 
 	if has_node("/root/SyncManager"):
-		sync_manager = get_node("/root/SyncManager")
-		service_locator.register_service("SyncManager", sync_manager)
+		service_locator.register_service("SyncManager", get_node("/root/SyncManager"))
 
 	if has_node("/root/TreeCache"):
-		tree_cache = get_node("/root/TreeCache")
-		service_locator.register_service("TreeCache", tree_cache)
+		service_locator.register_service("TreeCache", get_node("/root/TreeCache"))
 
-	print("  ✓ Legacy services registered")
-
-## Convenience method to get service locator
-static func get_service_locator() -> ServiceLocator:
-	if Engine.has_singleton("Bootstrap"):
-		var bootstrap: Node = Engine.get_singleton("Bootstrap")
-		return bootstrap.service_locator
-	elif has_node("/root/Bootstrap"):
-		var bootstrap: Node = get_node("/root/Bootstrap")
-		return bootstrap.service_locator
-	return null
+	print("  ✓ Autoloaded services registered")

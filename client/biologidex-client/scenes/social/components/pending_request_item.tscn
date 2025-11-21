@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cd7u2qv5nxwra"]
 
-[ext_resource type="Script" path="res://components/pending_request_item.gd" id="1_pending_item"]
+[ext_resource type="Script" path="res://scenes/social/components/pending_request_item.gd" id="1_pending_item"]
 
 [node name="PendingRequestItem" type="Panel"]
 custom_minimum_size = Vector2(0, 90)

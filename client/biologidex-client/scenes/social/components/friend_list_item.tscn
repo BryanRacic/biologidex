@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bgr7lhm8n3wk5"]
 
-[ext_resource type="Script" path="res://components/friend_list_item.gd" id="1_friend_item"]
+[ext_resource type="Script" path="res://scenes/social/components/friend_list_item.gd" id="1_friend_item"]
 
 [node name="FriendListItem" type="Panel"]
 custom_minimum_size = Vector2(0, 100)

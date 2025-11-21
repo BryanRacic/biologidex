@@ -1,0 +1,97 @@
+[gd_scene load_steps=2 format=3 uid="uid://image_viewer_001"]
+
+[ext_resource type="Script" path="res://features/ui/components/image_viewer/image_viewer.gd" id="1"]
+
+[node name="ImageViewer" type="Control"]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="AspectRatioContainer" type="AspectRatioContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+ratio = 1.0
+stretch_mode = 5
+
+[node name="BorderPanel" type="Panel" parent="AspectRatioContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="AspectRatioContainer/BorderPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 2
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 2
+theme_override_constants/margin_bottom = 2
+
+[node name="ImageTexture" type="TextureRect" parent="AspectRatioContainer/BorderPanel/MarginContainer"]
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="LoadingOverlay" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="LoadingOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="LoadingLabel" type="Label" parent="LoadingOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -50.0
+offset_top = -12.0
+offset_right = 50.0
+offset_bottom = 12.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Loading..."
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ControlsContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -50.0
+offset_top = -50.0
+offset_right = 50.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 1
+
+[node name="RotateButton" type="Button" parent="ControlsContainer"]
+custom_minimum_size = Vector2(100, 44)
+layout_mode = 2
+text = "Rotate"

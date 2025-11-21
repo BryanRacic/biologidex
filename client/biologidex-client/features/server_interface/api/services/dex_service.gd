@@ -426,6 +426,11 @@ func _download_and_cache_image(record: Dictionary, user_id: String) -> void:
 
 	_log("Image cached for user '%s': %s" % [user_id, cached_path])
 
+	# Update the database record with the cached image path
+	var creation_index: int = record.get("creation_index", -1)
+	if creation_index >= 0:
+		DexDatabase.add_record_from_dict(record, user_id)
+
 ## Get friends overview
 func get_friends_overview(callback: Callable = Callable()) -> void:
 	_log("Getting friends overview")

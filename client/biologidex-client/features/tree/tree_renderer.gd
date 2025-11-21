@@ -5,7 +5,7 @@ Handles batch rendering of nodes, edges, and interactions using MultiMeshInstanc
 extends Node2D
 class_name TreeRenderer
 
-const TreeDataModels = preload("res://tree_data_models.gd")
+const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
 
 # =============================================================================
 # Signals

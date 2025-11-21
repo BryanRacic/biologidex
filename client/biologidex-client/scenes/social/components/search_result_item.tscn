@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cq8n3vx7y5w8p"]
 
-[ext_resource type="Script" path="res://components/search_result_item.gd" id="1_search_result"]
+[ext_resource type="Script" path="res://scenes/social/components/search_result_item.gd" id="1_search_result"]
 
 [node name="SearchResultItem" type="PanelContainer"]
 custom_minimum_size = Vector2(0, 60)

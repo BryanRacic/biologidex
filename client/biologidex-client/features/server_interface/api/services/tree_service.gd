@@ -3,7 +3,7 @@ class_name TreeService
 
 ## TreeService - Taxonomic tree API operations
 
-const TreeDataModels = preload("res://tree_data_models.gd")
+const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
 
 signal tree_loaded(tree_data: TreeDataModels.TreeData)
 signal tree_load_failed(error: APITypes.APIError)

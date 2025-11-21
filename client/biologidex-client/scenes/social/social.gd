@@ -1,6 +1,11 @@
 extends Control
 ## Social Scene - Manage friends and friend requests
 
+# Services
+var TokenManager
+var NavigationManager
+var APIManager
+
 # UI References
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
@@ -13,8 +18,8 @@ extends Control
 @onready var pending_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Pending/PendingList
 
 # Preloaded scenes
-var friend_item_scene = preload("res://components/friend_list_item.tscn")
-var pending_item_scene = preload("res://components/pending_request_item.tscn")
+var friend_item_scene = preload("res://scenes/social/components/friend_list_item.tscn")
+var pending_item_scene = preload("res://scenes/social/components/pending_request_item.tscn")
 
 # State
 var friends_data: Array = []
@@ -30,11 +35,21 @@ var pending_removal_friendship_id: String = ""
 func _ready() -> void:
 	print("[Social] Scene loaded")
 
+	# Initialize services (with fallback to autoloads)
+	_initialize_services()
+
 	# Check authentication
 	if not TokenManager.is_logged_in():
 		print("[Social] ERROR: User not logged in")
 		NavigationManager.go_back()
 		return
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	TokenManager = get_node("/root/TokenManager")
+	NavigationManager = get_node("/root/NavigationManager")
+	APIManager = get_node("/root/APIManager")
 
 	# Connect UI signals
 	back_button.pressed.connect(_on_back_pressed)

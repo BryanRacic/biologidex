@@ -3,6 +3,7 @@ extends Control
 # Login scene - Handles user authentication
 # Shows login form if no valid refresh token exists
 
+# UI Elements
 @onready var username_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/UsernameField/UsernameInput
 @onready var password_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/PasswordField/PasswordInput
 @onready var login_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/LoginButton
@@ -10,11 +11,20 @@ extends Control
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/StatusLabel
 @onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/LoginForm/LoadingSpinner
 
+# Services (accessed via ServiceLocator)
+var token_manager
+var api_manager
+var navigation_manager
+
+# State
 var is_loading: bool = false
 
 
 func _ready() -> void:
 	print("[Login] Scene loaded")
+
+	# Get services from ServiceLocator
+	_initialize_services()
 
 	# Hide loading spinner initially
 	loading_spinner.visible = false
@@ -28,24 +38,35 @@ func _ready() -> void:
 	password_input.text_submitted.connect(func(_text: String): _on_login_button_pressed())
 
 	# Check if we have a saved refresh token
-	if TokenManager.has_refresh_token():
+	if token_manager.has_refresh_token():
 		print("[Login] Found saved refresh token, attempting automatic login...")
 		_attempt_token_refresh()
 	else:
 		print("[Login] No saved token, showing login form")
 		# Prepopulate username if available
-		if TokenManager.get_username().length() > 0:
-			username_input.text = TokenManager.get_username()
+		if token_manager.get_username().length() > 0:
+			username_input.text = token_manager.get_username()
 			password_input.grab_focus()
 		else:
 			username_input.grab_focus()
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	token_manager = get_node_or_null("/root/TokenManager")
+	api_manager = get_node_or_null("/root/APIManager")
+	navigation_manager = get_node_or_null("/root/NavigationManager")
+
+	if not token_manager or not api_manager or not navigation_manager:
+		push_error("[Login] Failed to initialize required services")
+		return
 
 
 func _attempt_token_refresh() -> void:
 	"""Try to use saved refresh token to get new access token"""
 	_set_loading(true, "Checking saved credentials...")
 
-	TokenManager.refresh_access_token(func(success: bool, error: String):
+	token_manager.refresh_access_token(func(success: bool, error: String):
 		if success:
 			print("[Login] Token refresh successful, navigating to home")
 			_navigate_to_home()
@@ -85,7 +106,7 @@ func _perform_login(username: String, password: String) -> void:
 	print("[Login] Attempting login for user: ", username)
 	_set_loading(true, "Logging in...")
 
-	APIManager.login(username, password, func(response: Dictionary, code: int):
+	api_manager.login(username, password, func(response: Dictionary, code: int):
 		if code == 200:
 			# Successful login
 			print("[Login] Login successful!")
@@ -101,7 +122,7 @@ func _perform_login(username: String, password: String) -> void:
 
 			if access.length() > 0 and refresh.length() > 0:
 				# Save tokens
-				TokenManager.save_login(access, refresh, user)
+				token_manager.save_login(access, refresh, user)
 
 				# Clear password field for security
 				password_input.text = ""
@@ -138,7 +159,7 @@ func _navigate_to_home() -> void:
 	"""Navigate to home scene after successful login"""
 	print("[Login] Navigating to home scene")
 	# Clear navigation history since this is a fresh login
-	NavigationManager.navigate_to("res://home.tscn", true)
+	navigation_manager.navigate_to("res://scenes/home/home.tscn", true)
 
 
 func _set_loading(loading: bool, message: String = "") -> void:
@@ -166,4 +187,4 @@ func _on_create_acct_button_pressed() -> void:
 		return
 
 	print("[Login] Navigating to create account scene")
-	NavigationManager.navigate_to("res://create_acct.tscn")
+	navigation_manager.navigate_to("res://scenes/create_account/create_acct.tscn")

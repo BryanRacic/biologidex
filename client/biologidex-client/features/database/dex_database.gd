@@ -19,7 +19,7 @@ const CACHE_DIR := "user://dex_cache/"
 ## }
 var dex_data: Dictionary = {}
 
-## Current viewing user (for backwards compatibility)
+## Current viewing user
 var current_user_id: String = "self"
 
 ## Sorted indices per user: {user_id: Array[int]}
@@ -28,9 +28,6 @@ var sorted_indices_per_user: Dictionary = {}
 signal record_added(record: Dictionary, user_id: String)
 signal database_loaded()
 signal database_switched(user_id: String)
-
-## Legacy signal for backwards compatibility
-signal record_added_legacy(creation_index: int)
 
 
 func _ready() -> void:
@@ -118,7 +115,7 @@ func load_all_databases() -> void:
 	database_loaded.emit()
 
 
-## Add or update a dex record (backwards compatible)
+## Add or update a dex record
 func add_record(
 	creation_index: int,
 	scientific_name: String,
@@ -161,10 +158,6 @@ func add_record_from_dict(record: Dictionary, user_id: String = "self") -> void:
 	save_database(user_id)
 	record_added.emit(record, user_id)
 
-	# Emit legacy signal for backwards compatibility
-	if user_id == current_user_id:
-		record_added_legacy.emit(creation_index)
-
 
 ## Remove a record from the database
 func remove_record(creation_index: int, user_id: String = "self") -> void:
@@ -187,38 +180,21 @@ func remove_record(creation_index: int, user_id: String = "self") -> void:
 	save_database(user_id)
 
 
-## Get a specific record by creation_index (backwards compatible)
-func get_record(creation_index: int) -> Dictionary:
-	return get_record_for_user(creation_index, current_user_id)
-
-
-## Get a specific record for a user (new)
+## Get a specific record for a user
 func get_record_for_user(creation_index: int, user_id: String = "self") -> Dictionary:
 	if dex_data.has(user_id) and dex_data[user_id].has(creation_index):
 		return dex_data[user_id][creation_index]
 	return {}
 
 
-## Get all records as dictionary (backwards compatible)
-func get_all_records() -> Dictionary:
-	if dex_data.has(current_user_id):
-		return dex_data[current_user_id].duplicate()
-	return {}
-
-
-## Get all records for a user as array (new)
+## Get all records for a user as array
 func get_all_records_for_user(user_id: String = "self") -> Array:
 	if not dex_data.has(user_id):
 		return []
 	return dex_data[user_id].values()
 
 
-## Get sorted indices (backwards compatible)
-func get_sorted_indices() -> Array[int]:
-	return get_sorted_indices_for_user(current_user_id)
-
-
-## Get sorted indices for a user (new)
+## Get sorted indices for a user
 func get_sorted_indices_for_user(user_id: String = "self") -> Array[int]:
 	if sorted_indices_per_user.has(user_id):
 		var result: Array[int] = []
@@ -227,24 +203,14 @@ func get_sorted_indices_for_user(user_id: String = "self") -> Array[int]:
 	return []
 
 
-## Get record count (backwards compatible)
-func get_record_count() -> int:
-	return get_record_count_for_user(current_user_id)
-
-
-## Get record count for a user (new)
+## Get record count for a user
 func get_record_count_for_user(user_id: String = "self") -> int:
 	if dex_data.has(user_id):
 		return dex_data[user_id].size()
 	return 0
 
 
-## Get next index (backwards compatible)
-func get_next_index(current_index: int) -> int:
-	return get_next_index_for_user(current_index, current_user_id)
-
-
-## Get next index for a user (new)
+## Get next index for a user
 func get_next_index_for_user(current_index: int, user_id: String = "self") -> int:
 	if not sorted_indices_per_user.has(user_id):
 		return -1
@@ -256,12 +222,7 @@ func get_next_index_for_user(current_index: int, user_id: String = "self") -> in
 	return -1
 
 
-## Get previous index (backwards compatible)
-func get_previous_index(current_index: int) -> int:
-	return get_previous_index_for_user(current_index, current_user_id)
-
-
-## Get previous index for a user (new)
+## Get previous index for a user
 func get_previous_index_for_user(current_index: int, user_id: String = "self") -> int:
 	if not sorted_indices_per_user.has(user_id):
 		return -1
@@ -273,12 +234,7 @@ func get_previous_index_for_user(current_index: int, user_id: String = "self") -
 	return -1
 
 
-## Get first index (backwards compatible)
-func get_first_index() -> int:
-	return get_first_index_for_user(current_user_id)
-
-
-## Get first index for a user (new)
+## Get first index for a user
 func get_first_index_for_user(user_id: String = "self") -> int:
 	if not sorted_indices_per_user.has(user_id):
 		return -1
@@ -289,12 +245,7 @@ func get_first_index_for_user(user_id: String = "self") -> int:
 	return -1
 
 
-## Check if record exists (backwards compatible)
-func has_record(creation_index: int) -> bool:
-	return has_record_for_user(creation_index, current_user_id)
-
-
-## Check if record exists for a user (new)
+## Check if record exists for a user
 func has_record_for_user(creation_index: int, user_id: String = "self") -> bool:
 	return dex_data.has(user_id) and dex_data[user_id].has(creation_index)
 

@@ -4,8 +4,12 @@ Coordinates data loading, rendering, and user interaction.
 """
 extends Control
 
-const APITypes = preload("res://api/core/api_types.gd")
-const TreeRenderer = preload("res://tree_renderer.gd")
+const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
+const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
+
+# Services
+var APIManager
+var NavigationManager
 
 # Node references (assigned in _ready)
 @onready var back_button: Button = $VBoxContainer/Toolbar/BackButton
@@ -41,6 +45,9 @@ var last_mouse_position: Vector2 = Vector2.ZERO
 func _ready() -> void:
 	print("[TreeController] Initializing tree view")
 
+	# Initialize services (with fallback to autoloads)
+	_initialize_services()
+
 	# Connect UI signals
 	search_bar.text_submitted.connect(_on_search_submitted)
 	mode_dropdown.item_selected.connect(_on_mode_selected)
@@ -57,23 +64,20 @@ func _ready() -> void:
 	# Check for friend context from navigation (viewing friend's tree)
 	if NavigationManager.has_context():
 		var context: Dictionary = NavigationManager.get_context()
-		if context.has("mode"):
-			var mode_str: String = context.get("mode", "")
-			var friend_id: String = context.get("friend_id", "")
-			var username: String = context.get("username", "Friend")
-
-			print("[TreeController] Loading tree for friend: ", username)
-
-			# Set mode based on context
-			if mode_str == "selected" and not friend_id.is_empty():
-				current_mode = APITypes.TreeMode.SELECTED
-				# Pass the friend UUID as a string
-				# Backend now correctly handles UUID strings (fixed in graph/views.py)
-				selected_friend_ids = [friend_id]
-				print("[TreeController] Set to SELECTED mode with friend UUID: ", friend_id)
-
+		if context.has("user_id"):
+			var friend_id: String = context.get("user_id")
+			print("[TreeController] Loading friend's tree: ", friend_id)
+			# Set mode to selected friend and add their ID
+			current_mode = APITypes.TreeMode.SELECTED
+			selected_friend_ids = [friend_id]
 			# Clear context
 			NavigationManager.clear_context()
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	APIManager = get_node("/root/APIManager")
+	NavigationManager = get_node("/root/NavigationManager")
 
 	# Setup mode dropdown
 	_setup_mode_dropdown()

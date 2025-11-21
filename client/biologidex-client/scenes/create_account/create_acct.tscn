@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://makmcpxt2lki"]
 
-[ext_resource type="Script" uid="uid://bw3yor6s278xw" path="res://create_account.gd" id="1_create_account"]
+[ext_resource type="Script" path="res://scenes/create_account/create_account.gd" id="1_create_account"]
 
 [node name="CreateAccount" type="Control"]
 layout_mode = 3

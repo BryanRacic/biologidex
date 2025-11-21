@@ -3,6 +3,13 @@ extends Control
 # Camera/Upload scene - Handles photo selection and upload for CV analysis
 # Uses godot-file-access-web plugin for HTML5 file access
 
+# Services
+var TokenManager
+var NavigationManager
+var APIManager
+var DexDatabase
+
+# UI Elements
 @onready var select_photo_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/SelectPhotoButton
 @onready var upload_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/UploadButton
 @onready var manual_entry_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ManualEntryButton
@@ -45,7 +52,6 @@ var status_check_timer: Timer
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
 var unsupported_format_warning: bool = false
-var dex_compatible_url: String = ""
 var cached_dex_image: Image = null
 
 # Image rotation state (client-side only, sent with CV analysis)
@@ -68,11 +74,22 @@ var current_test_image_index: int = 0
 func _ready() -> void:
 	print("[Camera] Scene loaded")
 
+	# Initialize services (with fallback to autoloads)
+	_initialize_services()
+
 	# Check authentication
 	if not TokenManager.is_logged_in():
 		print("[Camera] ERROR: User not logged in")
 		NavigationManager.go_back()
 		return
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	TokenManager = get_node("/root/TokenManager")
+	NavigationManager = get_node("/root/NavigationManager")
+	APIManager = get_node("/root/APIManager")
+	DexDatabase = get_node("/root/DexDatabase")
 
 	# Initialize UI state
 	_reset_ui()
@@ -637,11 +654,8 @@ func _check_job_status() -> void:
 
 	print("[Camera] Checking job status: ", current_job_id)
 
-	var access_token := TokenManager.get_access_token()
-
-	APIManager.get_vision_job(
+	APIManager.vision.get_vision_job(
 		current_job_id,
-		access_token,
 		_on_status_checked
 	)
 
@@ -775,15 +789,6 @@ func _process_selected_animal(job_data: Dictionary) -> void:
 				animal_details = root_animal_details.duplicate()
 				# Keep the animal_id field from detected_animals for consistency
 				animal_details["animal_id"] = detected_id
-	else:
-		# Fallback to legacy animal_details field (backward compatibility)
-		var animal_details_value = job_data.get("animal_details")
-		if animal_details_value != null and typeof(animal_details_value) == TYPE_DICTIONARY:
-			animal_details = animal_details_value
-			# Ensure animal_id field exists
-			if not animal_details.has("animal_id") and animal_details.has("id"):
-				animal_details["animal_id"] = animal_details["id"]
-			print("[Camera] Using legacy animal_details field")
 
 	# Extract animal information
 	var confidence_value = job_data.get("confidence_score")
@@ -1004,35 +1009,6 @@ func _on_dex_entry_final_created(response: Dictionary, code: int) -> void:
 		upload_button.disabled = false
 
 
-func _create_server_dex_entry(animal_id: String, vision_job_id: String) -> void:
-	"""Create server-side dex entry for syncing across devices"""
-	print("[Camera] Creating server-side dex entry for animal: ", animal_id)
-
-	APIManager.dex.create_entry(
-		animal_id,
-		vision_job_id,
-		"",  # notes
-		"friends",  # visibility
-		_on_dex_entry_created
-	)
-
-
-func _on_dex_entry_created(response: Dictionary, code: int) -> void:
-	"""Handle dex entry creation response"""
-	if code == 200 or code == 201:
-		var entry_id = response.get("id", "")
-		current_dex_entry_id = str(entry_id) if entry_id else ""
-		print("[Camera] Server-side dex entry created: ", current_dex_entry_id)
-
-		# Show manual entry button after successful creation
-		upload_button.visible = false
-		manual_entry_button.visible = true
-		manual_entry_button.disabled = false
-	else:
-		var error_msg = response.get("error", "Unknown error")
-		print("[Camera] WARNING: Failed to create server-side dex entry: ", error_msg)
-
-
 func _stop_status_polling() -> void:
 	"""Stop polling for job status"""
 	print("[Camera] Stopping status polling")
@@ -1051,94 +1027,12 @@ func _exit_tree() -> void:
 	_stop_status_polling()
 
 
-func _download_and_cache_dex_image(url: String) -> void:
-	"""Download the dex-compatible image and cache it locally."""
-	if url.length() == 0:
-		print("[Camera] No dex-compatible URL provided")
-		return
-
-	print("[Camera] Downloading dex-compatible image: ", url)
-
-	var http := HTTPRequest.new()
-	add_child(http)
-
-	var headers := []
-	if TokenManager.is_logged_in():
-		headers.append("Authorization: Bearer " + TokenManager.get_access_token())
-
-	http.request(url, headers)
-	var response_array = await http.request_completed
-
-	# Parse response
-	var result_code: int = int(response_array[1])  # HTTP status code
-	var body: PackedByteArray = response_array[3]  # Response body
-
-	if result_code == 200 and body.size() > 0:
-		# Load the PNG image
-		var image := Image.new()
-		var error := image.load_png_from_buffer(body)
-
-		if error == OK:
-			cached_dex_image = image
-
-			# Save to user://dex_cache/ for persistence
-			_save_cached_image(url, body)
-
-			print("[Camera] Dex image cached successfully (", image.get_width(), "x", image.get_height(), ")")
-		else:
-			push_error("[Camera] Failed to load dex image: ", error)
-	else:
-		push_error("[Camera] Failed to download dex image: HTTP ", result_code)
-
-	http.queue_free()
-
-
-func _save_cached_image(url: String, data: PackedByteArray) -> void:
-	"""Save cached image to local storage."""
-	var cache_dir := "user://dex_cache/"
-	var dir := DirAccess.open("user://")
-
-	if not dir.dir_exists("dex_cache"):
-		dir.make_dir("dex_cache")
-
-	# Use URL hash as filename
-	var filename := cache_dir + url.md5_text() + ".png"
-	var file := FileAccess.open(filename, FileAccess.WRITE)
-	if file:
-		file.store_buffer(data)
-		file.close()
-		print("[Camera] Cached image saved to: ", filename)
-	else:
-		push_error("[Camera] Failed to save cached image to: ", filename)
-
-
-func _load_cached_image(url: String) -> Image:
-	"""Load previously cached image if available."""
-	if url.length() == 0:
-		return null
-
-	var filename := "user://dex_cache/" + url.md5_text() + ".png"
-
-	if FileAccess.file_exists(filename):
-		var file := FileAccess.open(filename, FileAccess.READ)
-		if file:
-			var data := file.get_buffer(file.get_length())
-			file.close()
-
-			var image := Image.new()
-			if image.load_png_from_buffer(data) == OK:
-				print("[Camera] Loaded cached image from: ", filename)
-				return image
-
-	return null
-
-
 func _on_manual_entry_pressed() -> void:
 	"""Open manual entry popup for taxonomic search"""
 	print("[Camera] Opening manual entry popup")
 
 	# Create and configure popup
-	var popup_scene = load("res://components/manual_entry_popup.tscn")
+	var popup_scene = load("res://scenes/social/components/manual_entry_popup.tscn")
 	if not popup_scene:
 		print("[Camera] ERROR: Could not load manual entry popup scene")
 		return

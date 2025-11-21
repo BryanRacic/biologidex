@@ -9,64 +9,7 @@ signal job_status_received(job_data: Dictionary)
 signal job_status_failed(error: APITypes.APIError)
 signal job_completed(job_data: Dictionary)
 
-## Upload image for CV analysis
-## Requires: Authorization Bearer token
-## Returns: AnalysisJob object
-func create_vision_job(
-	image_data: PackedByteArray,
-	file_name: String,
-	file_type: String,
-	callback: Callable = Callable(),
-	transformations: Dictionary = {}
-) -> void:
-	_log("Creating vision job for image: %s (%d bytes)" % [file_name, image_data.size()])
-
-	# Build multipart form data fields
-	var fields = [
-		{
-			"name": "image",
-			"filename": file_name,
-			"type": file_type,
-			"data": image_data
-		}
-	]
-
-	# Add transformations if provided
-	if transformations.size() > 0:
-		_log("Including transformations: %s" % JSON.stringify(transformations))
-		fields.append({
-			"name": "transformations",
-			"data": JSON.stringify(transformations)
-		})
-
-	var req_config = _create_request_config(
-		true,
-		config.UPLOAD_TIMEOUT
-	)
-
-	var context = {"callback": callback}
-
-	api_client.post_multipart(
-		config.ENDPOINTS_VISION["jobs"],
-		fields,
-		_on_create_vision_job_success.bind(context),
-		_on_create_vision_job_error.bind(context),
-		req_config
-	)
-
-func _on_create_vision_job_success(response: Dictionary, context: Dictionary) -> void:
-	_log("Vision job created successfully: %s" % response.get("id", ""))
-	job_created.emit(response)
-	if context.callback and context.callback.is_valid():
-		context.callback.call(response, 200)
-
-func _on_create_vision_job_error(error: APITypes.APIError, context: Dictionary) -> void:
-	_handle_error(error, "create_vision_job")
-	job_creation_failed.emit(error)
-	if context.callback and context.callback.is_valid():
-		context.callback.call({"error": error.message}, error.code)
-
-## Create vision job from pre-converted image (NEW WORKFLOW)
+## Create vision job from pre-converted image
 ## Requires: Authorization Bearer token
 ## Returns: AnalysisJob object
 func create_vision_job_from_conversion(
@@ -95,6 +38,18 @@ func create_vision_job_from_conversion(
 		_on_create_vision_job_error.bind(context),
 		req_config
 	)
+
+func _on_create_vision_job_success(response: Dictionary, context: Dictionary) -> void:
+	_log("Vision job created successfully: %s" % response.get("id", ""))
+	job_created.emit(response)
+	if context.callback and context.callback.is_valid():
+		context.callback.call(response, 200)
+
+func _on_create_vision_job_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "create_vision_job")
+	job_creation_failed.emit(error)
+	if context.callback and context.callback.is_valid():
+		context.callback.call({"error": error.message}, error.code)
 
 ## Select an animal from multiple detected animals
 ## Requires: Authorization Bearer token

@@ -22,7 +22,7 @@ signal popup_closed()
 var current_dex_entry_id: String = ""
 var selected_taxonomy: Dictionary = {}
 var prefill_data: Dictionary = {}
-var search_result_item_scene: PackedScene = preload("res://components/search_result_item.tscn")
+var search_result_item_scene: PackedScene = preload("res://scenes/social/components/search_result_item.tscn")
 var current_results: Array = []
 var selected_item: Control = null
 

@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://he08vkkhgca1"]
 
-[ext_resource type="Script" uid="uid://bnptluhw772w1" path="res://tree_controller.gd" id="1_tree_controller"]
+[ext_resource type="Script" path="res://scenes/tree/tree_controller.gd" id="1_tree_controller"]
 
 [node name="Tree" type="Control"]
 layout_mode = 3

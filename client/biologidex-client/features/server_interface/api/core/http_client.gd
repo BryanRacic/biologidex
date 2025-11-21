@@ -5,7 +5,7 @@ class_name HTTPClientCore
 ## Manages raw HTTP operations, response parsing, and platform-specific configurations
 ## Uses a pool of HTTPRequest nodes to support concurrent requests
 
-const APITypes = preload("res://api/core/api_types.gd")
+const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 
 signal request_started(url: String, method: String)
 signal request_completed(url: String, response_code: int, body: Dictionary)
@@ -17,11 +17,6 @@ const POOL_SIZE = 3  # Match MAX_CONCURRENT_REQUESTS from APIConfig
 # HTTPRequest pool
 var http_request_pool: Array[HTTPRequest] = []
 var available_requests: Array[HTTPRequest] = []
-
-# Legacy single request for backward compatibility
-var http_request: HTTPRequest:
-	get:
-		return _get_available_request()
 
 func _ready() -> void:
 	# Create pool of HTTPRequest nodes
@@ -44,12 +39,6 @@ func _ready() -> void:
 
 	print("[HTTPClient] Initialized with %d HTTPRequest nodes in pool" % POOL_SIZE)
 
-## Get an available HTTPRequest from pool
-func _get_available_request() -> HTTPRequest:
-	if available_requests.size() > 0:
-		return available_requests[0]
-	# If none available, return first one (fallback for legacy code)
-	return http_request_pool[0] if http_request_pool.size() > 0 else null
 
 ## Acquire a request from the pool
 func _acquire_request() -> HTTPRequest:

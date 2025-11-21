@@ -4,9 +4,9 @@ class_name BaseService
 ## BaseService - Abstract base class for all API services
 ## Provides common functionality: URL building, error handling, logging
 
-const APIClient = preload("res://api/core/api_client.gd")
-const APIConfig = preload("res://api/core/api_config.gd")
-const APITypes = preload("res://api/core/api_types.gd")
+const APIClient = preload("res://features/server_interface/api/core/api_client.gd")
+const APIConfig = preload("res://features/server_interface/api/core/api_config.gd")
+const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 
 var api_client
 var config

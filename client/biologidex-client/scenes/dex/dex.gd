@@ -1,6 +1,7 @@
 extends Control
 ## Dex Gallery - Browse through discovered animals with multi-user support
 
+# UI Elements
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var dex_number_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/"Dex Number"
 @onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
@@ -17,6 +18,14 @@ extends Control
 # @onready var sync_button: Button = $Panel/MarginContainer/VBoxContainer/Header/SyncButton
 # @onready var sync_progress: ProgressBar = $Panel/MarginContainer/VBoxContainer/Header/SyncProgress
 
+# Services
+var TokenManager
+var NavigationManager
+var DexDatabase
+var SyncManager
+var APIManager
+
+# State
 var current_index: int = -1
 var current_image_width: float = 0.0
 var current_image_height: float = 0.0
@@ -28,11 +37,23 @@ var available_users: Dictionary = {}  # user_id -> username mapping
 func _ready() -> void:
 	print("[Dex] Scene loaded (Multi-user mode)")
 
+	# Initialize services (with fallback to autoloads)
+	_initialize_services()
+
 	# Check authentication
 	if not TokenManager.is_logged_in():
 		print("[Dex] ERROR: User not logged in")
 		NavigationManager.go_back()
 		return
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	TokenManager = get_node("/root/TokenManager")
+	NavigationManager = get_node("/root/NavigationManager")
+	DexDatabase = get_node("/root/DexDatabase")
+	SyncManager = get_node("/root/SyncManager")
+	APIManager = get_node("/root/APIManager")
 
 	# Connect buttons
 	back_button.pressed.connect(_on_back_pressed)
@@ -53,7 +74,7 @@ func _ready() -> void:
 
 	# Check for friend context from navigation (viewing friend's dex)
 	if NavigationManager.has_context():
-		var context := NavigationManager.get_context()
+		var context: Dictionary = NavigationManager.get_context()
 		if context.has("user_id"):
 			var friend_id: String = context.get("user_id")
 			var username: String = context.get("username", "Friend")
@@ -84,7 +105,7 @@ func _populate_user_list() -> void:
 		available_users["self"] = "My Dex"
 
 	# Add any friends whose dex we have cached (but don't overwrite existing)
-	var tracked_users := DexDatabase.get_tracked_users()
+	var tracked_users: Array = DexDatabase.get_tracked_users()
 	for user_id in tracked_users:
 		if user_id != "self" and not available_users.has(user_id):
 			available_users[user_id] = "Friend (%s)" % user_id.substr(0, 8)
@@ -98,12 +119,12 @@ func _populate_user_list() -> void:
 func _check_and_sync_if_needed() -> void:
 	"""Always trigger sync when opening dex - incremental if we have a last_sync timestamp"""
 	# Check if database is empty
-	var first_index := DexDatabase.get_first_index_for_user("self")
-	var database_empty := (first_index < 0)
+	var first_index: int = DexDatabase.get_first_index_for_user("self")
+	var database_empty: bool = (first_index < 0)
 
 	# Check if we've never synced
-	var last_sync := SyncManager.get_last_sync("self")
-	var never_synced := last_sync.is_empty()
+	var last_sync: String = SyncManager.get_last_sync("self")
+	var never_synced: bool = last_sync.is_empty()
 
 	# Always trigger sync (will be incremental if last_sync exists)
 	if database_empty or never_synced:
@@ -116,7 +137,7 @@ func _check_and_sync_if_needed() -> void:
 
 func _load_first_record() -> void:
 	"""Load the first record (lowest creation_index) for current user"""
-	var first_index := DexDatabase.get_first_index_for_user(current_user_id)
+	var first_index: int = DexDatabase.get_first_index_for_user(current_user_id)
 
 	if first_index >= 0:
 		_display_record(first_index)
@@ -137,7 +158,7 @@ func _show_empty_state() -> void:
 
 func _display_record(creation_index: int) -> void:
 	"""Display a specific record for current user"""
-	var record := DexDatabase.get_record_for_user(creation_index, current_user_id)
+	var record: Dictionary = DexDatabase.get_record_for_user(creation_index, current_user_id)
 
 	if record.is_empty():
 		print("[Dex] ERROR: Record not found: ", creation_index)
@@ -252,11 +273,11 @@ func _update_navigation_buttons() -> void:
 		return
 
 	# Check if there's a previous record for current user
-	var prev_index := DexDatabase.get_previous_index_for_user(current_index, current_user_id)
+	var prev_index: int = DexDatabase.get_previous_index_for_user(current_index, current_user_id)
 	previous_button.disabled = (prev_index < 0)
 
 	# Check if there's a next record for current user
-	var next_index := DexDatabase.get_next_index_for_user(current_index, current_user_id)
+	var next_index: int = DexDatabase.get_next_index_for_user(current_index, current_user_id)
 	next_button.disabled = (next_index < 0)
 
 
@@ -286,7 +307,7 @@ func _on_previous_pressed() -> void:
 	if current_index < 0:
 		return
 
-	var prev_index := DexDatabase.get_previous_index_for_user(current_index, current_user_id)
+	var prev_index: int = DexDatabase.get_previous_index_for_user(current_index, current_user_id)
 	if prev_index >= 0:
 		print("[Dex] Navigating to previous: #", prev_index)
 		_display_record(prev_index)
@@ -299,7 +320,7 @@ func _on_next_pressed() -> void:
 	if current_index < 0:
 		return
 
-	var next_index := DexDatabase.get_next_index_for_user(current_index, current_user_id)
+	var next_index: int = DexDatabase.get_next_index_for_user(current_index, current_user_id)
 	if next_index >= 0:
 		print("[Dex] Navigating to next: #", next_index)
 		_display_record(next_index)
@@ -428,7 +449,7 @@ func _on_edit_pressed() -> void:
 	print("[Dex] Opening manual entry for editing record #", current_index)
 
 	# Get current record data
-	var record := DexDatabase.get_record_for_user(current_index, current_user_id)
+	var record: Dictionary = DexDatabase.get_record_for_user(current_index, current_user_id)
 	if record.is_empty():
 		print("[Dex] ERROR: Could not find record")
 		return
@@ -504,7 +525,7 @@ func _on_my_entries_for_edit(response: Dictionary, code: int, _creation_index: i
 func _open_manual_entry_popup(entry_id: String, record: Dictionary) -> void:
 	"""Open the manual entry popup with current data"""
 	# Create popup
-	var popup_scene = load("res://components/manual_entry_popup.tscn")
+	var popup_scene = load("res://scenes/social/components/manual_entry_popup.tscn")
 	if not popup_scene:
 		print("[Dex] ERROR: Could not load manual entry popup scene")
 		return
