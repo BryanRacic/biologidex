@@ -1,29 +1,3 @@
-# BiologiDex Development Bookmark (2025-11-18)
-
-## Latest: Taxonomy Matching & Synonym Resolution ✅
-
-### Problem Solved
-- "Canis lupus familiaris" wasn't matching due to empty genus fields in COL data
-- Implemented 6-stage matching + 3-stage synonym resolution + field population
-- Added NameRelation model to track COL synonym relationships
-
-### Files Changed
-- `taxonomy/models.py`: NameRelation model
-- `taxonomy/services.py`: Enhanced lookup_or_create_from_cv()
-- `taxonomy/importers/col_importer.py`: _parse_namerelation()
-- `taxonomy/migrations/0002_namerelation.py`: New migration
-
-### Next Steps
-1. Apply migration in production (copy to /opt, rebuild, migrate)
-2. Re-import COL data to populate NameRelation table
-3. Test with dog photo upload
-
-### Documentation Created
-- `/CLAUDE.md`: Updated with taxonomy matching details
-- `/server/taxonomy/README_MATCHING.md`: Deep dive on matching logic
-
----
-
 ## TODO
 - download first 5 dex records in the background on login (if possible)
 - catch_date should be exclusively server side
@@ -48,10 +22,8 @@
       - remove friend
       - view dex
       - view taxonomic tree 
-- allow modification of dex entries
-  - retry if image id seems inaccurate
-    - try different model/modify prompt
-  - manually lookup by common/scientific name
+- retry if image id seems inaccurate
+  - try different model/modify prompt
 - Feed of all friends new dex entries (sort by most liked vs newest)
   - Everyone can upvote a dex entry
     - Will be the image displayed on the tree
@@ -62,14 +34,6 @@
   - Remove unused code, outdated features
   - Identify inefficiant or non-optimal solutions/algorithmns
   - Identify potential security/privacy issues
-- Refactor & reorganize client code
-  - features
-    - all abstract features & scripts not associated with a single scene file
-      - ex. `features/server_interface` contains `api` and `token` dirs (`token` dir contains `token_manager.py`)
-  - scenes
-    - all features/scripts and scenes organized by page/view/scene on the client side
-      - ex. `scenes/social/` dir contains `social.gd` and `social.tscn`, but all the actual API calls/token handling is abstracted into the `server_interface/api/social/` directory.
-      - ex. `scenes/tree/` dir contains `tree.gd` and `tree.tscn` but calls `features/cache/tree_cache.gd` which inherits from a basic `features/cache/cache.gd` script. All the API calls/request handling is handled in the `server_interface/api/tree` directory *(which may call specific API toolings outside of it's directory, like `get_animals` which might require using the `features/server_interface/api/animals/` functions)*. All generic tree/graph generation should be handled by generic `features/graph/` or `features/tree/` scripts, which are used by the specific `scenes/tree/` scripts/scenes *(extensible incase there are multiple types of trees/graphs in the future)* 
 - Alow users to delete a dex entry on the edit page
 
 bryan@DeepThought:/opt/biologidex/server$ docker-compose -f docker-compose.production.yml run web python manage.py import_col --force
