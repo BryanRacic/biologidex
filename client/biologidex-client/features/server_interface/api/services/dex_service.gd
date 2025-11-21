@@ -290,15 +290,20 @@ func _process_sync_entries(entries: Array, user_id: String, server_time: String,
 	var processed := 0
 
 	for entry in entries:
+		# Get existing record to preserve cached_image_path if not re-downloading
+		var creation_index_val: int = entry.get("creation_index", -1)
+		var existing_record := DexDatabase.get_record_for_user(creation_index_val, user_id)
+		var existing_cached_path: String = existing_record.get("cached_image_path", "")
+
 		# Update local database with expanded record format
 		var record := {
-			"creation_index": entry.get("creation_index", -1),
+			"creation_index": creation_index_val,
 			"scientific_name": entry.get("scientific_name", ""),
 			"common_name": entry.get("common_name", ""),
 			"image_checksum": entry.get("image_checksum", ""),
 			"dex_compatible_url": entry.get("dex_compatible_url", ""),
 			"updated_at": entry.get("updated_at", ""),
-			"cached_image_path": "",  # Will be set after download
+			"cached_image_path": existing_cached_path,  # Preserve existing path
 			"animal_id": entry.get("animal_id", ""),  # Store animal UUID for editing
 			"dex_entry_id": entry.get("id", "")  # Store dex entry ID for editing
 		}

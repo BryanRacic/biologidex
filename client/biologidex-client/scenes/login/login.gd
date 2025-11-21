@@ -106,7 +106,7 @@ func _perform_login(username: String, password: String) -> void:
 	print("[Login] Attempting login for user: ", username)
 	_set_loading(true, "Logging in...")
 
-	api_manager.login(username, password, func(response: Dictionary, code: int):
+	api_manager.auth.login(username, password, func(response: Dictionary, code: int):
 		if code == 200:
 			# Successful login
 			print("[Login] Login successful!")

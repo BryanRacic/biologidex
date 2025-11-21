@@ -119,8 +119,8 @@ func refresh_access_token(callback: Callable) -> void:
 
 	print("[TokenManager] Refreshing access token...")
 
-	# Use APIManager to refresh
-	APIManager.refresh_token(refresh_token, func(response: Dictionary, code: int):
+	# Use APIManager auth service to refresh
+	APIManager.auth.refresh_token(refresh_token, func(response: Dictionary, code: int):
 		if code == 200 and response.has("access"):
 			update_access_token(response["access"])
 			callback.call(true, "")
