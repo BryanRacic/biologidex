@@ -43,19 +43,35 @@ func _populate_ui() -> void:
 	var common: String = entry_data.get("common_name", "")
 	var owner: String = entry_data.get("owner_username", "Unknown")
 	var creation_index: int = entry_data.get("creation_index", -1)
+	var catch_date: String = entry_data.get("catch_date", "")
 
-	# Set record label
+	# Set record label with species name and catch info
 	if record_label:
-		var label_text := scientific
+		# Format species name
+		var species_line := scientific
 		if not common.is_empty():
-			label_text += " - %s" % common
-		record_label.text = label_text
+			species_line += " - %s" % common
 
-	# Set tooltip with full info including owner
+		# Format catch info (username and date)
+		var catch_info := owner
+		if not catch_date.is_empty():
+			# Format date nicely (take just the date part, not time)
+			var date_parts := catch_date.split("T")
+			if date_parts.size() > 0:
+				catch_info += " - " + date_parts[0]
+
+		# Combine lines
+		record_label.text = species_line + "\n" + catch_info
+
+	# Set tooltip with full info
 	var tooltip_info := "%s" % scientific
 	if not common.is_empty():
 		tooltip_info += " (%s)" % common
 	tooltip_info += "\n#%03d - Caught by %s" % [creation_index, owner]
+	if not catch_date.is_empty():
+		var date_parts := catch_date.split("T")
+		if date_parts.size() > 0:
+			tooltip_info += " on " + date_parts[0]
 
 	tooltip_text = tooltip_info
 

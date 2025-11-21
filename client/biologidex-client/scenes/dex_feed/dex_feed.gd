@@ -9,18 +9,16 @@ const SYNC_INTERVAL_MS = 60000  # Auto-refresh every minute
 # Note: Services (TokenManager, NavigationManager, APIManager, DexDatabase, SyncManager)
 # are automatically initialized by BaseSceneController
 
-# State Management
+# State Management (is_loading inherited from BaseSceneController)
 var feed_entries: Array[Dictionary] = []
 var displayed_entries: Array[Dictionary] = []
 var current_filter: String = "all"
 var selected_friend_id: String = ""
-var is_loading: bool = false
 var sync_queue: Array[String] = []
 var friends_data: Dictionary = {}  # user_id -> friend info
 var is_syncing: bool = false
 
-# UI References
-@onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+# UI References (back_button, status_label, is_loading inherited from BaseSceneController)
 @onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
 @onready var title_label: Label = $Panel/MarginContainer/VBoxContainer/Header/TitleLabel
 @onready var filter_all_button: Button = $Panel/MarginContainer/VBoxContainer/FilterBar/AllButton
@@ -28,7 +26,6 @@ var is_syncing: bool = false
 @onready var scroll_container: ScrollContainer = $Panel/MarginContainer/VBoxContainer/ScrollContainer
 @onready var feed_container: VBoxContainer = $Panel/MarginContainer/VBoxContainer/ScrollContainer/FeedContainer
 @onready var loading_overlay: Control = $LoadingOverlay
-@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/StatusLabel
 
 # Signals
 signal feed_loaded(entry_count: int)
@@ -40,6 +37,10 @@ func _on_scene_ready() -> void:
 	"""Called by BaseSceneController after managers are initialized and auth is checked"""
 	scene_name = "DexFeed"
 	print("[DexFeed] Scene ready (refactored v2)")
+
+	# Wire up UI elements from scene (BaseSceneController members)
+	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+	status_label = $Panel/MarginContainer/VBoxContainer/StatusLabel
 
 	_setup_ui()
 	_initialize_feed()

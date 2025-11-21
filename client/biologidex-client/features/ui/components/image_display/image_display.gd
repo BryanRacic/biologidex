@@ -175,8 +175,8 @@ func reset_rotation() -> void:
 			rotate_image_counter_clockwise()
 
 
-func get_rotation() -> int:
-	"""Get current rotation angle"""
+func get_image_rotation() -> int:
+	"""Get current image rotation angle"""
 	return total_rotation
 
 

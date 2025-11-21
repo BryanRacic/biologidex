@@ -19,9 +19,14 @@ extends BaseSceneController
 @onready var instruction_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/InstructionLabel
 @onready var result_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ResultLabel
 
-# Image display (using simple TextureRect for now, TODO: replace with ImageDisplay component)
+# Image display - dex_record_image component with two modes:
+# 1. simple_image: Used for preview during photo selection/rotation
+# 2. bordered_display: Used to show final dex record card with label
 @onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
 @onready var simple_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/Image
+@onready var bordered_display: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio
+@onready var bordered_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/Image
+@onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
 
 # Components (programmatically instantiated)
 var file_selector: FileSelector
@@ -42,6 +47,14 @@ func _on_scene_ready() -> void:
 	"""Called by BaseSceneController after managers are initialized"""
 	scene_name = "Camera"
 	print("[Camera] Scene ready (refactored v2)")
+
+	# Wire up UI elements from scene (BaseSceneController members)
+	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+	status_label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/StatusLabel
+	loading_spinner = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/LoadingSpinner
+	# Connect back button (set after BaseSceneController._setup_common_ui(), so connect manually)
+	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
+		back_button.pressed.connect(_on_back_pressed)
 
 	# Create and initialize file selector
 	file_selector = FileSelector.new()
@@ -84,21 +97,37 @@ func _reset_ui() -> void:
 	# Buttons
 	upload_button.disabled = true
 	upload_button.text = "Upload & Analyze"
-	upload_button.visible = true
+	upload_button.visible = false  # Hidden until photo selected
 	retry_button.visible = false
 	rotate_image_button.visible = false
 	manual_entry_button.visible = false
 	select_photo_button.visible = true
 	instruction_label.visible = true
 
+	# Re-enable select button (unless platform doesn't support it)
+	if file_selector and file_selector.is_web_mode:
+		select_photo_button.disabled = false
+	elif file_selector and file_selector.is_editor_mode:
+		select_photo_button.disabled = false
+	else:
+		select_photo_button.disabled = true
+
+	# Reconnect upload button to original handler
+	if upload_button.pressed.is_connected(_on_create_dex_entry):
+		upload_button.pressed.disconnect(_on_create_dex_entry)
+	if not upload_button.pressed.is_connected(_on_upload_pressed):
+		upload_button.pressed.connect(_on_upload_pressed)
+
 	# Labels
 	status_label.text = "Select a photo to identify an animal"
 	status_label.add_theme_color_override("font_color", Color.WHITE)
 	result_label.text = ""
 
-	# Image display
+	# Image display - hide bordered dex card, prepare for new photo selection
 	record_image.visible = false
 	simple_image.texture = null
+	bordered_display.visible = false
+	simple_image.visible = true
 
 	# Loading indicator
 	if loading_spinner:
@@ -118,6 +147,13 @@ func _reset_ui() -> void:
 
 func _on_select_photo_pressed() -> void:
 	"""Open file picker"""
+	# Reset all state when selecting a new photo
+	_reset_ui()
+
+	# Cancel any ongoing analysis
+	if cv_workflow:
+		cv_workflow.cancel_analysis()
+
 	file_selector.open_file_picker()
 	status_label.text = "Opening file picker..."
 
@@ -127,6 +163,10 @@ func _on_file_selected(file_name: String, file_type: String, file_data: PackedBy
 	print("[Camera] File selected: ", file_name, " (", file_data.size(), " bytes)")
 
 	selected_file_data = file_data
+
+	# Hide bordered display, show simple preview
+	bordered_display.visible = false
+	simple_image.visible = true
 
 	# Try to load for preview
 	var preview_success = _load_image_preview(file_data, file_type)
@@ -141,6 +181,7 @@ func _on_file_selected(file_name: String, file_type: String, file_data: PackedBy
 		status_label.text = "⚠️ Cannot preview, but you can still upload"
 		status_label.add_theme_color_override("font_color", Color.YELLOW)
 
+	upload_button.visible = true
 	upload_button.disabled = false
 	upload_button.text = "Upload & Analyze"
 
@@ -278,13 +319,13 @@ func _on_analysis_complete(job_model: AnalysisJobModel) -> void:
 	if animal_count == 0:
 		_handle_no_animals()
 	elif animal_count == 1:
-		var animal_dict = job_model.detected_animals[0]
-		_display_result(animal_dict)
+		var animal_model: AnimalModel = job_model.detected_animals[0]
+		_display_result(animal_model.to_dict())
 	else:
 		# TODO: Show animal selection UI
 		print("[Camera] Multiple animals detected, auto-selecting first")
-		var animal_dict = job_model.detected_animals[0]
-		_display_result(animal_dict)
+		var animal_model: AnimalModel = job_model.detected_animals[0]
+		_display_result(animal_model.to_dict())
 
 
 func _on_analysis_failed(error_type: String, message: String, code: int) -> void:
@@ -361,6 +402,7 @@ func _display_result(animal_dict: Dictionary) -> void:
 	status_label.add_theme_color_override("font_color", Color.GREEN)
 
 	# Update button to create dex entry
+	upload_button.visible = true
 	upload_button.text = "Create Dex Entry"
 	upload_button.disabled = false
 	upload_button.pressed.disconnect(_on_upload_pressed)
@@ -399,7 +441,9 @@ func _on_create_dex_entry() -> void:
 		"scientific_name": scientific_name,
 		"common_name": common_name,
 		"cached_image_path": cached_path,
-		"animal_id": animal_id
+		"animal_id": animal_id,
+		"owner_username": TokenManager.get_username(),
+		"catch_date": Time.get_datetime_string_from_system(false, true)  # ISO 8601 format
 	}
 	DexDatabase.add_record_from_dict(record_dict, "self")
 	print("[Camera] Added to local database: #%d" % creation_index)
@@ -443,6 +487,50 @@ func _cache_image(creation_index: int) -> String:
 	return path
 
 
+func _show_dex_record_card() -> void:
+	"""Display the dex record card with border and label"""
+	# Hide simple preview, show bordered card
+	simple_image.visible = false
+	bordered_display.visible = true
+	record_image.visible = true
+
+	# Copy image to bordered display
+	if simple_image.texture:
+		bordered_image.texture = simple_image.texture
+
+	# Set label text
+	var scientific_name: String = str(pending_animal_details.get("scientific_name", ""))
+	var common_name: String = str(pending_animal_details.get("common_name", ""))
+
+	# Format species name
+	var species_line = ""
+	if scientific_name:
+		species_line = scientific_name
+	if common_name:
+		if species_line:
+			species_line += " - " + common_name
+		else:
+			species_line = common_name
+
+	if not species_line:
+		species_line = "Unknown Species"
+
+	# Format catch info (username and date)
+	var username = TokenManager.get_username()
+	var catch_date = Time.get_datetime_string_from_system(false, true)  # ISO 8601 format
+	var catch_info = username if username else "Unknown User"
+
+	# Format date nicely (take just the date part)
+	var date_parts = catch_date.split("T")
+	if date_parts.size() > 0:
+		catch_info += " - " + date_parts[0]
+
+	# Combine lines
+	record_label.text = species_line + "\n" + catch_info
+
+	print("[Camera] Showing dex record card: ", species_line)
+
+
 func _on_dex_created(response: Dictionary, code: int) -> void:
 	"""Handle dex entry creation response"""
 	hide_loading()
@@ -460,17 +548,25 @@ func _on_dex_created(response: Dictionary, code: int) -> void:
 				record["dex_entry_id"] = current_dex_entry_id
 				DexDatabase.add_record_from_dict(record, user_id)
 
-		show_success("Dex entry created!")
+		# Show dex record card with border and label
+		_show_dex_record_card()
 
-		# Reset for new upload
+		# Update UI for next upload
 		upload_button.visible = false
 		select_photo_button.visible = true
-		instruction_label.visible = true
+		select_photo_button.disabled = false
+		rotate_image_button.visible = false
+		manual_entry_button.visible = false
+		result_label.text = ""
 
-		# In editor mode, cycle to next image
+		# Show success message
+		status_label.text = "Dex entry created! Select another photo to continue."
+		status_label.add_theme_color_override("font_color", Color.GREEN)
+
+		# In editor mode, prepare next test image index (loads when user clicks Select Photo)
 		if file_selector.is_editor_mode:
 			file_selector.cycle_test_image()
-			print("[Camera] Ready for next test image")
+			print("[Camera] Ready for next test image (will load on button press)")
 	else:
 		var error_msg = response.get("error", "Unknown error")
 		show_error("Failed to create entry", error_msg, code)
@@ -485,7 +581,7 @@ func _on_manual_entry_pressed() -> void:
 	"""Open manual entry popup"""
 	print("[Camera] Opening manual entry popup")
 
-	var popup_scene = load("res://scenes/social/components/manual_entry_popup.tscn")
+	var popup_scene = load("res://features/ui/components/manual_entry_popup/manual_entry_popup.tscn")
 	if not popup_scene:
 		print("[Camera] ERROR: Could not load manual entry popup")
 		return
@@ -499,7 +595,8 @@ func _on_manual_entry_pressed() -> void:
 	popup.popup_closed.connect(_on_manual_entry_closed)
 
 	add_child(popup)
-	popup.popup_centered(Vector2(600, 500))
+	# Show with dynamic sizing (80% of screen, centered)
+	popup.show_popup()
 
 
 func _on_manual_entry_updated(taxonomy_data: Dictionary) -> void:

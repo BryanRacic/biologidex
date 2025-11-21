@@ -22,6 +22,9 @@ class APIError extends RefCounted:
 	func is_auth_error() -> bool:
 		return code == 401 or code == 403
 
+	func is_client_error() -> bool:
+		return code >= 400 and code < 500
+
 	func is_validation_error() -> bool:
 		return code == 400
 

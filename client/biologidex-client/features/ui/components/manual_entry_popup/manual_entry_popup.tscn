@@ -1,17 +1,26 @@
 [gd_scene load_steps=2 format=3 uid="uid://bhk8v4kam2x3r"]
 
-[ext_resource type="Script" path="res://scenes/social/components/manual_entry_popup.gd" id="1_manual_entry"]
+[ext_resource type="Script" uid="uid://dy5fa6prasqkg" path="res://scenes/social/components/manual_entry_popup.gd" id="1_manual_entry"]
 
 [node name="ManualEntryPopup" type="PopupPanel"]
+oversampling_override = 1.0
 title = "Manual Entry"
 initial_position = 2
-size = Vector2i(600, 500)
+min_size = Vector2i(400, 400)
+visible = true
 script = ExtResource("1_manual_entry")
 
 [node name="Panel" type="Panel" parent="."]
-layout_mode = 2
-offset_right = 600.0
-offset_bottom = 500.0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="Panel"]
 layout_mode = 1
@@ -103,20 +112,22 @@ size_flags_vertical = 3
 theme_override_constants/separation = 8
 
 [node name="ResultsLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
 text = "Results:"
-visible = false
 
 [node name="LoadingLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.8, 1, 1)
 text = "Searching..."
-visible = false
 
 [node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer"]
+custom_minimum_size = Vector2(0, 200)
 layout_mode = 2
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="ResultsList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ResultsContainer/ScrollContainer"]
 layout_mode = 2
@@ -135,5 +146,5 @@ text = "Selected: None"
 
 [node name="SubmitButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/SelectionContainer"]
 layout_mode = 2
-text = "Submit"
 disabled = true
+text = "Submit"

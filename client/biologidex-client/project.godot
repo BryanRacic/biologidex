@@ -17,7 +17,6 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-Bootstrap="*res://bootstrap.gd"
 NavigationManager="*res://features/navigation/navigation_manager.gd"
 TokenManager="*res://features/server_interface/auth/token_manager.gd"
 APIManager="*res://features/server_interface/api/api_manager.gd"

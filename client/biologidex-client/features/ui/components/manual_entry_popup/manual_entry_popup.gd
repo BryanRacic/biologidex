@@ -25,9 +25,15 @@ var prefill_data: Dictionary = {}
 var search_result_item_scene: PackedScene = preload("res://scenes/social/components/search_result_item.tscn")
 var current_results: Array = []
 var selected_item: Control = null
+var error_dialog: AcceptDialog = null
 
 func _ready() -> void:
 	print("[ManualEntryPopup] Popup ready")
+
+	# Create error dialog
+	error_dialog = AcceptDialog.new()
+	error_dialog.title = "Error"
+	add_child(error_dialog)
 
 	# Connect buttons
 	close_button.pressed.connect(_on_close_pressed)
@@ -48,6 +54,30 @@ func _ready() -> void:
 	# Pre-fill if data provided
 	if not prefill_data.is_empty():
 		_prefill_inputs()
+
+func show_popup() -> void:
+	"""Show the popup with dynamic sizing and centering"""
+	# Get the actual window/screen size, not the viewport
+	var viewport_size = get_tree().root.get_visible_rect().size
+	var popup_size = Vector2i(
+		int(viewport_size.x * 0.8),
+		int(viewport_size.y * 0.8)
+	)
+
+	# Ensure minimum size constraints
+	popup_size.x = maxi(popup_size.x, 400)
+	popup_size.y = maxi(popup_size.y, 400)
+
+	print("[ManualEntryPopup] Window size: ", viewport_size)
+	print("[ManualEntryPopup] Calculated popup size: ", popup_size)
+
+	# Set the size directly first
+	size = popup_size
+
+	# Then show and center without size parameter (just centers the already-sized popup)
+	popup_centered()
+
+	print("[ManualEntryPopup] Actual popup size after show: ", size)
 
 func _prefill_inputs() -> void:
 	"""Pre-fill input fields with existing data"""
@@ -268,10 +298,16 @@ func _on_dex_entry_updated(response: Dictionary, code: int) -> void:
 
 func _show_error(message: String) -> void:
 	"""Show error message to user"""
+	# Show in results label
 	results_label.visible = true
 	results_label.text = "⚠ " + message
 	results_label.add_theme_color_override("font_color", Color.ORANGE_RED)
 	print("[ManualEntryPopup] ERROR: ", message)
+
+	# Also show popup dialog for important errors
+	if error_dialog:
+		error_dialog.dialog_text = message
+		error_dialog.popup_centered()
 
 func _on_back_pressed() -> void:
 	"""Handle back button"""

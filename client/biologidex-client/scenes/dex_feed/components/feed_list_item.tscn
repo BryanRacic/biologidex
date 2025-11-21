@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://bgr7lhm8n3wk5"]
+[gd_scene load_steps=3 format=3 uid="uid://dqx8n3wk5bgr7"]
 
 [ext_resource type="Script" path="res://scenes/dex_feed/components/feed_list_item.gd" id="1_feed_item"]
 [ext_resource type="PackedScene" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="2_record"]

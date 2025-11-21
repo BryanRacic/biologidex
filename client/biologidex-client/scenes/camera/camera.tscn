@@ -116,6 +116,13 @@ size_flags_horizontal = 4
 disabled = true
 text = "Upload & Analyze"
 
+[node name="RetryButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Retry Analysis"
+
 [node name="ManualEntryButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
 visible = false
 custom_minimum_size = Vector2(200, 60)

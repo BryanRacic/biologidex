@@ -108,7 +108,10 @@ func build_url_with_params(endpoint: String, params: Dictionary) -> String:
 			var value = params[key]
 			# Convert value to string if needed
 			var value_str = str(value) if typeof(value) != TYPE_STRING else value
-			param_strings.append("%s=%s" % [key, value_str])
+			# URL encode both key and value to handle special characters
+			var encoded_key = key.uri_encode()
+			var encoded_value = value_str.uri_encode()
+			param_strings.append("%s=%s" % [encoded_key, encoded_value])
 		url += "?" + "&".join(param_strings)
 
 	return url

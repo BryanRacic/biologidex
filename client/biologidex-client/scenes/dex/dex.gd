@@ -38,6 +38,12 @@ func _on_scene_ready() -> void:
 	scene_name = "Dex"
 	print("[Dex] Scene ready (refactored v2)")
 
+	# Wire up UI elements from scene (BaseSceneController members)
+	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+	# Connect back button (set after BaseSceneController._setup_common_ui(), so connect manually)
+	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
+		back_button.pressed.connect(_on_back_pressed)
+
 	# Connect UI
 	previous_button.pressed.connect(_on_previous_pressed)
 	next_button.pressed.connect(_on_next_pressed)
@@ -95,7 +101,6 @@ func _populate_user_list() -> void:
 
 func _check_and_sync_if_needed() -> void:
 	var first_index: int = DexDatabase.get_first_index_for_user("self")
-	var last_sync: String = SyncManager.get_last_sync("self")
 	var has_corruption: bool = _has_corrupted_data(first_index)
 
 	if has_corruption:
@@ -167,13 +172,33 @@ func _display_record(creation_index: int) -> void:
 func _update_record_label(record: Dictionary) -> void:
 	var sci: String = record.get("scientific_name", "")
 	var common: String = record.get("common_name", "")
+	var username: String = record.get("owner_username", "")
+	var catch_date: String = record.get("catch_date", "")
 
+	# Format species name
+	var species_line := ""
 	if sci.length() > 0:
-		record_label.text = sci + (" - " + common if common.length() > 0 else "")
+		species_line = sci + (" - " + common if common.length() > 0 else "")
 	elif common.length() > 0:
-		record_label.text = common
+		species_line = common
 	else:
-		record_label.text = "Unknown"
+		species_line = "Unknown"
+
+	# Format catch info line (username and date)
+	var catch_info := ""
+	if username.length() > 0:
+		catch_info = username
+	else:
+		catch_info = "Unknown User"
+
+	if catch_date.length() > 0:
+		# Format date nicely (take just the date part, not time)
+		var date_parts := catch_date.split("T")
+		if date_parts.size() > 0:
+			catch_info += " - " + date_parts[0]
+
+	# Combine lines
+	record_label.text = species_line + "\n" + catch_info
 
 
 func _load_and_display_image(path: String) -> void:
@@ -311,7 +336,7 @@ func _on_my_entries_for_edit(response: Dictionary, code: int, record: Dictionary
 
 
 func _open_manual_entry_popup(entry_id: String, record: Dictionary) -> void:
-	var popup_scene = load("res://scenes/social/components/manual_entry_popup.tscn")
+	var popup_scene = load("res://features/ui/components/manual_entry_popup/manual_entry_popup.tscn")
 	if not popup_scene:
 		show_error("Failed to load popup", "Could not load popup scene")
 		return
@@ -327,7 +352,8 @@ func _open_manual_entry_popup(entry_id: String, record: Dictionary) -> void:
 	popup.popup_closed.connect(_on_popup_closed)
 
 	add_child(popup)
-	popup.popup_centered(Vector2(600, 500))
+	# Show with dynamic sizing (80% of screen, centered)
+	popup.show_popup()
 
 
 func _on_entry_updated(_taxonomy: Dictionary) -> void:

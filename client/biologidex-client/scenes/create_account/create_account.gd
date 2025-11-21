@@ -113,7 +113,7 @@ func _perform_registration(username: String, email: String, password: String, pa
 	print("[CreateAccount] Attempting registration for user: ", username)
 	_set_loading(true, "Creating account...")
 
-	api_manager.register(username, email, password, password_confirm, func(response: Dictionary, code: int):
+	api_manager.auth.register(username, email, password, password_confirm, func(response: Dictionary, code: int):
 		if code == 200 or code == 201:
 			# Successful registration (service layer normalizes 201 to 200)
 			print("[CreateAccount] Registration successful!")
@@ -128,25 +128,57 @@ func _perform_registration(username: String, email: String, password: String, pa
 			# Registration failed
 			var error_message := "Registration failed"
 
-			# Handle field-specific errors
-			if response.has("username"):
-				var username_errors = response["username"]
-				if typeof(username_errors) == TYPE_ARRAY and username_errors.size() > 0:
-					error_message = "Username: " + str(username_errors[0])
+			# Check for field_errors first (new auth service format)
+			if response.has("field_errors") and typeof(response["field_errors"]) == TYPE_DICTIONARY:
+				var field_errors = response["field_errors"]
+
+				# Check common fields in priority order
+				if field_errors.has("email"):
+					var email_errors = field_errors["email"]
+					if typeof(email_errors) == TYPE_ARRAY and email_errors.size() > 0:
+						error_message = str(email_errors[0])
+					else:
+						error_message = str(email_errors)
+				elif field_errors.has("username"):
+					var username_errors = field_errors["username"]
+					if typeof(username_errors) == TYPE_ARRAY and username_errors.size() > 0:
+						error_message = str(username_errors[0])
+					else:
+						error_message = str(username_errors)
+				elif field_errors.has("password"):
+					var password_errors = field_errors["password"]
+					if typeof(password_errors) == TYPE_ARRAY and password_errors.size() > 0:
+						error_message = str(password_errors[0])
+					else:
+						error_message = str(password_errors)
 				else:
-					error_message = "Username: " + str(username_errors)
+					# Show first available field error
+					for field in field_errors:
+						var field_error = field_errors[field]
+						if typeof(field_error) == TYPE_ARRAY and field_error.size() > 0:
+							error_message = "%s: %s" % [field.capitalize(), str(field_error[0])]
+						else:
+							error_message = "%s: %s" % [field.capitalize(), str(field_error)]
+						break
+			# Handle direct field errors (legacy format)
 			elif response.has("email"):
 				var email_errors = response["email"]
 				if typeof(email_errors) == TYPE_ARRAY and email_errors.size() > 0:
-					error_message = "Email: " + str(email_errors[0])
+					error_message = str(email_errors[0])
 				else:
-					error_message = "Email: " + str(email_errors)
+					error_message = str(email_errors)
+			elif response.has("username"):
+				var username_errors = response["username"]
+				if typeof(username_errors) == TYPE_ARRAY and username_errors.size() > 0:
+					error_message = str(username_errors[0])
+				else:
+					error_message = str(username_errors)
 			elif response.has("password"):
 				var password_errors = response["password"]
 				if typeof(password_errors) == TYPE_ARRAY and password_errors.size() > 0:
-					error_message = "Password: " + str(password_errors[0])
+					error_message = str(password_errors[0])
 				else:
-					error_message = "Password: " + str(password_errors)
+					error_message = str(password_errors)
 			elif response.has("detail"):
 				error_message = str(response["detail"])
 			elif response.has("error"):
@@ -171,7 +203,7 @@ func _perform_auto_login(username: String, password: String) -> void:
 	print("[CreateAccount] Auto-login after registration")
 	_set_loading(true, "Logging in...")
 
-	api_manager.login(username, password, func(response: Dictionary, code: int):
+	api_manager.auth.login(username, password, func(response: Dictionary, code: int):
 		if code == 200:
 			# Successful login
 			print("[CreateAccount] Auto-login successful!")

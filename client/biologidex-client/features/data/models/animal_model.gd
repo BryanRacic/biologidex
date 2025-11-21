@@ -40,8 +40,9 @@ static func from_dict(data: Dictionary) -> AnimalModel:
 	var model = AnimalModel.new()
 
 	# Core identifiers
-	model.id = data.get("id", "")
-	model.creation_index = data.get("creation_index", -1)
+	# API sometimes uses "animal_id" (in detected_animals) or "id" (in animal details)
+	model.id = data.get("animal_id", data.get("id", ""))
+	model.creation_index = int(data.get("creation_index", -1)) if data.get("creation_index") != null else -1
 
 	# Taxonomic hierarchy
 	model.scientific_name = data.get("scientific_name", "")
@@ -73,6 +74,7 @@ func to_dict() -> Dictionary:
 	"""Convert model to dictionary for API submission"""
 	return {
 		"id": id,
+		"animal_id": id,  # Alias for compatibility with detected_animals format
 		"creation_index": creation_index,
 		"scientific_name": scientific_name,
 		"common_name": common_name,

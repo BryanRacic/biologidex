@@ -10,8 +10,7 @@ const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
 
 # Note: Services (APIManager, NavigationManager) are automatically initialized by BaseSceneController
 
-# Node references (assigned in _ready)
-@onready var back_button: Button = $VBoxContainer/Toolbar/BackButton
+# Node references (back_button, is_loading inherited from BaseSceneController)
 @onready var search_bar: LineEdit = $VBoxContainer/Toolbar/SearchBar
 @onready var mode_dropdown: OptionButton = $VBoxContainer/Toolbar/ModeDropdown
 @onready var zoom_in_button: Button = $VBoxContainer/Toolbar/ZoomControls/ZoomInButton
@@ -32,8 +31,7 @@ var selected_friend_ids: Array = []  # Array of UUID strings
 # Renderer
 var tree_renderer: TreeRenderer = null
 
-# State
-var is_loading: bool = false
+# State (is_loading inherited from BaseSceneController)
 var is_initialized: bool = false
 
 # Camera control state
@@ -45,6 +43,12 @@ func _on_scene_ready() -> void:
 	"""Called by BaseSceneController after managers are initialized"""
 	scene_name = "TreeController"
 	print("[TreeController] Scene ready (refactored v2)")
+
+	# Wire up UI elements from scene (BaseSceneController members)
+	back_button = $VBoxContainer/Toolbar/BackButton
+	# Connect back button (set after BaseSceneController._setup_common_ui(), so connect manually)
+	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
+		back_button.pressed.connect(_on_back_pressed)
 
 	# Connect UI signals
 	search_bar.text_submitted.connect(_on_search_submitted)

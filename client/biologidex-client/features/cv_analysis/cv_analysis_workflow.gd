@@ -232,12 +232,33 @@ func _upload_and_convert() -> void:
 		_handle_error(AnalysisStage.CONVERTING, 0, "No image data to upload")
 		return
 
-	# Call image conversion API
+	# Determine filename and type
+	var file_name = "image.jpg"
+	if not source_image_path.is_empty():
+		file_name = source_image_path.get_file()
+
+	var file_type = "image/jpeg"
+	if file_name.ends_with(".png"):
+		file_type = "image/png"
+	elif file_name.ends_with(".jpg") or file_name.ends_with(".jpeg"):
+		file_type = "image/jpeg"
+
+	# Call image conversion API (single callback handles both success/error)
 	APIManager.images.convert_image(
 		source_image_data,
-		_on_conversion_complete,
-		_on_conversion_failed
+		file_name,
+		file_type,
+		_on_conversion_response,
+		transformations
 	)
+
+
+func _on_conversion_response(response: Dictionary, code: int) -> void:
+	"""Unified callback for conversion (routes to success or error handler)"""
+	if code == 200 or code == 201:
+		_on_conversion_complete(response, code)
+	else:
+		_on_conversion_failed(response, code)
 
 
 func _on_conversion_complete(response: Dictionary, code: int) -> void:
@@ -272,19 +293,24 @@ func _download_converted_image() -> void:
 		_handle_error(AnalysisStage.DOWNLOADING, 0, "No conversion ID to download")
 		return
 
-	# Call download API
+	# Call download API (single callback)
 	APIManager.images.download_converted_image(
 		conversion_id,
-		_on_download_complete,
-		_on_download_failed
+		_on_download_response
 	)
 
 
-func _on_download_complete(image_data: PackedByteArray, code: int) -> void:
+func _on_download_response(response: Dictionary, code: int) -> void:
+	"""Unified callback for download (routes to success or error handler)"""
+	if code == 200:
+		_on_download_complete(response, code)
+	else:
+		_on_download_failed(response, code)
+
+
+func _on_download_complete(response: Dictionary, _code: int) -> void:
 	"""Handle successful image download"""
-	if code != 200:
-		_handle_error(AnalysisStage.DOWNLOADING, code, "Download failed")
-		return
+	var image_data: PackedByteArray = response.get("data", PackedByteArray())
 
 	if image_data.is_empty():
 		_handle_error(AnalysisStage.DOWNLOADING, 0, "Downloaded image is empty")
@@ -312,18 +338,20 @@ func _submit_analysis() -> void:
 		_handle_error(AnalysisStage.ANALYZING, 0, "No conversion ID for analysis")
 		return
 
-	# Prepare job data
-	var job_data = {
-		"source_conversion": conversion_id,
-		"post_conversion_transformations": transformations
-	}
-
-	# Call vision API
-	APIManager.vision.create_job(
-		job_data,
-		_on_analysis_submitted,
-		_on_analysis_submit_failed
+	# Call vision API (single callback)
+	APIManager.vision.create_vision_job_from_conversion(
+		conversion_id,
+		_on_analysis_response,
+		transformations
 	)
+
+
+func _on_analysis_response(response: Dictionary, code: int) -> void:
+	"""Unified callback for analysis submission (routes to success or error handler)"""
+	if code == 200 or code == 201:
+		_on_analysis_submitted(response, code)
+	else:
+		_on_analysis_submit_failed(response, code)
 
 
 func _on_analysis_submitted(response: Dictionary, code: int) -> void:
@@ -388,11 +416,19 @@ func _check_job_status() -> void:
 		_handle_error(AnalysisStage.POLLING, 0, "No job ID to check status")
 		return
 
-	APIManager.vision.get_job_status(
+	# Call vision API (single callback)
+	APIManager.vision.get_vision_job(
 		job_id,
-		_on_job_status_received,
-		_on_job_status_failed
+		_on_job_status_response
 	)
+
+
+func _on_job_status_response(response: Dictionary, code: int) -> void:
+	"""Unified callback for job status (routes to success or error handler)"""
+	if code == 200:
+		_on_job_status_received(response, code)
+	else:
+		_on_job_status_failed(response, code)
 
 
 func _on_job_status_received(response: Dictionary, code: int) -> void:
@@ -425,7 +461,7 @@ func _on_job_status_received(response: Dictionary, code: int) -> void:
 			_handle_error(AnalysisStage.POLLING, 500, error_msg)
 
 
-func _on_job_status_failed(response: Dictionary, code: int) -> void:
+func _on_job_status_failed(_response: Dictionary, code: int) -> void:
 	"""Handle job status check failure"""
 	# For polling errors, we can continue trying
 	push_warning("[CVAnalysisWorkflow] Status check failed (code %d), will retry" % code)

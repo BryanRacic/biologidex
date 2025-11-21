@@ -5,13 +5,11 @@ extends BaseSceneController
 # Note: Services (TokenManager, NavigationManager, APIManager)
 # are automatically initialized by BaseSceneController
 
-# UI References
-@onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+# UI References (back_button, status_label, is_loading inherited from BaseSceneController)
 @onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
 @onready var friend_code_display: LineEdit = $Panel/MarginContainer/VBoxContainer/YourFriendCodeSection/FriendCodeDisplay
 @onready var friend_code_input: LineEdit = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/FriendCodeInput
 @onready var add_button: Button = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/AddButton
-@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/AddFriendSection/StatusLabel
 @onready var tab_container: TabContainer = $Panel/MarginContainer/VBoxContainer/TabContainer
 @onready var friends_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Friends/FriendsList
 @onready var pending_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Pending/PendingList
@@ -20,10 +18,9 @@ extends BaseSceneController
 var friend_item_scene = preload("res://scenes/social/components/friend_list_item.tscn")
 var pending_item_scene = preload("res://scenes/social/components/pending_request_item.tscn")
 
-# State
+# State (is_loading inherited from BaseSceneController)
 var friends_data: Array = []
 var pending_requests: Array = []
-var is_loading: bool = false
 
 # Confirmation dialog
 var confirmation_dialog: ConfirmationDialog = null
@@ -35,6 +32,10 @@ func _on_scene_ready() -> void:
 	"""Called by BaseSceneController after managers are initialized and auth is checked"""
 	scene_name = "Social"
 	print("[Social] Scene ready (refactored v2)")
+
+	# Wire up UI elements from scene (BaseSceneController members)
+	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
+	status_label = $Panel/MarginContainer/VBoxContainer/AddFriendSection/StatusLabel
 
 	# Connect UI signals
 	back_button.pressed.connect(_on_back_pressed)

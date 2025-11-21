@@ -305,7 +305,9 @@ func _process_sync_entries(entries: Array, user_id: String, server_time: String,
 			"updated_at": entry.get("updated_at", ""),
 			"cached_image_path": existing_cached_path,  # Preserve existing path
 			"animal_id": entry.get("animal_id", ""),  # Store animal UUID for editing
-			"dex_entry_id": entry.get("id", "")  # Store dex entry ID for editing
+			"dex_entry_id": entry.get("id", ""),  # Store dex entry ID for editing
+			"owner_username": entry.get("owner_username", ""),  # Store username for display
+			"catch_date": entry.get("catch_date", "")  # Store catch date for display
 		}
 
 		# Check if image needs downloading

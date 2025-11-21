@@ -281,11 +281,12 @@ func _on_request_success(data: Dictionary, request: APITypes.QueuedRequest) -> v
 func _on_request_error(error: APITypes.APIError, request: APITypes.QueuedRequest) -> void:
 	active_requests -= 1
 
-	# Don't retry auth errors (401/403) - they won't succeed
+	# Don't retry client errors (4xx) - they indicate issues with the request that won't be fixed by retrying
+	# Exception: Rate limit errors (429) should be retried with backoff
 	var should_retry = (
 		request.config.retry_on_failure
 		and request.attempt < request.config.max_retries
-		and not error.is_auth_error()
+		and (not error.is_client_error() or error.is_rate_limit_error())
 	)
 
 	if should_retry:

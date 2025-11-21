@@ -47,18 +47,22 @@ static func from_dict(data: Dictionary) -> AnalysisJobModel:
 	"""Create AnalysisJobModel from API response dictionary"""
 	var model = AnalysisJobModel.new()
 
-	# Core identifiers
-	model.id = data.get("id", "")
-	model.owner_id = data.get("owner", "")
+	# Core identifiers (handle null values from API)
+	model.id = data.get("id", "") if data.get("id") != null else ""
+	# API uses "user" field, not "owner"
+	var owner = data.get("user", data.get("owner", ""))
+	model.owner_id = owner if owner != null else ""
 
 	# Status
 	model.status = data.get("status", "pending")
 	model.progress = data.get("progress", 0.0)
 
-	# Images
-	model.conversion_id = data.get("source_conversion", "")
-	model.image_url = data.get("image", "")
-	model.dex_compatible_image_url = data.get("dex_compatible_image", "")
+	# Images (handle null values from API)
+	model.conversion_id = data.get("source_conversion", "") if data.get("source_conversion") != null else ""
+	model.image_url = data.get("image", "") if data.get("image") != null else ""
+	# API returns "dex_compatible_url" for the image URL
+	var dex_url = data.get("dex_compatible_url", data.get("dex_compatible_image", ""))
+	model.dex_compatible_image_url = dex_url if dex_url != null else ""
 
 	# Post-conversion transformations
 	if data.has("post_conversion_transformations"):
@@ -71,10 +75,25 @@ static func from_dict(data: Dictionary) -> AnalysisJobModel:
 				var animal = AnimalModel.from_dict(animal_data)
 				model.detected_animals.append(animal)
 
-	model.selected_animal_index = data.get("selected_animal_index", -1)
+	# Selected animal index (handle null from API)
+	var selected_idx = data.get("selected_animal_index", -1)
+	model.selected_animal_index = int(selected_idx) if selected_idx != null else -1
 
-	# Legacy identified animal
-	if data.has("identified_animal"):
+	# Parse animal_details (full animal data with creation_index)
+	if data.has("animal_details") and data["animal_details"] is Dictionary:
+		model.identified_animal = AnimalModel.from_dict(data["animal_details"])
+		model.identified_animal_id = model.identified_animal.id
+
+		# Merge animal_details into corresponding detected_animals entry
+		# This ensures detected_animals has complete data including creation_index
+		for i in range(model.detected_animals.size()):
+			if model.detected_animals[i].id == model.identified_animal.id:
+				# Merge complete data from animal_details
+				model.detected_animals[i] = model.identified_animal.duplicate_model()
+				break
+
+	# Legacy identified animal (fallback if no animal_details)
+	elif data.has("identified_animal"):
 		var animal_data = data["identified_animal"]
 		if animal_data is Dictionary:
 			model.identified_animal = AnimalModel.from_dict(animal_data)
@@ -82,15 +101,15 @@ static func from_dict(data: Dictionary) -> AnalysisJobModel:
 		elif animal_data is String:
 			model.identified_animal_id = animal_data
 
-	# Results
-	model.confidence_score = data.get("confidence_score", 0.0)
-	model.error_message = data.get("error_message", "")
-	model.retry_count = data.get("retry_count", 0)
+	# Results (handle null values from API)
+	model.confidence_score = data.get("confidence_score", 0.0) if data.get("confidence_score") != null else 0.0
+	model.error_message = data.get("error_message", "") if data.get("error_message") != null else ""
+	model.retry_count = int(data.get("retry_count", 0)) if data.get("retry_count") != null else 0
 
-	# Timestamps
-	model.created_at = data.get("created_at", "")
-	model.updated_at = data.get("updated_at", "")
-	model.completed_at = data.get("completed_at", "")
+	# Timestamps (handle null values from API)
+	model.created_at = data.get("created_at", "") if data.get("created_at") != null else ""
+	model.updated_at = data.get("updated_at", "") if data.get("updated_at") != null else ""
+	model.completed_at = data.get("completed_at", "") if data.get("completed_at") != null else ""
 
 	return model
 
@@ -99,12 +118,12 @@ func to_dict() -> Dictionary:
 	"""Convert model to dictionary for API submission"""
 	var data = {
 		"id": id,
-		"owner": owner_id,
+		"user": owner_id,  # Server uses "user" not "owner"
 		"status": status,
 		"progress": progress,
 		"source_conversion": conversion_id,
 		"image": image_url,
-		"dex_compatible_image": dex_compatible_image_url,
+		"dex_compatible_url": dex_compatible_image_url,  # Server uses "dex_compatible_url"
 		"post_conversion_transformations": post_conversion_transformations,
 		"selected_animal_index": selected_animal_index,
 		"confidence_score": confidence_score,

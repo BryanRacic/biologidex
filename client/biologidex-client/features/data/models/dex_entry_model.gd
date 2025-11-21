@@ -24,8 +24,10 @@ var animal: AnimalModel = null
 @export var notes: String = ""
 @export var visibility: String = "private"  # private, friends, public
 @export var is_favorite: bool = false
-@export var location: String = ""
-@export var captured_at: String = ""
+@export var location: String = ""  # Server uses "location_name"
+@export var location_lat: float = 0.0  # GPS latitude
+@export var location_lon: float = 0.0  # GPS longitude
+@export var captured_at: String = ""  # Server uses "catch_date"
 
 # Customizations (stored as JSON in API)
 var customizations: Dictionary = {}
@@ -70,12 +72,21 @@ static func from_dict(data: Dictionary) -> DexEntryModel:
 	model.original_image_url = data.get("original_image", "")
 	model.processed_image_url = data.get("processed_image", "")
 
-	# Metadata
-	model.notes = data.get("notes", "")
-	model.visibility = data.get("visibility", "private")
-	model.is_favorite = data.get("is_favorite", false)
-	model.location = data.get("location", "")
-	model.captured_at = data.get("captured_at", "")
+	# Metadata (handle null values and server field name differences)
+	model.notes = data.get("notes", "") if data.get("notes") != null else ""
+	model.visibility = data.get("visibility", "private") if data.get("visibility") != null else "private"
+	model.is_favorite = data.get("is_favorite", false) if data.get("is_favorite") != null else false
+	# Server uses "location_name" for string location
+	model.location = data.get("location_name", data.get("location", ""))
+	model.location = model.location if model.location != null else ""
+	# Server uses "catch_date" for captured timestamp
+	model.captured_at = data.get("catch_date", data.get("captured_at", ""))
+	model.captured_at = model.captured_at if model.captured_at != null else ""
+	# GPS coordinates
+	var lat = data.get("location_lat", 0.0)
+	model.location_lat = float(lat) if lat != null else 0.0
+	var lon = data.get("location_lon", 0.0)
+	model.location_lon = float(lon) if lon != null else 0.0
 
 	# Customizations
 	if data.has("customizations"):
@@ -98,13 +109,15 @@ func to_dict() -> Dictionary:
 		"id": id,
 		"owner": owner_id,
 		"animal": animal_id,
-		"image": image_url,
+		"original_image": image_url,  # Server uses "original_image" not "image"
 		"image_checksum": image_checksum,
 		"notes": notes,
 		"visibility": visibility,
 		"is_favorite": is_favorite,
-		"location": location,
-		"captured_at": captured_at,
+		"location_name": location,  # Server uses "location_name"
+		"location_lat": location_lat,
+		"location_lon": location_lon,
+		"catch_date": captured_at,  # Server uses "catch_date"
 		"customizations": customizations,
 		"source_vision_job": source_vision_job_id,
 		"confidence_score": confidence_score,

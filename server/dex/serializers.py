@@ -65,6 +65,7 @@ class DexEntryCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DexEntry
         fields = [
+            'id',
             'animal',
             'source_vision_job',
             'original_image',
@@ -75,6 +76,7 @@ class DexEntryCreateSerializer(serializers.ModelSerializer):
             'catch_date',
             'visibility',
         ]
+        read_only_fields = ['id']
 
     def validate(self, attrs):
         """Validate that either source_vision_job or original_image is provided."""
@@ -100,9 +102,13 @@ class DexEntryCreateSerializer(serializers.ModelSerializer):
         if source_vision_job_id:
             try:
                 vision_job = AnalysisJob.objects.get(id=source_vision_job_id)
-                # Use the original image from the vision job
+                # Use the dex-compatible image from the vision job (preferred)
+                # Fall back to deprecated image field for legacy support
                 if not validated_data.get('original_image'):
-                    validated_data['original_image'] = vision_job.image
+                    if vision_job.dex_compatible_image:
+                        validated_data['original_image'] = vision_job.dex_compatible_image
+                    elif vision_job.image:
+                        validated_data['original_image'] = vision_job.image
                 # Link the vision job
                 validated_data['source_vision_job'] = vision_job
             except AnalysisJob.DoesNotExist:
@@ -146,6 +152,7 @@ class DexEntrySyncSerializer(serializers.ModelSerializer):
     scientific_name = serializers.CharField(source='animal.scientific_name', read_only=True)
     common_name = serializers.CharField(source='animal.common_name', read_only=True)
     creation_index = serializers.IntegerField(source='animal.creation_index', read_only=True)
+    owner_username = serializers.CharField(source='owner.username', read_only=True)
 
     # Image URLs for client to download
     dex_compatible_url = serializers.SerializerMethodField()
@@ -160,6 +167,7 @@ class DexEntrySyncSerializer(serializers.ModelSerializer):
             'creation_index',
             'scientific_name',
             'common_name',
+            'owner_username',
             'dex_compatible_url',
             'image_checksum',
             'image_updated_at',
