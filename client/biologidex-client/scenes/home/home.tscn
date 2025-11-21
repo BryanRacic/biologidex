@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://dr46x1xsyjpfd"]
 
-[ext_resource type="Script" path="res://scenes/home/home.gd" id="1_home"]
+[ext_resource type="Script" uid="uid://dxro5hjb7xtf3" path="res://scenes/home/home.gd" id="1_home"]
 
 [node name="Home" type="Control"]
 layout_mode = 3
@@ -119,3 +119,8 @@ text = "Tree"
 custom_minimum_size = Vector2(80, 44)
 layout_mode = 2
 text = "Social"
+
+[node name="Feed" type="Button" parent="Panel/MarginContainer/VBoxContainer/Footer"]
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+text = "Feed"
