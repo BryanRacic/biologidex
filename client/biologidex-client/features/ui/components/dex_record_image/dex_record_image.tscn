@@ -1,6 +1,6 @@
-[gd_scene load_steps=5 format=3 uid="uid://cwxkm5mw4opxq"]
+[gd_scene load_steps=5 format=3]
 
-[ext_resource type="Texture2D" uid="uid://de58e6gkmcrfw" path="res://resources/test_img.jpeg" id="1_yeq50"]
+[ext_resource type="Texture2D" path="res://resources/test_img.jpeg" id="1_yeq50"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yeq50"]
 border_width_left = 20
@@ -15,7 +15,7 @@ expand_margin_right = 20.0
 [sub_resource type="LabelSettings" id="LabelSettings_yeq50"]
 font_color = Color(0, 0, 0, 1)
 
-[node name="RecordImage" type="Control"]
+[node name="DexRecordImage" type="Control"]
 layout_mode = 3
 anchors_preset = 0
 size_flags_horizontal = 3

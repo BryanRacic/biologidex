@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://b12e8gabmy5f0"]
 
 [ext_resource type="Script" path="res://scenes/camera/camera.gd" id="1_camera"]
-[ext_resource type="PackedScene" uid="uid://cwxkm5mw4opxq" path="res://record_image.tscn" id="3_qqjab"]
+[ext_resource type="PackedScene" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
 
 [node name="Camera" type="Control"]
 layout_mode = 3
