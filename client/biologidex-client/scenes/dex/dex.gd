@@ -73,6 +73,7 @@ func _initialize_services() -> void:
 	APIManager.dex.friends_overview_received.connect(_on_friends_overview_received)
 
 	# Check for friend context from navigation (viewing friend's dex)
+	var target_creation_index: int = -1
 	if NavigationManager.has_context():
 		var context: Dictionary = NavigationManager.get_context()
 		if context.has("user_id"):
@@ -85,6 +86,11 @@ func _initialize_services() -> void:
 			current_user_id = friend_id
 			available_users[friend_id] = username
 
+			# Check if we should navigate to a specific entry (from feed)
+			if context.has("creation_index"):
+				target_creation_index = context.get("creation_index", -1)
+				print("[Dex] Will navigate to entry #%d" % target_creation_index)
+
 			# Clear context
 			NavigationManager.clear_context()
 
@@ -94,8 +100,11 @@ func _initialize_services() -> void:
 	# Check if we need to sync
 	_check_and_sync_if_needed()
 
-	# Load first record for current user
-	_load_first_record()
+	# Load specific record if requested, otherwise load first record
+	if target_creation_index >= 0:
+		_navigate_to_record(target_creation_index)
+	else:
+		_load_first_record()
 
 
 func _populate_user_list() -> void:
@@ -167,6 +176,19 @@ func _load_first_record() -> void:
 			_show_empty_state()
 	else:
 		_show_empty_state()
+
+
+func _navigate_to_record(creation_index: int) -> void:
+	"""Navigate to a specific record (used when coming from feed)"""
+	print("[Dex] Navigating to specific record: #%d" % creation_index)
+
+	# Check if the record exists
+	var record: Dictionary = DexDatabase.get_record_for_user(creation_index, current_user_id)
+	if not record.is_empty():
+		_display_record(creation_index)
+	else:
+		print("[Dex] WARNING: Requested record #%d not found, loading first record instead" % creation_index)
+		_load_first_record()
 
 
 func _show_empty_state() -> void:

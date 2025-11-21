@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://b3v8k7nan2wq1"]
 
-[ext_resource type="Script" uid="uid://ufjiddqqtcsm" path="res://scenes/social/social.gd" id="1_social"]
+[ext_resource type="Script" path="res://scenes/dex_feed/dex_feed.gd" id="1_dex_feed"]
 
 [node name="DexFeed" type="Control"]
 layout_mode = 3
@@ -9,7 +9,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_social")
+script = ExtResource("1_dex_feed")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -44,7 +44,7 @@ custom_minimum_size = Vector2(60, 44)
 layout_mode = 2
 text = "<<"
 
-[node name="Title" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Feed"
@@ -58,11 +58,40 @@ text = "Refresh"
 [node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="FeedContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="FilterBar" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AllButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/FilterBar"]
+custom_minimum_size = Vector2(100, 44)
+layout_mode = 2
+text = "All Friends"
+
+[node name="FriendsDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/FilterBar"]
+custom_minimum_size = Vector2(200, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="FeedList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/FeedContainer"]
+[node name="FeedContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
+
+[node name="LoadingOverlay" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)

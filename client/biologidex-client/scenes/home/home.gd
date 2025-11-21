@@ -7,6 +7,7 @@ extends Control
 @onready var welcome_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/WelcomeLabel
 @onready var camera_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/CameraButton
 @onready var dex_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/DexButton
+@onready var feed_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/FeedButton
 @onready var tree_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/TreeButton
 @onready var social_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/SocialButton
 @onready var menu_button: Button = $Panel/MarginContainer/VBoxContainer/Header/MenuButton
@@ -35,6 +36,7 @@ func _ready() -> void:
 	# Connect navigation buttons
 	camera_button.pressed.connect(_on_camera_pressed)
 	dex_button.pressed.connect(_on_dex_pressed)
+	feed_button.pressed.connect(_on_feed_pressed)
 	tree_button.pressed.connect(_on_tree_pressed)
 	social_button.pressed.connect(_on_social_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
@@ -60,6 +62,12 @@ func _on_dex_pressed() -> void:
 	"""Navigate to dex collection"""
 	print("[Home] Dex button pressed")
 	navigation_manager.navigate_to("res://scenes/dex/dex.tscn")
+
+
+func _on_feed_pressed() -> void:
+	"""Navigate to friends' feed"""
+	print("[Home] Feed button pressed")
+	navigation_manager.navigate_to("res://scenes/dex_feed/dex_feed.tscn")
 
 
 func _on_tree_pressed() -> void:

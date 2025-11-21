@@ -120,7 +120,7 @@ custom_minimum_size = Vector2(80, 44)
 layout_mode = 2
 text = "Social"
 
-[node name="Feed" type="Button" parent="Panel/MarginContainer/VBoxContainer/Footer"]
+[node name="FeedButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Footer"]
 custom_minimum_size = Vector2(80, 44)
 layout_mode = 2
 text = "Feed"

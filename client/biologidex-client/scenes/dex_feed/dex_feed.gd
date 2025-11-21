@@ -1,48 +1,57 @@
 extends Control
-## Social Scene - Manage friends and friend requests
+## Dex Feed - Display friends' dex entries in a chronological feed
+
+# Constants
+const FEED_ITEM_SCENE = preload("res://scenes/dex_feed/components/feed_list_item.tscn")
+const SYNC_INTERVAL_MS = 60000  # Auto-refresh every minute
 
 # Services
 var TokenManager
 var NavigationManager
 var APIManager
+var DexDatabase
+var SyncManager
+
+# State Management
+var feed_entries: Array[Dictionary] = []
+var displayed_entries: Array[Dictionary] = []
+var current_filter: String = "all"
+var selected_friend_id: String = ""
+var is_loading: bool = false
+var sync_queue: Array[String] = []
+var friends_data: Dictionary = {}  # user_id -> friend info
+var is_syncing: bool = false
 
 # UI References
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
-@onready var friend_code_display: Label = $Panel/MarginContainer/VBoxContainer/YourFriendCodeSection/FriendCodeDisplay
-@onready var friend_code_input: LineEdit = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/FriendCodeInput
-@onready var add_button: Button = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/AddButton
-@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/AddFriendSection/StatusLabel
-@onready var tab_container: TabContainer = $Panel/MarginContainer/VBoxContainer/TabContainer
-@onready var friends_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Friends/FriendsList
-@onready var pending_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Pending/PendingList
+@onready var title_label: Label = $Panel/MarginContainer/VBoxContainer/Header/TitleLabel
+@onready var filter_all_button: Button = $Panel/MarginContainer/VBoxContainer/FilterBar/AllButton
+@onready var filter_dropdown: OptionButton = $Panel/MarginContainer/VBoxContainer/FilterBar/FriendsDropdown
+@onready var scroll_container: ScrollContainer = $Panel/MarginContainer/VBoxContainer/ScrollContainer
+@onready var feed_container: VBoxContainer = $Panel/MarginContainer/VBoxContainer/ScrollContainer/FeedContainer
+@onready var loading_overlay: Control = $LoadingOverlay
+@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/StatusLabel
 
-# Preloaded scenes
-var friend_item_scene = preload("res://scenes/social/components/friend_list_item.tscn")
-var pending_item_scene = preload("res://scenes/social/components/pending_request_item.tscn")
-
-# State
-var friends_data: Array = []
-var pending_requests: Array = []
-var is_loading: bool = false
-
-# Confirmation dialog
-var confirmation_dialog: ConfirmationDialog = null
-var pending_removal_friend: Dictionary = {}
-var pending_removal_friendship_id: String = ""
+# Signals
+signal feed_loaded(entry_count: int)
+signal sync_started()
+signal sync_completed()
+signal entry_favorited(entry_id: String, is_favorite: bool)
 
 
 func _ready() -> void:
-	print("[Social] Scene loaded")
-
-	# Initialize services (with fallback to autoloads)
+	print("[DexFeed] Scene loaded")
 	_initialize_services()
 
 	# Check authentication
 	if not TokenManager.is_logged_in():
-		print("[Social] ERROR: User not logged in")
+		print("[DexFeed] ERROR: User not logged in")
 		NavigationManager.go_back()
 		return
+
+	_setup_ui()
+	_initialize_feed()
 
 
 func _initialize_services() -> void:
@@ -50,114 +59,38 @@ func _initialize_services() -> void:
 	TokenManager = get_node("/root/TokenManager")
 	NavigationManager = get_node("/root/NavigationManager")
 	APIManager = get_node("/root/APIManager")
+	DexDatabase = get_node("/root/DexDatabase")
+	SyncManager = get_node("/root/SyncManager")
 
-	# Connect UI signals
+
+func _setup_ui() -> void:
+	"""Setup UI elements and connect signals"""
 	back_button.pressed.connect(_on_back_pressed)
 	refresh_button.pressed.connect(_on_refresh_pressed)
-	add_button.pressed.connect(_on_add_button_pressed)
-	friend_code_input.text_submitted.connect(_on_friend_code_submitted)
+	filter_all_button.pressed.connect(_on_filter_all_pressed)
+	filter_dropdown.item_selected.connect(_on_filter_dropdown_selected)
 
-	# Create confirmation dialog
-	_setup_confirmation_dialog()
-
-	# Load friend code
-	_load_friend_code()
-
-	# Load initial data
-	_load_friends()
-	_load_pending_requests()
+	# Set initial state
+	title_label.text = "Friends' Feed"
+	_show_loading(false)
+	_show_status("", true)
 
 
-func _setup_confirmation_dialog() -> void:
-	"""Create and setup the confirmation dialog for removing friends"""
-	confirmation_dialog = ConfirmationDialog.new()
-	confirmation_dialog.dialog_text = "Are you sure you want to remove this friend?"
-	confirmation_dialog.confirmed.connect(_confirm_remove_friend)
-	add_child(confirmation_dialog)
+func _initialize_feed() -> void:
+	"""Initialize the feed by loading friends and syncing their dex entries"""
+	print("[DexFeed] Initializing feed...")
+	_show_status("Loading friends...", true)
+	_load_friends_list()
 
 
-func _load_friend_code() -> void:
-	"""Load the current user's friend code"""
-	print("[Social] Loading friend code...")
-	APIManager.auth.get_friend_code(_on_friend_code_loaded)
-
-
-func _on_friend_code_loaded(response: Dictionary, code: int) -> void:
-	"""Handle friend code response"""
-	if code == 200:
-		var friend_code: String = response.get("friend_code", "")
-		if not friend_code.is_empty():
-			friend_code_display.text = friend_code
-			print("[Social] Friend code loaded: ", friend_code)
-		else:
-			friend_code_display.text = "Error loading code"
-			print("[Social] ERROR: Friend code empty in response")
-	else:
-		friend_code_display.text = "Error loading code"
-		var error_msg: String = response.get("error", "Failed to load friend code")
-		print("[Social] ERROR loading friend code: ", error_msg)
-
-
-func _on_back_pressed() -> void:
-	"""Navigate back to previous scene"""
-	print("[Social] Back button pressed")
-	NavigationManager.go_back()
-
-
-func _on_refresh_pressed() -> void:
-	"""Refresh friends and pending requests"""
-	print("[Social] Refresh button pressed")
-	_show_status("Refreshing...", true)
-	_load_friends()
-	_load_pending_requests()
-
-
-func _on_add_button_pressed() -> void:
-	"""Handle add friend button press"""
-	var friend_code: String = friend_code_input.text.strip_edges().to_upper()
-	_send_friend_request(friend_code)
-
-
-func _on_friend_code_submitted(text: String) -> void:
-	"""Handle enter key in friend code input"""
-	var friend_code: String = text.strip_edges().to_upper()
-	_send_friend_request(friend_code)
-
-
-func _send_friend_request(friend_code: String) -> void:
-	"""Send a friend request by friend code"""
-	if friend_code.length() != 8:
-		_show_status("Friend code must be 8 characters", false)
-		return
-
-	_show_status("Sending friend request...", true)
-	add_button.disabled = true
-
-	APIManager.social.send_friend_request(friend_code, "", _on_friend_request_sent)
-
-
-func _on_friend_request_sent(response: Dictionary, code: int) -> void:
-	"""Handle friend request response"""
-	add_button.disabled = false
-
-	if code == 200 or code == 201:
-		_show_status("Friend request sent successfully!", true)
-		friend_code_input.text = ""
-		# Refresh lists after short delay
-		await get_tree().create_timer(1.0).timeout
-		_show_status("", true)
-	else:
-		var error_msg: String = response.get("error", "Failed to send friend request")
-		_show_status("Error: %s" % error_msg, false)
-
-
-func _load_friends() -> void:
-	"""Load friends list from API"""
+func _load_friends_list() -> void:
+	"""Load the friends list from the server"""
 	if is_loading:
+		print("[DexFeed] Already loading, skipping duplicate request")
 		return
 
 	is_loading = true
-	print("[Social] Loading friends list...")
+	print("[DexFeed] Loading friends list...")
 	APIManager.social.get_friends(_on_friends_loaded)
 
 
@@ -167,277 +100,393 @@ func _on_friends_loaded(response: Dictionary, code: int) -> void:
 
 	if code != 200:
 		var error_msg: String = response.get("error", "Failed to load friends")
-		print("[Social] ERROR loading friends: ", error_msg)
-		_show_status("Failed to load friends", false)
+		print("[DexFeed] ERROR loading friends: ", error_msg)
+		_show_status("Failed to load friends: %s" % error_msg, false)
 		return
 
-	friends_data = response.get("friends", [])
-	print("[Social] Loaded %d friends" % friends_data.size())
-	_populate_friends_list()
+	var friends: Array = response.get("friends", [])
+	print("[DexFeed] Loaded %d friends" % friends.size())
 
-	# Clear status if showing refresh message
-	if status_label.text == "Refreshing...":
-		_show_status("", true)
+	# Clear and populate friends data
+	friends_data.clear()
+	for friend in friends:
+		var friend_id: String = friend.get("id", "")
+		if not friend_id.is_empty():
+			friends_data[friend_id] = {
+				"username": friend.get("username", "Unknown"),
+				"avatar": friend.get("avatar", ""),
+				"friend_code": friend.get("friend_code", ""),
+				"total_catches": friend.get("total_catches", 0),
+				"unique_species": friend.get("unique_species", 0)
+			}
 
+	_populate_filter_dropdown()
 
-func _populate_friends_list() -> void:
-	"""Populate the friends list with friend items"""
-	# Clear existing items
-	for child in friends_list.get_children():
-		child.queue_free()
-
-	# Show empty state if no friends
-	if friends_data.size() == 0:
-		var empty_label := Label.new()
-		empty_label.text = "No friends yet. Add your first friend using their friend code!"
-		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-		friends_list.add_child(empty_label)
+	if friends_data.is_empty():
+		_show_status("No friends yet. Add friends to see their catches!", false)
+		_display_empty_state()
 		return
 
-	# Add friend items
-	for friend in friends_data:
-		var item = friend_item_scene.instantiate()
-		friends_list.add_child(item)
-		item.set_friend_data(friend)
-
-		# Connect signals with context binding
-		item.view_dex_requested.connect(_on_view_friend_dex.bind(friend))
-		item.view_tree_requested.connect(_on_view_friend_tree.bind(friend))
-		item.remove_requested.connect(_on_remove_friend.bind(friend))
+	# Start syncing all friends' dex entries
+	_sync_all_friends()
 
 
-func _load_pending_requests() -> void:
-	"""Load pending friend requests from API"""
-	print("[Social] Loading pending requests...")
-	APIManager.social.get_pending_requests(_on_pending_loaded)
+func _populate_filter_dropdown() -> void:
+	"""Populate the filter dropdown with friend names"""
+	filter_dropdown.clear()
+	filter_dropdown.add_item("All Friends", 0)
+
+	var index := 1
+	for friend_id in friends_data.keys():
+		var friend_info: Dictionary = friends_data[friend_id]
+		var username: String = friend_info.get("username", "Unknown")
+		filter_dropdown.add_item(username, index)
+		# Store friend_id in metadata
+		filter_dropdown.set_item_metadata(index, friend_id)
+		index += 1
 
 
-func _on_pending_loaded(response: Dictionary, code: int) -> void:
-	"""Handle pending requests response"""
-	if code != 200:
-		var error_msg: String = response.get("error", "Failed to load pending requests")
-		print("[Social] ERROR loading pending requests: ", error_msg)
+func _sync_all_friends() -> void:
+	"""Start syncing all friends' dex entries using batch sync"""
+	if is_syncing:
+		print("[DexFeed] Already syncing, skipping duplicate request")
 		return
 
-	pending_requests = response.get("requests", [])
-	print("[Social] Loaded %d pending requests" % pending_requests.size())
-	_populate_pending_list()
+	is_syncing = true
 
-	# Update tab badge (if TabContainer supports it)
-	# For now, just update the tab name
-	if pending_requests.size() > 0:
-		tab_container.set_tab_title(1, "Pending (%d)" % pending_requests.size())
+	print("[DexFeed] Starting batch sync for %d friends" % friends_data.size())
+	_show_status("Syncing friends' dex entries...", true)
+	_show_loading(true)
+
+	sync_started.emit()
+
+	# Build batch sync request for friends only (not self)
+	var sync_requests := []
+	for friend_id in friends_data.keys():
+		sync_requests.append({
+			"user_id": friend_id,
+			"last_sync": SyncManager.get_last_sync(friend_id)
+		})
+
+	# Execute batch sync
+	var req_config = APIManager.dex._create_request_config()
+	APIManager.dex.api_client.post(
+		"/dex/entries/batch_sync/",
+		{"sync_requests": sync_requests},
+		_on_batch_sync_success,
+		_on_batch_sync_api_error,
+		req_config
+	)
+
+
+func _on_batch_sync_success(response: Dictionary) -> void:
+	"""Handle successful batch sync API response"""
+	_on_batch_sync_completed(response, 200)
+
+
+func _on_batch_sync_api_error(error) -> void:
+	"""Handle batch sync API error"""
+	var error_msg: String = ""
+	var error_code: int = 500
+
+	if error is Dictionary:
+		error_msg = error.get("message", "Unknown error")
+		error_code = error.get("code", 500)
 	else:
-		tab_container.set_tab_title(1, "Pending")
+		error_msg = str(error)
+
+	_on_batch_sync_error({"error": error_msg}, error_code)
 
 
-func _populate_pending_list() -> void:
-	"""Populate the pending requests list"""
-	# Clear existing items
-	for child in pending_list.get_children():
+func _on_batch_sync_completed(response: Dictionary, code: int) -> void:
+	"""Handle completion of batch sync"""
+	if code != 200:
+		print("[DexFeed] ERROR: Batch sync failed with code: ", code)
+		_show_status("Sync failed", false)
+		_show_loading(false)
+		is_syncing = false
+		return
+
+	var results: Dictionary = response.get("results", {})
+	var server_time: String = response.get("server_time", "")
+
+	print("[DexFeed] Batch sync completed: %d users" % results.size())
+
+	# Process each friend's results
+	for user_id in results.keys():
+		var user_result = results[user_id]
+
+		if user_result.has("error"):
+			var error_msg: String = user_result.get("error", "Unknown error")
+			print("[DexFeed] ERROR syncing %s: %s" % [user_id, error_msg])
+			continue
+
+		var entries: Array = user_result.get("entries", [])
+		print("[DexFeed] Processing %d entries for user: %s" % [entries.size(), user_id])
+
+		# Process entries for this user (similar to DexService._process_sync_entries)
+		for entry in entries:
+			var creation_index_val: int = entry.get("creation_index", -1)
+			var existing_record: Dictionary = DexDatabase.get_record_for_user(creation_index_val, user_id)
+			var existing_cached_path: String = existing_record.get("cached_image_path", "")
+
+			var record := {
+				"creation_index": creation_index_val,
+				"scientific_name": entry.get("scientific_name", ""),
+				"common_name": entry.get("common_name", ""),
+				"image_checksum": entry.get("image_checksum", ""),
+				"dex_compatible_url": entry.get("dex_compatible_url", ""),
+				"updated_at": entry.get("updated_at", ""),
+				"cached_image_path": existing_cached_path,
+				"animal_id": entry.get("animal_id", ""),
+				"dex_entry_id": entry.get("id", "")
+			}
+
+			DexDatabase.add_record_from_dict(record, user_id)
+
+		# Update sync timestamp for this user
+		if not server_time.is_empty():
+			SyncManager.update_last_sync(user_id, server_time)
+
+	_on_all_syncs_completed()
+
+
+func _on_batch_sync_error(response: Dictionary, code: int) -> void:
+	"""Handle batch sync error"""
+	var error_msg: String = response.get("error", "Unknown error")
+	print("[DexFeed] ERROR: Batch sync failed: ", error_msg)
+
+	_show_status("Sync failed: %s" % error_msg, false)
+	_show_loading(false)
+	is_syncing = false
+
+	# Still try to display cached data
+	_load_feed_entries()
+	_display_feed()
+
+
+func _on_all_syncs_completed() -> void:
+	"""Called when all friends have been synced"""
+	is_syncing = false
+	_show_loading(false)
+
+	print("[DexFeed] All syncs completed, loading feed entries...")
+	_show_status("Building feed...", true)
+
+	sync_completed.emit()
+
+	# Load and display feed entries
+	_load_feed_entries()
+	_display_feed()
+
+
+func _load_feed_entries() -> void:
+	"""Load feed entries from all friends' cached dex data"""
+	feed_entries.clear()
+
+	# Aggregate entries from all friends
+	for friend_id in friends_data.keys():
+		var friend_entries: Array = DexDatabase.get_all_records_for_user(friend_id)
+		var friend_info: Dictionary = friends_data.get(friend_id, {})
+
+		for entry in friend_entries:
+			var feed_entry := _create_feed_entry(entry, friend_id, friend_info)
+			feed_entries.append(feed_entry)
+
+	# Sort by date (newest first)
+	feed_entries.sort_custom(_sort_by_date_desc)
+
+	print("[DexFeed] Loaded %d feed entries from %d friends" % [feed_entries.size(), friends_data.size()])
+
+
+func _create_feed_entry(dex_record: Dictionary, owner_id: String, friend_info: Dictionary) -> Dictionary:
+	"""Create a feed entry from a dex record"""
+	return {
+		"dex_entry_id": dex_record.get("dex_entry_id", ""),
+		"owner_id": owner_id,
+		"owner_username": friend_info.get("username", "Unknown"),
+		"owner_avatar": friend_info.get("avatar", ""),
+		"creation_index": dex_record.get("creation_index", -1),
+		"animal_id": dex_record.get("animal_id", ""),
+		"scientific_name": dex_record.get("scientific_name", "Unknown"),
+		"common_name": dex_record.get("common_name", ""),
+		"catch_date": dex_record.get("catch_date", dex_record.get("updated_at", "")),
+		"updated_at": dex_record.get("updated_at", ""),
+		"is_favorite": dex_record.get("is_favorite", false),
+		"cached_image_path": dex_record.get("cached_image_path", ""),
+		"dex_compatible_url": dex_record.get("dex_compatible_url", "")
+	}
+
+
+func _sort_by_date_desc(a: Dictionary, b: Dictionary) -> bool:
+	"""Sort feed entries by date (newest first)"""
+	var date_a: String = a.get("updated_at", a.get("catch_date", ""))
+	var date_b: String = b.get("updated_at", b.get("catch_date", ""))
+	return date_a > date_b  # Newest first
+
+
+func _display_feed() -> void:
+	"""Display the feed entries based on current filters"""
+	_clear_feed_display()
+
+	# Apply filters
+	displayed_entries = _apply_filters(feed_entries)
+
+	if displayed_entries.is_empty():
+		_show_status("No entries to display", false)
+		_display_empty_state()
+		return
+
+	# Display entries
+	print("[DexFeed] Displaying %d entries" % displayed_entries.size())
+	for entry in displayed_entries:
+		_add_feed_item(entry)
+
+	_show_status("%d entries" % displayed_entries.size(), true)
+	feed_loaded.emit(displayed_entries.size())
+
+
+func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
+	"""Apply current filters to the feed entries"""
+	if current_filter == "all":
+		return entries.duplicate()
+
+	# Filter by specific friend
+	if not selected_friend_id.is_empty():
+		var filtered: Array[Dictionary] = []
+		for entry in entries:
+			if entry.get("owner_id", "") == selected_friend_id:
+				filtered.append(entry)
+		return filtered
+
+	return entries.duplicate()
+
+
+func _add_feed_item(entry: Dictionary) -> void:
+	"""Add a feed item to the display"""
+	var item = FEED_ITEM_SCENE.instantiate()
+	feed_container.add_child(item)
+	item.setup(entry)
+
+	# Connect signals
+	item.favorite_toggled.connect(_on_entry_favorite_toggled)
+	item.view_in_dex_pressed.connect(_on_view_in_dex)
+
+
+func _clear_feed_display() -> void:
+	"""Clear all feed items from the display"""
+	for child in feed_container.get_children():
 		child.queue_free()
 
-	# Show empty state if no pending requests
-	if pending_requests.size() == 0:
-		var empty_label := Label.new()
-		empty_label.text = "No pending friend requests"
-		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		pending_list.add_child(empty_label)
+
+func _display_empty_state() -> void:
+	"""Display empty state message"""
+	var empty_label := Label.new()
+
+	if friends_data.is_empty():
+		empty_label.text = "No friends yet!\n\nAdd friends to see their catches in the feed."
+	else:
+		empty_label.text = "No entries to display.\n\nYour friends haven't caught any animals yet!"
+
+	empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	empty_label.custom_minimum_size = Vector2(400, 200)
+
+	feed_container.add_child(empty_label)
+
+
+func _on_entry_favorite_toggled(entry_id: String, is_favorite: bool) -> void:
+	"""Handle favorite toggle for a feed entry"""
+	print("[DexFeed] Toggling favorite for entry: %s" % entry_id)
+	# Note: This would toggle the user's own favorite status for a friend's entry
+	# For now, we'll just emit the signal
+	entry_favorited.emit(entry_id, is_favorite)
+
+
+func _on_view_in_dex(entry: Dictionary) -> void:
+	"""Navigate to the friend's dex to view the full entry"""
+	var friend_id: String = entry.get("owner_id", "")
+	var username: String = entry.get("owner_username", "Friend")
+	var creation_index: int = entry.get("creation_index", -1)
+
+	if friend_id.is_empty() or creation_index < 0:
+		print("[DexFeed] ERROR: Invalid entry data for navigation")
 		return
 
-	# Add pending request items
-	for request in pending_requests:
-		var item = pending_item_scene.instantiate()
-		pending_list.add_child(item)
-		item.set_request_data(request)
-
-		# Connect signals with context binding
-		item.accept_requested.connect(_on_accept_request.bind(request))
-		item.reject_requested.connect(_on_reject_request.bind(request))
-		item.block_requested.connect(_on_block_request.bind(request))
-
-
-func _on_view_friend_dex(friend: Dictionary) -> void:
-	"""Navigate to friend's dex"""
-	var friend_id: String = friend.get("id", "")
-	var username: String = friend.get("username", "Friend")
-
-	if friend_id.is_empty():
-		print("[Social] ERROR: Friend ID is empty")
-		return
-
-	print("[Social] Navigating to dex for friend: ", username)
+	print("[DexFeed] Navigating to dex for %s, entry #%d" % [username, creation_index])
 
 	# Set navigation context
 	NavigationManager.set_context({
 		"user_id": friend_id,
-		"username": username
+		"username": username,
+		"creation_index": creation_index,
+		"from_feed": true
 	})
 
 	NavigationManager.navigate_to("res://dex.tscn")
 
 
-func _on_view_friend_tree(friend: Dictionary) -> void:
-	"""Navigate to taxonomic tree showing this specific friend's entries"""
-	var friend_id: String = friend.get("id", "")
-	var username: String = friend.get("username", "Friend")
+func _on_back_pressed() -> void:
+	"""Navigate back to previous scene"""
+	print("[DexFeed] Back button pressed")
+	NavigationManager.go_back()
 
-	if friend_id.is_empty():
-		print("[Social] ERROR: Friend ID is empty")
+
+func _on_refresh_pressed() -> void:
+	"""Refresh the feed by re-syncing all friends"""
+	print("[DexFeed] Refresh button pressed")
+	_show_status("Refreshing...", true)
+	_sync_all_friends()
+
+
+func _on_filter_all_pressed() -> void:
+	"""Show all friends' entries"""
+	print("[DexFeed] Filter: All friends")
+	current_filter = "all"
+	selected_friend_id = ""
+	filter_dropdown.selected = 0
+	_display_feed()
+
+
+func _on_filter_dropdown_selected(index: int) -> void:
+	"""Handle filter dropdown selection"""
+	if index == 0:
+		# "All Friends" selected
+		_on_filter_all_pressed()
 		return
 
-	print("[Social] Navigating to tree view for friend: ", username)
+	# Get friend_id from metadata
+	var friend_id = filter_dropdown.get_item_metadata(index)
+	if friend_id is String and not friend_id.is_empty():
+		var friend_info: Dictionary = friends_data.get(friend_id, {})
+		var username: String = friend_info.get("username", "Unknown")
 
-	# Set navigation context to use SELECTED mode with just this friend
-	# Note: This shows the current user + this specific friend's entries
-	NavigationManager.set_context({
-		"mode": "selected",
-		"friend_id": friend_id,
-		"username": username
-	})
-
-	NavigationManager.navigate_to("res://tree.tscn")
-
-
-func _on_remove_friend(friend: Dictionary) -> void:
-	"""Show confirmation dialog before removing friend"""
-	pending_removal_friend = friend
-	var username: String = friend.get("username", "this friend")
-
-	# Find friendship ID - need to look through friends_data for the friendship relationship
-	# The API response should include friendship details
-	var friendship_id: String = _get_friendship_id_for_friend(friend)
-
-	if friendship_id.is_empty():
-		print("[Social] ERROR: Could not find friendship ID for friend: ", username)
-		_show_status("Error: Could not remove friend", false)
-		return
-
-	pending_removal_friendship_id = friendship_id
-
-	confirmation_dialog.dialog_text = "Remove %s from your friends?\n\nThis action cannot be undone." % username
-	confirmation_dialog.popup_centered()
+		print("[DexFeed] Filter: %s" % username)
+		current_filter = "friend"
+		selected_friend_id = friend_id
+		_display_feed()
 
 
-func _get_friendship_id_for_friend(friend: Dictionary) -> String:
-	"""Extract friendship ID from friend data"""
-	# The friend data structure from the API should include the friendship_id
-	# or we need to derive it from the relationship
-	var friend_id: String = friend.get("id", "")
-
-	# For now, we'll need to store the friendship_id when we load friends
-	# The API returns friends with their details but we need the friendship record ID
-	# This is a limitation - we may need to modify the API response or track it separately
-
-	# Workaround: The friendship ID might be in the response, or we need to query it
-	# For now, return the friend's user ID and we'll handle it in the API call
-	return friend_id
-
-
-func _confirm_remove_friend() -> void:
-	"""Actually remove the friend after confirmation"""
-	var username: String = pending_removal_friend.get("username", "friend")
-	print("[Social] Removing friend: ", username)
-
-	_show_status("Removing friend...", true)
-
-	# Note: The unfriend API expects a friendship ID, not user ID
-	# We need to store friendship IDs with friends, or make an additional lookup
-	# For now, we'll pass the user_id and handle the lookup server-side if needed
-	APIManager.social.unfriend(pending_removal_friendship_id, _on_friend_removed)
-
-
-func _on_friend_removed(response: Dictionary, code: int) -> void:
-	"""Handle friend removal response"""
-	if code == 200 or code == 204:
-		var username: String = pending_removal_friend.get("username", "Friend")
-		_show_status("%s has been removed from your friends" % username, true)
-
-		# Refresh the friends list
-		await get_tree().create_timer(1.0).timeout
-		_load_friends()
-		_show_status("", true)
-	else:
-		var error_msg: String = response.get("error", "Failed to remove friend")
-		_show_status("Error: %s" % error_msg, false)
-
-	pending_removal_friend = {}
-	pending_removal_friendship_id = ""
-
-
-func _on_accept_request(request: Dictionary) -> void:
-	"""Accept a friend request"""
-	var request_id: String = request.get("id", "")
-	var from_user: Dictionary = request.get("from_user_details", {})
-	var username: String = from_user.get("username", "user")
-
-	if request_id.is_empty():
-		print("[Social] ERROR: Request ID is empty")
-		return
-
-	print("[Social] Accepting friend request from: ", username)
-	_show_status("Accepting friend request...", true)
-
-	APIManager.social.respond_to_request(request_id, "accept", _on_request_responded)
-
-
-func _on_reject_request(request: Dictionary) -> void:
-	"""Reject a friend request"""
-	var request_id: String = request.get("id", "")
-	var from_user: Dictionary = request.get("from_user_details", {})
-	var username: String = from_user.get("username", "user")
-
-	if request_id.is_empty():
-		print("[Social] ERROR: Request ID is empty")
-		return
-
-	print("[Social] Rejecting friend request from: ", username)
-	_show_status("Rejecting friend request...", true)
-
-	APIManager.social.respond_to_request(request_id, "reject", _on_request_responded)
-
-
-func _on_block_request(request: Dictionary) -> void:
-	"""Block a user from a friend request"""
-	var request_id: String = request.get("id", "")
-	var from_user: Dictionary = request.get("from_user_details", {})
-	var username: String = from_user.get("username", "user")
-
-	if request_id.is_empty():
-		print("[Social] ERROR: Request ID is empty")
-		return
-
-	print("[Social] Blocking user: ", username)
-	_show_status("Blocking user...", true)
-
-	APIManager.social.respond_to_request(request_id, "block", _on_request_responded)
-
-
-func _on_request_responded(response: Dictionary, code: int) -> void:
-	"""Handle response to friend request"""
-	if code == 200:
-		_show_status("Request processed successfully", true)
-
-		# Refresh both lists
-		await get_tree().create_timer(1.0).timeout
-		_load_friends()
-		_load_pending_requests()
-		_show_status("", true)
-	else:
-		var error_msg: String = response.get("error", "Failed to process request")
-		_show_status("Error: %s" % error_msg, false)
+func _show_loading(visible: bool) -> void:
+	"""Show or hide loading overlay"""
+	if loading_overlay:
+		loading_overlay.visible = visible
 
 
 func _show_status(message: String, is_success: bool) -> void:
 	"""Show status message with appropriate color"""
+	if not status_label:
+		return
+
 	status_label.text = message
 
 	if message.is_empty():
 		status_label.modulate = Color.WHITE
-	elif is_success:
-		status_label.modulate = Color.GREEN
+		status_label.visible = false
 	else:
-		status_label.modulate = Color.RED
+		status_label.visible = true
+		if is_success:
+			status_label.modulate = Color.GREEN
+		else:
+			status_label.modulate = Color.RED
