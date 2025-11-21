@@ -1,9 +1,10 @@
-extends BaseSceneController
+extends Control
 ## Social Scene - Manage friends and friend requests
-## Refactored: 443 → ~415 lines (6% reduction)
 
-# Note: Services (TokenManager, NavigationManager, APIManager)
-# are automatically initialized by BaseSceneController
+# Services
+var TokenManager
+var NavigationManager
+var APIManager
 
 # UI References
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
@@ -31,10 +32,24 @@ var pending_removal_friend: Dictionary = {}
 var pending_removal_friendship_id: String = ""
 
 
-func _on_scene_ready() -> void:
-	"""Called by BaseSceneController after managers are initialized and auth is checked"""
-	scene_name = "Social"
-	print("[Social] Scene ready (refactored v2)")
+func _ready() -> void:
+	print("[Social] Scene loaded")
+
+	# Initialize services (with fallback to autoloads)
+	_initialize_services()
+
+	# Check authentication
+	if not TokenManager.is_logged_in():
+		print("[Social] ERROR: User not logged in")
+		NavigationManager.go_back()
+		return
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	TokenManager = get_node("/root/TokenManager")
+	NavigationManager = get_node("/root/NavigationManager")
+	APIManager = get_node("/root/APIManager")
 
 	# Connect UI signals
 	back_button.pressed.connect(_on_back_pressed)

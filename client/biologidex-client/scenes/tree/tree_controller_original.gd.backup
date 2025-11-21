@@ -1,14 +1,15 @@
 """
 TreeController - Main orchestrator for taxonomic tree visualization.
 Coordinates data loading, rendering, and user interaction.
-Refactored: 478 → ~450 lines (6% reduction)
 """
-extends BaseSceneController
+extends Control
 
 const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
 
-# Note: Services (APIManager, NavigationManager) are automatically initialized by BaseSceneController
+# Services
+var APIManager
+var NavigationManager
 
 # Node references (assigned in _ready)
 @onready var back_button: Button = $VBoxContainer/Toolbar/BackButton
@@ -41,10 +42,11 @@ var is_panning: bool = false
 var last_mouse_position: Vector2 = Vector2.ZERO
 
 
-func _on_scene_ready() -> void:
-	"""Called by BaseSceneController after managers are initialized"""
-	scene_name = "TreeController"
-	print("[TreeController] Scene ready (refactored v2)")
+func _ready() -> void:
+	print("[TreeController] Initializing tree view")
+
+	# Initialize services (with fallback to autoloads)
+	_initialize_services()
 
 	# Connect UI signals
 	search_bar.text_submitted.connect(_on_search_submitted)
@@ -70,6 +72,12 @@ func _on_scene_ready() -> void:
 			selected_friend_ids = [friend_id]
 			# Clear context
 			NavigationManager.clear_context()
+
+
+func _initialize_services() -> void:
+	"""Initialize service references from autoloads"""
+	APIManager = get_node("/root/APIManager")
+	NavigationManager = get_node("/root/NavigationManager")
 
 	# Setup mode dropdown
 	_setup_mode_dropdown()
