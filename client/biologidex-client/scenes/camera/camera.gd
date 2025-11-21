@@ -275,14 +275,19 @@ func _on_file_loaded(file_name: String, file_type: String, base64_data: String) 
 	upload_button.text = "Upload for Analysis"
 	progress_label.text = ""
 
+	# Update state to IMAGE_SELECTED regardless of preview success (we have valid file data)
+	current_state = CameraState.IMAGE_SELECTED
+	total_rotation = 0  # Reset rotation
+
 	# Update visibility: Hide select/instruction, show rotation button when preview succeeds
 	if preview_result.success:
 		select_photo_button.visible = false
 		instruction_label.visible = false
 		rotate_image_button.visible = true
 		rotate_image_button.disabled = false  # Re-enable rotation button
-		total_rotation = 0  # Reset rotation
-		current_state = CameraState.IMAGE_SELECTED  # Update state
+	else:
+		# Preview failed but we can still upload - disable rotation, keep select visible
+		rotate_image_button.visible = false
 
 	print("[Camera] File ready for upload - Size: ", selected_file_data.size(), " bytes")
 

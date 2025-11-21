@@ -1203,6 +1203,70 @@ docker-compose -f docker-compose.production.yml exec db pg_dump -U biologidex bi
 docker-compose -f docker-compose.production.yml exec -T db psql -U biologidex biologidex < backup.sql
 ```
 
+### Full Database Reset
+
+To completely reset the database (users, animals with creation_index, and dex entries) on the production server:
+
+**⚠️ WARNING**: This will permanently delete all user data, animals, and dex entries. Always create a backup first!
+
+```bash
+# 1. Create a backup first (optional but recommended)
+docker-compose -f docker-compose.production.yml exec db pg_dump -U biologidex biologidex > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. Stop all services
+docker-compose -f docker-compose.production.yml down
+
+# 3. Remove the database volume (this deletes all data)
+docker volume rm server_postgres_data
+
+# 4. Start services (creates fresh database)
+docker-compose -f docker-compose.production.yml up -d
+
+# 5. Wait for database to be ready (10-15 seconds)
+sleep 15
+
+# 6. Run migrations in order
+docker-compose -f docker-compose.production.yml exec web python manage.py makemigrations accounts animals dex social vision images taxonomy
+docker-compose -f docker-compose.production.yml exec web python manage.py migrate
+
+# 7. Load taxonomy fixtures
+docker-compose -f docker-compose.production.yml exec web python manage.py loaddata taxonomy/fixtures/ranks.json
+
+# 8. Create a new superuser
+docker-compose -f docker-compose.production.yml exec web python manage.py createsuperuser
+
+# 9. (Optional) Seed test data
+docker-compose -f docker-compose.production.yml exec web python manage.py seed_test_users
+
+# 10. Verify the reset
+docker-compose -f docker-compose.production.yml exec web python manage.py shell -c "from accounts.models import User; from animals.models import Animal; from dex.models import DexEntry; print(f'Users: {User.objects.count()}, Animals: {Animal.objects.count()}, Dex Entries: {DexEntry.objects.count()}')"
+```
+
+**Notes:**
+- The database volume name may vary. Check with: `docker volume ls | grep postgres`
+- If the volume name is different, replace `server_postgres_data` with the actual volume name
+- After reset, the Animal creation_index counter will restart from 1
+- You may need to reload taxonomy data if using COL integration: `docker-compose -f docker-compose.production.yml exec web python manage.py import_col --async`
+- Media files (uploaded images) are stored separately and won't be deleted by this process. To also remove media files, use: `rm -rf /var/lib/biologidex/media/*`
+
+**Selective Reset:**
+
+To reset only specific tables without recreating the entire database:
+
+```bash
+# Reset only users
+docker-compose -f docker-compose.production.yml exec db psql -U biologidex biologidex -c "TRUNCATE accounts_user CASCADE;"
+
+# Reset only animals (includes cascade to dex entries)
+docker-compose -f docker-compose.production.yml exec db psql -U biologidex biologidex -c "TRUNCATE animals_animal CASCADE;"
+
+# Reset only dex entries
+docker-compose -f docker-compose.production.yml exec db psql -U biologidex biologidex -c "TRUNCATE dex_dexentry CASCADE;"
+
+# Reset creation_index sequence after deleting animals
+docker-compose -f docker-compose.production.yml exec db psql -U biologidex biologidex -c "SELECT setval('animals_animal_creation_index_seq', 1, false);"
+```
+
 ---
 
 ## Troubleshooting

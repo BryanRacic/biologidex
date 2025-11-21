@@ -27,8 +27,8 @@ SyncManager="*res://features/database/sync_manager.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=1080
+window/size/viewport_height=1920
 window/size/mode=2
 window/size/initial_position_type=3
 window/size/window_width_override=1280
@@ -43,6 +43,7 @@ enabled=PackedStringArray("res://addons/godot-file-access-web/addons/FileAccessW
 [gui]
 
 theme/default_font_multichannel_signed_distance_field=true
+theme/default_theme_scale=2.0
 
 [rendering]
 

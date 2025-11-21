@@ -98,6 +98,10 @@ class TaxonomicRankAdmin(admin.ModelAdmin):
 
 @admin.register(Taxonomy)
 class TaxonomyAdmin(admin.ModelAdmin):
+    # CRITICAL: Pagination for 9M+ records
+    list_per_page = 50
+    show_full_result_count = False  # Disable COUNT(*) query on massive table
+
     list_display = [
         'scientific_name', 'rank', 'status', 'kingdom',
         'phylum', 'class_name', 'genus', 'specific_epithet',
@@ -109,14 +113,15 @@ class TaxonomyAdmin(admin.ModelAdmin):
     ]
     search_fields = [
         'scientific_name', 'genus', 'species', 'specific_epithet',
-        'infraspecific_epithet', 'subspecies',
-        'source_taxon_id', 'common_names__name'
+        'infraspecific_epithet', 'subspecies', 'source_taxon_id'
+        # REMOVED: 'common_names__name' - too expensive on massive table
     ]
     readonly_fields = [
         'id', 'created_at', 'updated_at', 'completeness_score',
         'full_hierarchy_display', 'common_names_display'
     ]
     autocomplete_fields = ['parent', 'accepted_name']
+    list_select_related = ['source', 'rank']  # Optimize FK lookups
 
     fieldsets = (
         ('Identification', {
@@ -164,6 +169,16 @@ class TaxonomyAdmin(admin.ModelAdmin):
         })
     )
 
+    def get_queryset(self, request):
+        """Optimize queryset for large dataset"""
+        qs = super().get_queryset(request)
+        # Use select_related for foreign keys to avoid N+1 queries
+        qs = qs.select_related('source', 'rank', 'import_job')
+        # Add ordering to ensure consistent pagination
+        if not qs.ordered:
+            qs = qs.order_by('-created_at')
+        return qs
+
     def source_link(self, obj):
         if obj.source_url:
             return format_html(
@@ -199,14 +214,21 @@ class TaxonomyAdmin(admin.ModelAdmin):
 
     def common_names_display(self, obj):
         """Display common names for this taxonomy"""
-        names = obj.common_names.all()[:10]
-        if not names:
+        # Fetch 6 to check if there are more, only fetch minimal fields
+        names_list = list(obj.common_names.only('name', 'language', 'is_preferred')[:6])
+        if not names_list:
             return '-'
+
+        has_more = len(names_list) > 5
+        display_names = names_list[:5]
+
         html = '<ul style="margin: 0; padding-left: 20px;">'
-        for cn in names:
+        for cn in display_names:
             preferred = ' ⭐' if cn.is_preferred else ''
             html += f'<li>{cn.name} ({cn.language}){preferred}</li>'
         html += '</ul>'
+        if has_more:
+            html += '<i>(showing 5 of many)</i>'
         return format_html(html)
     common_names_display.short_description = 'Common Names'
 

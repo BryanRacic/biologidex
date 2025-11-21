@@ -9,7 +9,7 @@ var APIManager
 # UI References
 @onready var back_button: Button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
 @onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
-@onready var friend_code_display: Label = $Panel/MarginContainer/VBoxContainer/YourFriendCodeSection/FriendCodeDisplay
+@onready var friend_code_display: LineEdit = $Panel/MarginContainer/VBoxContainer/YourFriendCodeSection/FriendCodeDisplay
 @onready var friend_code_input: LineEdit = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/FriendCodeInput
 @onready var add_button: Button = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/AddButton
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/AddFriendSection/StatusLabel

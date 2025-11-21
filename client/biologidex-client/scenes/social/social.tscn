@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://b3v8k7nan2wq1"]
 
-[ext_resource type="Script" path="res://scenes/social/social.gd" id="1_social"]
+[ext_resource type="Script" uid="uid://ufjiddqqtcsm" path="res://scenes/social/social.gd" id="1_social"]
 
 [node name="Social" type="Control"]
 layout_mode = 3
@@ -67,10 +67,13 @@ layout_mode = 2
 theme_type_variation = &"HeaderMedium"
 text = "Your Friend Code:"
 
-[node name="FriendCodeDisplay" type="Label" parent="Panel/MarginContainer/VBoxContainer/YourFriendCodeSection"]
+[node name="FriendCodeDisplay" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/YourFriendCodeSection"]
+custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Loading..."
+size_flags_horizontal = 3
+placeholder_text = "Loading..."
+max_length = 8
+editable = false
 
 [node name="HSeparator3" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
