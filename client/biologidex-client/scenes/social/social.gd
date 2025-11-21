@@ -263,7 +263,7 @@ func _on_view_friend_dex(friend: Dictionary) -> void:
 		"username": username
 	})
 
-	NavigationManager.navigate_to("res://dex.tscn")
+	NavigationManager.navigate_to("res://scenes/dex/dex.tscn")
 
 
 func _on_view_friend_tree(friend: Dictionary) -> void:
@@ -285,7 +285,7 @@ func _on_view_friend_tree(friend: Dictionary) -> void:
 		"username": username
 	})
 
-	NavigationManager.navigate_to("res://tree.tscn")
+	NavigationManager.navigate_to("res://scenes/tree/tree.tscn")
 
 
 func _on_remove_friend(friend: Dictionary) -> void:
