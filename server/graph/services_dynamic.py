@@ -218,9 +218,17 @@ class DynamicTaxonomicTreeService:
                     path.append(value)
 
                     if value not in current_node['children']:
+                        # Create unique ID - for species, include genus to prevent collisions
+                        # (e.g., "Canis lupus" and "Vulpes lupus" are different species)
+                        if rank == 'species' and len(path) >= 2:
+                            # Include genus in species ID: "species_Canis_lupus"
+                            node_id = f"species_{path[-2]}_{value}".replace(' ', '_')
+                        else:
+                            node_id = f"{rank}_{value}".replace(' ', '_')
+
                         # Create virtual node for taxonomic rank
                         current_node['children'][value] = {
-                            'id': f"{rank}_{value}".replace(' ', '_'),
+                            'id': node_id,
                             'name': value,
                             'rank': rank,
                             'path': '/'.join(path),
