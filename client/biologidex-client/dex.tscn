@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://cg0yoe60uiwat"]
 
-[ext_resource type="Script" path="res://dex.gd" id="1_dex_script"]
+[ext_resource type="Script" path="res://scenes/dex/dex.gd" id="1_dex_script"]
 [ext_resource type="PackedScene" uid="uid://cwxkm5mw4opxq" path="res://record_image.tscn" id="3_6jk22"]
 
 [node name="Dex" type="Control"]

@@ -126,9 +126,25 @@ func _check_and_sync_if_needed() -> void:
 	var last_sync: String = SyncManager.get_last_sync("self")
 	var never_synced: bool = last_sync.is_empty()
 
+	# Check if database has corrupted data (records with no valid images)
+	var has_corrupted_data: bool = false
+	if first_index >= 0:
+		var first_record: Dictionary = DexDatabase.get_record_for_user(first_index, "self")
+		var image_path: String = first_record.get("cached_image_path", "")
+		if image_path.is_empty() or not FileAccess.file_exists(image_path):
+			has_corrupted_data = true
+			print("[Dex] Detected corrupted data (record #%d has invalid image)" % first_index)
+
+	# Force full sync if we have corrupted data
+	if has_corrupted_data and not never_synced:
+		print("[Dex] Forcing full sync to repair corrupted database")
+		SyncManager.clear_sync("self")
+
 	# Always trigger sync (will be incremental if last_sync exists)
 	if database_empty or never_synced:
 		print("[Dex] Auto-triggering initial sync (database_empty=%s, never_synced=%s)" % [database_empty, never_synced])
+	elif has_corrupted_data:
+		print("[Dex] Auto-triggering full sync to repair database")
 	else:
 		print("[Dex] Auto-triggering incremental sync (last_sync: %s)" % last_sync)
 
@@ -140,7 +156,15 @@ func _load_first_record() -> void:
 	var first_index: int = DexDatabase.get_first_index_for_user(current_user_id)
 
 	if first_index >= 0:
-		_display_record(first_index)
+		# Validate that the record has a valid image before displaying
+		var record: Dictionary = DexDatabase.get_record_for_user(first_index, current_user_id)
+		var image_path: String = record.get("cached_image_path", "")
+
+		if image_path.length() > 0 and FileAccess.file_exists(image_path):
+			_display_record(first_index)
+		else:
+			print("[Dex] First record #%d has invalid image, showing empty state until sync completes" % first_index)
+			_show_empty_state()
 	else:
 		_show_empty_state()
 
@@ -385,6 +409,24 @@ func _on_sync_user_completed(user_id: String, entries_updated: int) -> void:
 		is_syncing = false
 		print("[Dex] Sync completed: %d entries updated" % entries_updated)
 		# TODO: Hide progress bar, enable sync button, show success message
+
+		# If sync returned 0 entries and we have invalid local data, clean it up
+		if entries_updated == 0:
+			var all_indices = DexDatabase.get_sorted_indices_for_user(current_user_id)
+			var cleaned_count = 0
+			for index in all_indices:
+				var record = DexDatabase.get_record_for_user(index, current_user_id)
+				var image_path: String = record.get("cached_image_path", "")
+				if image_path.is_empty() or not FileAccess.file_exists(image_path):
+					print("[Dex] Removing corrupted record #%d (no valid image)" % index)
+					DexDatabase.remove_record(index, current_user_id)
+					cleaned_count += 1
+
+			if cleaned_count > 0:
+				print("[Dex] Cleaned %d corrupted records" % cleaned_count)
+				# Refresh display after cleanup
+				_load_first_record()
+				return
 
 		# If we just edited an entry and it was synced, find and display the updated record
 		if not pending_edit_dex_entry_id.is_empty():
