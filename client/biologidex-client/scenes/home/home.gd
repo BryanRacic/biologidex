@@ -1,16 +1,20 @@
-extends Control
+extends Node2D
 
 # Home scene - Main screen after login
 # Provides navigation to main app features
 
-# UI Elements
-@onready var welcome_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/WelcomeLabel
-@onready var camera_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/CameraButton
-@onready var dex_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/DexButton
-@onready var feed_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/FeedButton
-@onready var tree_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/TreeButton
-@onready var social_button: Button = $Panel/MarginContainer/VBoxContainer/Footer/SocialButton
-@onready var menu_button: Button = $Panel/MarginContainer/VBoxContainer/Header/MenuButton
+# Background settings
+@onready var mat := get_node("%Background").material as ShaderMaterial
+@export var scroll_speed := Vector2(30.0, 20.0) # px/sec
+var scroll_accum := Vector2.ZERO
+
+# UI Elementsad
+@onready var camera_button: Button = get_node("%CameraButton")
+@onready var dex_button: Button = get_node("%DexButton")
+@onready var feed_button: Button = get_node("%FeedButton")
+@onready var tree_button: Button = get_node("%TreeButton")
+@onready var social_button: Button = get_node("%SocialButton")
+@onready var menu_button: Button = get_node("%MenuButton")
 
 # Services (accessed via ServiceLocator)
 var token_manager
@@ -23,10 +27,8 @@ func _ready() -> void:
 	# Get services from ServiceLocator
 	_initialize_services()
 
-	# Update welcome message with username
 	if token_manager.is_logged_in():
 		var username: String = token_manager.get_username()
-		welcome_label.text = "Welcome back, %s!" % username
 		print("[Home] User logged in: ", username)
 	else:
 		print("[Home] WARNING: User not logged in, redirecting to login")
@@ -41,6 +43,9 @@ func _ready() -> void:
 	social_button.pressed.connect(_on_social_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
 
+func _process(delta):
+	scroll_accum += scroll_speed * delta
+	mat.set_shader_parameter("scroll", scroll_accum)
 
 func _initialize_services() -> void:
 	"""Initialize service references from autoloads"""
