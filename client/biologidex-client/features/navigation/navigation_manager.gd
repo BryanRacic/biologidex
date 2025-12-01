@@ -11,6 +11,39 @@ var max_stack_size: int = 10  # Prevent memory issues with very deep navigation
 var navigation_context: Dictionary = {}  # Context data to pass to next scene
 
 
+func _ready() -> void:
+	_setup_display_scaling()
+
+
+func _setup_display_scaling() -> void:
+	"""Configure display scaling for high DPI devices"""
+	var screen_count := DisplayServer.get_screen_count()
+	var primary_screen := DisplayServer.get_primary_screen()
+	var screen_dpi := DisplayServer.screen_get_dpi(primary_screen)
+	var screen_size := DisplayServer.screen_get_size(primary_screen)
+
+	# Log display info for debugging
+	print("[Display] Screens: %d, Primary DPI: %d, Size: %s" % [screen_count, screen_dpi, screen_size])
+
+	# On web, get_screen_scale returns 1.0 but the browser handles DPI
+	# On desktop, we may need to adjust content_scale_factor
+	if OS.has_feature("web"):
+		# Web platforms handle DPI via HTML/CSS - log for debugging
+		print("[Display] Web platform detected - DPI handled by browser")
+	else:
+		# Desktop platforms - check if we need scale adjustment
+		var window := get_window()
+		if window and screen_dpi > 0:
+			# Standard DPI is ~96 on Windows, ~72 on macOS
+			# If DPI is significantly higher, we may be on a high DPI display
+			var base_dpi := 96.0 if OS.has_feature("windows") else 72.0
+			var scale_factor := screen_dpi / base_dpi
+
+			if scale_factor > 1.5:
+				print("[Display] High DPI detected (scale: %.2f)" % scale_factor)
+				# content_scale_factor is automatically handled by allow_hidpi setting
+
+
 func navigate_to(scene_path: String, clear_history: bool = false) -> void:
 	"""
 	Navigate to a new scene

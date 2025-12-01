@@ -45,7 +45,7 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@biologidex.com')
 # Celery - async tasks in production
 CELERY_TASK_ALWAYS_EAGER = False
 
-# Stricter CORS in production
+# Stricter CORS in production (LAN regex patterns inherited from base.py)
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
 

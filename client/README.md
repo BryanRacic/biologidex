@@ -67,6 +67,76 @@ client/
 └── README.md                 # This file
 ```
 
+## In-Editor Web Debug
+### Step 1: Configure Editor Settings
+
+In Godot, go to **Editor → Editor Settings → Export → Web** and modify these settings:
+
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| **Http Host** | `0.0.0.0` | By default, it will only listen to local connections for security. Change it to `0.0.0.0` to listen to connections on any interface. |
+| **Http Port** | `8060` (default) | The port the server listens on |
+| **Use Ssl** | `true` (recommended) | Enable HTTPS for full feature support |
+
+### Step 2: Enable HTTPS (Important for Mobile)
+
+More and more features like threads, gamepads, clipboard access, etc., have been disabled by browser vendors when running from a page served without HTTPS. Enabling SSL ensures your mobile browser can use all features.
+
+`Ssl Key` and `Ssl Certificate` can be optionally specified to provide your own SSL certificate and key (otherwise, a self-signed certificate will be generated).
+
+### Step 3: Find Your Desktop's IP Address
+
+```bash
+# On Ubuntu
+ip addr show | grep "inet " | grep -v 127.0.0.1
+# or
+hostname -I
+```
+
+Note your local IP (e.g., `192.168.1.100`).
+
+### Step 4: Run & Test
+
+1. In Godot, click **Remote Debug → Run in Browser** (the fourth button from the right in the top-right corner)
+2. On your mobile device, open a browser and navigate to:
+   - **With SSL:** `https://192.168.1.100:8060/tmp_js_export.html`
+   - **Without SSL:** `http://192.168.1.100:8060/tmp_js_export.html`
+3. Accept the self-signed certificate warning on mobile if using HTTPS
+
+### Workflow Tips for UI Development
+
+**Fast iteration loop:**
+1. Make UI changes in Godot editor
+2. Click Remote Deploy → Run in Browser
+3. Refresh your mobile browser (the URL stays the same)
+4. See changes instantly
+
+**For threading issues:** If you encounter errors about `SharedArrayBuffer`, Godot 4.3 games exported to the web without Thread Support are not subject to this restriction, making them compatible with more environments. You can disable Thread Support in your web export preset for simpler testing.
+
+## Web Export & High DPI Displays
+
+The project uses a custom HTML shell (`export_templates/custom_html_shell.html`) to properly handle high DPI displays (retina screens, high-res mobile devices, MacBook Pros).
+
+### Key Settings
+
+**project.godot:**
+- `window/stretch/mode="canvas_items"` - Properly scales UI for any resolution
+- `window/dpi/allow_hidpi=true` - Enables DPI awareness
+
+**export_presets.cfg:**
+- `html/canvas_resize_policy=1` - Uses project resolution (prevents double-scaling)
+- `html/custom_html_shell="res://export_templates/custom_html_shell.html"`
+
+### What the Custom Shell Fixes
+
+- Proper viewport meta for mobile (`viewport-fit=cover`, no user scaling)
+- Canvas fills viewport correctly on high DPI screens
+- Safe area insets for notched devices (iPhone X+, etc.)
+- Prevents pull-to-refresh gesture on mobile
+
+See `export_templates/README.md` for full documentation.
+
+
 ## Current Implementation Analysis
 
 ### Issues Found

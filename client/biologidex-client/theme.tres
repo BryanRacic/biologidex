@@ -79,8 +79,7 @@ corner_radius_bottom_left = 4
 
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_e1x85"]
 color = Color(0, 0, 0, 0.60784316)
-grow_begin = -75.0
-grow_end = -75.0
+thickness = 2
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_e1x85"]
 
@@ -97,6 +96,7 @@ corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
 [resource]
+default_base_scale = 1.0
 default_font_size = 16
 Button/colors/font_color = Color(0, 0, 0, 1)
 Button/colors/font_disabled_color = Color(0.5, 0.5, 0.5, 0.5)

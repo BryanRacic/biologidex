@@ -78,6 +78,10 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **Web Export**:
 - Single-threaded mode (best compatibility)
 - `HTTPRequest.accept_gzip = false` - avoid double decompression
+- **High DPI fix**: Custom HTML shell at `export_templates/custom_html_shell.html`
+  - `canvas_resize_policy=1` (Project) prevents double-scaling
+  - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
+  - Safe area insets for notched devices
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)
@@ -187,6 +191,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **Godot Web Export**:
 - Single-threaded mode: `variant/thread_support=false`
 - 37MB WASM → 9MB gzipped
+- Custom HTML shell: `export_templates/custom_html_shell.html` (high DPI fix)
 - `scripts/export-to-prod.sh` handles export, gzip, backup, deployment
 
 ## Commands

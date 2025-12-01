@@ -31,7 +31,7 @@ window/size/viewport_height=3120
 window/size/initial_position_type=3
 window/size/window_width_override=1280
 window/size/window_height_override=720
-window/stretch/mode="viewport"
+window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=6
 
@@ -42,6 +42,7 @@ enabled=PackedStringArray("res://addons/godot-file-access-web/addons/FileAccessW
 [gui]
 
 theme/default_font_multichannel_signed_distance_field=true
+theme/default_font_generate_mipmaps=true
 theme/default_theme_scale=2.0
 
 [rendering]
