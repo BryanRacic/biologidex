@@ -1,8 +1,9 @@
-extends BaseSceneController
+extends BaseSceneNode
+
 
 # Camera/Upload scene - Highly refactored using component-based architecture
 # Reduced from 1095 lines to ~300 lines by using:
-# - BaseSceneController (eliminates manager initialization)
+# - BaseSceneNode (eliminates manager initialization)
 # - CVAnalysisWorkflow (eliminates conversion + analysis + polling logic)
 # - FileSelector (eliminates file access complexity)
 # - ErrorDialog (standardizes error handling)
@@ -11,22 +12,22 @@ extends BaseSceneController
 # UI Elements
 # ============================================================================
 
-@onready var select_photo_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/SelectPhotoButton
-@onready var upload_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/UploadButton
-@onready var retry_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RetryButton
-@onready var manual_entry_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ManualEntryButton
-@onready var rotate_image_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RotateImageButton
-@onready var instruction_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/InstructionLabel
-@onready var result_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/ResultLabel
+@onready var select_photo_button: Button = get_node("%SelectPhotoButton")
+@onready var upload_button: Button = get_node("%UploadButton")
+@onready var retry_button: Button = get_node("%RetryButton")
+@onready var manual_entry_button: Button = get_node("%ManualEntryButton")
+@onready var rotate_image_button: Button = get_node("%RotateImageButton")
+@onready var instruction_label: Label = get_node("%InstructionLabel")
+@onready var result_label: Label = get_node("%ResultLabel")
 
 # Image display - dex_record_image component with two modes:
 # 1. simple_image: Used for preview during photo selection/rotation
 # 2. bordered_display: Used to show final dex record card with label
-@onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
-@onready var simple_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/Image
-@onready var bordered_display: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio
-@onready var bordered_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/Image
-@onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
+@onready var record_image: Control = get_node("%RecordImage")
+@onready var simple_image: TextureRect = get_node("%RecordImage/SimpleImage")
+@onready var bordered_display: AspectRatioContainer = get_node("%RecordImage/ImageBorderAspectRatio")
+@onready var bordered_image: TextureRect = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/BorderedImage")
+@onready var record_label: Label = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel")
 
 # Components (programmatically instantiated)
 var file_selector: FileSelector
@@ -44,17 +45,9 @@ var current_dex_entry_id: String = ""
 # ============================================================================
 
 func _on_scene_ready() -> void:
-	"""Called by BaseSceneController after managers are initialized"""
+	"""Called by BaseSceneNode after managers are initialized"""
 	scene_name = "Camera"
 	print("[Camera] Scene ready (refactored v2)")
-
-	# Wire up UI elements from scene (BaseSceneController members)
-	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
-	status_label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/StatusLabel
-	loading_spinner = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/LoadingSpinner
-	# Connect back button (set after BaseSceneController._setup_common_ui(), so connect manually)
-	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
-		back_button.pressed.connect(_on_back_pressed)
 
 	# Create and initialize file selector
 	file_selector = FileSelector.new()

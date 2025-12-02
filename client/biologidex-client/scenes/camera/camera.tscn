@@ -1,144 +1,175 @@
-[gd_scene load_steps=3 format=3 uid="uid://b12e8gabmy5f0"]
+[gd_scene load_steps=7 format=3 uid="uid://b12e8gabmy5f0"]
 
-[ext_resource type="Script" path="res://scenes/camera/camera.gd" id="1_camera"]
-[ext_resource type="PackedScene" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
+[ext_resource type="Script" uid="uid://cc3lv4isgvhri" path="res://scenes/camera/camera.gd" id="1_camera"]
+[ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
+[ext_resource type="Shader" uid="uid://bktd7dhf70op1" path="res://shaders/paper.gdshader" id="3_u3rx3"]
+[ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="5_4ph7v"]
 
-[node name="Camera" type="Control"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_qr7cc"]
+resource_local_to_scene = true
+shader = ExtResource("3_u3rx3")
+shader_parameter/scroll = Vector2(0, 0)
+shader_parameter/grid_scale = 22.0
+shader_parameter/line_px = 0.5
+shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
+shader_parameter/line_alpha = 0.06999999843536
+shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
+shader_parameter/paper_noise_amount = 0.05
+shader_parameter/paper_noise_scale = 0.35
+shader_parameter/speckle_amount = 0.06400000304
+shader_parameter/speckle_density = 1.67999996803664
+shader_parameter/speckle_scale = 5.999999877064
+shader_parameter/fiber_amount = 0.1110000052725
+shader_parameter/fiber_scale = 0.56999999470999
+
+[sub_resource type="Theme" id="Theme_u3rx3"]
+
+[node name="Camera" type="Node2D" node_paths=PackedStringArray("back_button", "status_label", "loading_spinner")]
+script = ExtResource("1_camera")
+back_button = NodePath("UI/Control/VBoxContainer/Header/BackButton")
+status_label = NodePath("UI/Control/CenterContainer/VBoxContainer/StatusLabel")
+loading_spinner = NodePath("UI/Control/CenterContainer/VBoxContainer/LoadingSpinner")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Background" type="ColorRect" parent="UI"]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_qr7cc")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Control" type="Control" parent="UI"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_camera")
+theme = ExtResource("5_4ph7v")
 
-[node name="Panel" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
+layout_mode = 0
+offset_right = 324.0
+offset_bottom = 85.0
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
-layout_mode = 2
-
-[node name="Header" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 
-[node name="BackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="BackButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
+theme_override_font_sizes/font_size = 124
 text = "<<"
 
-[node name="Title" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control/CenterContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Photo Upload"
+theme = SubResource("Theme_u3rx3")
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="InstructionLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 124
+horizontal_alignment = 1
 vertical_alignment = 1
+autowrap_mode = 3
 
-[node name="Spacer" type="Control" parent="Panel/MarginContainer/VBoxContainer/Header"]
-custom_minimum_size = Vector2(44, 44)
+[node name="Spacer2" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Content" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="ContentMargin" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
-
-[node name="ContentContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-theme_override_constants/separation = 20
-
-[node name="RecordImage" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer" instance=ExtResource("3_qqjab")]
+[node name="RecordImage" parent="UI/Control/CenterContainer/VBoxContainer" instance=ExtResource("3_qqjab")]
+unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 
-[node name="RotateImageButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="RotateImageButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 124
 text = "Rotate Image"
 
-[node name="InstructionLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
-layout_mode = 2
-text = "Select a photo of an animal to identify"
-horizontal_alignment = 1
-autowrap_mode = 3
-
-[node name="SelectPhotoButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="SelectPhotoButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 124
 text = "Select Photo"
 
-[node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="StatusLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
 layout_mode = 2
+theme_override_font_sizes/font_size = 124
 text = "currentstatus"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="ProgressLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="ResultLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
-horizontal_alignment = 1
-
-[node name="UploadButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
-custom_minimum_size = Vector2(200, 60)
-layout_mode = 2
-size_flags_horizontal = 4
-disabled = true
-text = "Upload & Analyze"
-
-[node name="RetryButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
-visible = false
-custom_minimum_size = Vector2(200, 60)
-layout_mode = 2
-size_flags_horizontal = 4
-text = "Retry Analysis"
-
-[node name="ManualEntryButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
-visible = false
-custom_minimum_size = Vector2(200, 60)
-layout_mode = 2
-size_flags_horizontal = 4
-text = "Manual Entry"
-
-[node name="LoadingSpinner" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
-layout_mode = 2
-text = "⏳ Processing..."
-horizontal_alignment = 1
-
-[node name="ResultLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
-layout_mode = 2
+theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="ProgressLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
 layout_mode = 2
+theme_override_font_sizes/font_size = 124
+horizontal_alignment = 1
+
+[node name="UploadButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 124
+disabled = true
+text = "Upload & Analyze"
+
+[node name="RetryButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 124
+text = "Retry Analysis"
+
+[node name="ManualEntryButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 124
+text = "Manual Entry"
+
+[node name="LoadingSpinner" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 124
+text = "⏳ Processing..."
+horizontal_alignment = 1

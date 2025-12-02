@@ -1,4 +1,4 @@
-extends BaseSceneController
+extends BaseSceneNode
 ## Dex Gallery - Browse through discovered animals with multi-user support
 ## Refactored: 636 → ~300 lines (53% reduction)
 
@@ -6,17 +6,17 @@ extends BaseSceneController
 # UI Elements
 # ============================================================================
 
-@onready var previous_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer/PreviousButton
-@onready var next_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer/NextButton
-@onready var edit_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/EditButton
-@onready var dex_number_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/"Dex Number"
+@onready var previous_button: Button = get_node("%PreviousButton")
+@onready var next_button: Button = get_node("%NextButton")
+@onready var edit_button: Button = get_node("%EditButton")
+@onready var dex_number_label: Label = get_node("%Dex Number")
 
-# Legacy display (TODO: Replace with RecordCard component)
-@onready var record_image: Control = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage
-@onready var bordered_container: AspectRatioContainer = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio
-@onready var bordered_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/Image
-@onready var record_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
-@onready var simple_image: TextureRect = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/RecordImage/Image
+# RecordImage component (dex_record_image.tscn)
+@onready var record_image: Control = get_node("%RecordImage")
+@onready var bordered_container: AspectRatioContainer = get_node("%RecordImage/ImageBorderAspectRatio")
+@onready var bordered_image: TextureRect = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/BorderedImage")
+@onready var record_label: Label = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel")
+@onready var simple_image: TextureRect = get_node("%RecordImage/SimpleImage")
 
 # ============================================================================
 # State
@@ -37,12 +37,6 @@ var current_image_height: float = 0.0
 func _on_scene_ready() -> void:
 	scene_name = "Dex"
 	print("[Dex] Scene ready (refactored v2)")
-
-	# Wire up UI elements from scene (BaseSceneController members)
-	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
-	# Connect back button (set after BaseSceneController._setup_common_ui(), so connect manually)
-	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
-		back_button.pressed.connect(_on_back_pressed)
 
 	# Connect UI
 	previous_button.pressed.connect(_on_previous_pressed)

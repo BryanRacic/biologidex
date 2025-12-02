@@ -1,113 +1,133 @@
-[gd_scene load_steps=3 format=3 uid="uid://b1ddhtmmke34x"]
+[gd_scene load_steps=7 format=3 uid="uid://b1ddhtmmke34x"]
 
-[ext_resource type="Script" path="res://scenes/dex/dex.gd" id="1_dex_script"]
-[ext_resource type="PackedScene" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_6jk22"]
+[ext_resource type="Script" uid="uid://cyn8bfc0bs6sh" path="res://scenes/dex/dex.gd" id="1_dex_script"]
+[ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_6jk22"]
+[ext_resource type="Shader" uid="uid://bktd7dhf70op1" path="res://shaders/paper.gdshader" id="3_copi1"]
+[ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="4_ugod7"]
 
-[node name="Dex" type="Control"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_71h4m"]
+resource_local_to_scene = true
+shader = ExtResource("3_copi1")
+shader_parameter/scroll = Vector2(0, 0)
+shader_parameter/grid_scale = 22.0
+shader_parameter/line_px = 0.5
+shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
+shader_parameter/line_alpha = 0.06999999843536
+shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
+shader_parameter/paper_noise_amount = 0.05
+shader_parameter/paper_noise_scale = 0.35
+shader_parameter/speckle_amount = 0.06400000304
+shader_parameter/speckle_density = 1.67999996803664
+shader_parameter/speckle_scale = 5.999999877064
+shader_parameter/fiber_amount = 0.1110000052725
+shader_parameter/fiber_scale = 0.56999999470999
+
+[sub_resource type="Theme" id="Theme_qtagj"]
+
+[node name="Dex" type="Node2D" node_paths=PackedStringArray("back_button")]
+script = ExtResource("1_dex_script")
+back_button = NodePath("UI/Control/VBoxContainer/Header/BackButton")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Background" type="ColorRect" parent="UI"]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_71h4m")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Control" type="Control" parent="UI"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_dex_script")
+theme = ExtResource("4_ugod7")
 
-[node name="Panel" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
+layout_mode = 0
+offset_right = 324.0
+offset_bottom = 85.0
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
-layout_mode = 2
-
-[node name="Header" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 
-[node name="BackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="BackButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
+theme_override_font_sizes/font_size = 124
 text = "<<"
 
-[node name="Title" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Animal Dex"
-vertical_alignment = 1
+[node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
-[node name="Spacer" type="Control" parent="Panel/MarginContainer/VBoxContainer/Header"]
-custom_minimum_size = Vector2(44, 44)
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control/CenterContainer"]
 layout_mode = 2
+theme = SubResource("Theme_qtagj")
+theme_override_constants/separation = 30
+alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Content" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="ContentMargin" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
-
-[node name="ContentContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-theme_override_constants/separation = 20
-
-[node name="Dex Number" type="Label" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="Dex Number" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="RecordImage" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer" instance=ExtResource("3_6jk22")]
+[node name="RecordImage" parent="UI/Control/CenterContainer/VBoxContainer" instance=ExtResource("3_6jk22")]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="Spacer4" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 
-[node name="PreviousButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer"]
+[node name="PreviousButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
-text = "Previous"
+text = "Prev"
 
-[node name="NextButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer/HBoxContainer"]
+[node name="Spacer4" type="Control" parent="UI/Control/CenterContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 2
+
+[node name="NextButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
 text = "Next"
 
-[node name="EditButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="Spacer3" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 2
+
+[node name="EditButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
 text = "Edit Entry"
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Content/ContentMargin/ContentContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2

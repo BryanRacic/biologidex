@@ -1,4 +1,4 @@
-extends BaseSceneController
+extends BaseSceneNode
 ## Dex Feed - Display friends' dex entries in a chronological feed
 ## Refactored: 484 → ~420 lines (13% reduction)
 
@@ -7,9 +7,9 @@ const FEED_ITEM_SCENE = preload("res://scenes/dex_feed/components/feed_list_item
 const SYNC_INTERVAL_MS = 60000  # Auto-refresh every minute
 
 # Note: Services (TokenManager, NavigationManager, APIManager, DexDatabase, SyncManager)
-# are automatically initialized by BaseSceneController
+# are automatically initialized by BaseSceneNode
 
-# State Management (is_loading inherited from BaseSceneController)
+# State Management (is_loading inherited from BaseSceneNode)
 var feed_entries: Array[Dictionary] = []
 var displayed_entries: Array[Dictionary] = []
 var current_filter: String = "all"
@@ -18,14 +18,14 @@ var sync_queue: Array[String] = []
 var friends_data: Dictionary = {}  # user_id -> friend info
 var is_syncing: bool = false
 
-# UI References (back_button, status_label, is_loading inherited from BaseSceneController)
-@onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
-@onready var title_label: Label = $Panel/MarginContainer/VBoxContainer/Header/TitleLabel
-@onready var filter_all_button: Button = $Panel/MarginContainer/VBoxContainer/FilterBar/AllButton
-@onready var filter_dropdown: OptionButton = $Panel/MarginContainer/VBoxContainer/FilterBar/FriendsDropdown
-@onready var scroll_container: ScrollContainer = $Panel/MarginContainer/VBoxContainer/ScrollContainer
-@onready var feed_container: VBoxContainer = $Panel/MarginContainer/VBoxContainer/ScrollContainer/FeedContainer
-@onready var loading_overlay: Control = $LoadingOverlay
+# UI References (back_button inherited from BaseSceneNode, set via @export)
+@onready var refresh_button: Button = get_node("%RefreshButton")
+@onready var filter_all_button: Button = get_node("%AllButton")
+@onready var filter_dropdown: OptionButton = get_node("%FriendsDropdown")
+@onready var scroll_container: ScrollContainer = get_node("%ScrollContainer")
+@onready var feed_container: VBoxContainer = get_node("%FeedContainer")
+@onready var status_label: Label = get_node("%StatusLabel")
+@onready var loading_overlay: Control = get_node("%LoadingOverlay")
 
 # Signals
 signal feed_loaded(entry_count: int)
@@ -34,13 +34,9 @@ signal sync_completed()
 
 
 func _on_scene_ready() -> void:
-	"""Called by BaseSceneController after managers are initialized and auth is checked"""
+	"""Called by BaseSceneNode after managers are initialized and auth is checked"""
 	scene_name = "DexFeed"
 	print("[DexFeed] Scene ready (refactored v2)")
-
-	# Wire up UI elements from scene (BaseSceneController members)
-	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
-	status_label = $Panel/MarginContainer/VBoxContainer/StatusLabel
 
 	_setup_ui()
 	_initialize_feed()
@@ -48,13 +44,11 @@ func _on_scene_ready() -> void:
 
 func _setup_ui() -> void:
 	"""Setup UI elements and connect signals"""
-	back_button.pressed.connect(_on_back_pressed)
 	refresh_button.pressed.connect(_on_refresh_pressed)
 	filter_all_button.pressed.connect(_on_filter_all_pressed)
 	filter_dropdown.item_selected.connect(_on_filter_dropdown_selected)
 
 	# Set initial state
-	title_label.text = "Friends' Feed"
 	_show_loading(false)
 	_show_status("", true)
 

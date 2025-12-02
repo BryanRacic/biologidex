@@ -21,6 +21,7 @@ anchors_preset = 0
 size_flags_horizontal = 3
 
 [node name="ImageBorderAspectRatio" type="AspectRatioContainer" parent="."]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -34,7 +35,8 @@ ratio = 1.5
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_yeq50")
 
-[node name="Image" type="TextureRect" parent="ImageBorderAspectRatio/ImageBorder"]
+[node name="BorderedImage" type="TextureRect" parent="ImageBorderAspectRatio/ImageBorder"]
+unique_name_in_owner = true
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 6
@@ -57,13 +59,15 @@ theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
 [node name="RecordLabel" type="Label" parent="ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
+unique_name_in_owner = true
 layout_mode = 2
 text = "Genus species - common name
 Username  catchdate "
 label_settings = SubResource("LabelSettings_yeq50")
 horizontal_alignment = 2
 
-[node name="Image" type="TextureRect" parent="."]
+[node name="SimpleImage" type="TextureRect" parent="."]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

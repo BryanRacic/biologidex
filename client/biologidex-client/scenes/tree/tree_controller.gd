@@ -3,14 +3,14 @@ TreeController - Main orchestrator for taxonomic tree visualization.
 Coordinates data loading, rendering, and user interaction.
 Refactored: 478 → ~450 lines (6% reduction)
 """
-extends BaseSceneController
+extends BaseSceneNode
 
 const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
 
-# Note: Services (APIManager, NavigationManager) are automatically initialized by BaseSceneController
+# Note: Services (APIManager, NavigationManager) are automatically initialized by BaseSceneNode
 
-# Node references (back_button, is_loading inherited from BaseSceneController)
+# Node references (back_button, is_loading inherited from BaseSceneNode)
 @onready var search_bar: LineEdit = $VBoxContainer/Toolbar/SearchBar
 @onready var mode_dropdown: OptionButton = $VBoxContainer/Toolbar/ModeDropdown
 @onready var zoom_in_button: Button = $VBoxContainer/Toolbar/ZoomControls/ZoomInButton
@@ -31,7 +31,7 @@ var selected_friend_ids: Array = []  # Array of UUID strings
 # Renderer
 var tree_renderer: TreeRenderer = null
 
-# State (is_loading inherited from BaseSceneController)
+# State (is_loading inherited from BaseSceneNode)
 var is_initialized: bool = false
 
 # Camera control state
@@ -40,13 +40,13 @@ var last_mouse_position: Vector2 = Vector2.ZERO
 
 
 func _on_scene_ready() -> void:
-	"""Called by BaseSceneController after managers are initialized"""
+	"""Called by BaseSceneNode after managers are initialized"""
 	scene_name = "TreeController"
 	print("[TreeController] Scene ready (refactored v2)")
 
-	# Wire up UI elements from scene (BaseSceneController members)
+	# Wire up UI elements from scene (BaseSceneNode members)
 	back_button = $VBoxContainer/Toolbar/BackButton
-	# Connect back button (set after BaseSceneController._setup_common_ui(), so connect manually)
+	# Connect back button (set after BaseSceneNode._setup_common_ui(), so connect manually)
 	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
 		back_button.pressed.connect(_on_back_pressed)
 

@@ -1,9 +1,6 @@
-### NOTE THIS IS DEPRECATED!!! ###
-### See base_scene_node.gd     ###
+class_name BaseSceneNode extends Node2D
 
-class_name BaseSceneNode extends Control
-
-# Base class for all scene controllers
+# Base class for all 2D Scene Nodes
 # Provides common manager initialization, UI helpers, and error handling patterns
 
 # Core manager references (auto-initialized)

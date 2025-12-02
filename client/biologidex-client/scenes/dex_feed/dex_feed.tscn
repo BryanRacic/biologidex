@@ -1,94 +1,124 @@
-[gd_scene load_steps=2 format=3 uid="uid://c8v7k2nan9wq2"]
+[gd_scene load_steps=5 format=3 uid="uid://c8v7k2naoawq2"]
 
-[ext_resource type="Script" path="res://scenes/dex_feed/dex_feed.gd" id="1_dex_feed"]
+[ext_resource type="Script" uid="uid://c0evumno1kr2k" path="res://scenes/dex_feed/dex_feed.gd" id="1_dex_feed"]
+[ext_resource type="Shader" uid="uid://bktd7dhf70op1" path="res://shaders/paper.gdshader" id="2_jpgsw"]
+[ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="3_4phfc"]
 
-[node name="DexFeed" type="Control"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ic8ij"]
+resource_local_to_scene = true
+shader = ExtResource("2_jpgsw")
+shader_parameter/scroll = Vector2(0, 0)
+shader_parameter/grid_scale = 22.0
+shader_parameter/line_px = 0.5
+shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
+shader_parameter/line_alpha = 0.06999999843536
+shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
+shader_parameter/paper_noise_amount = 0.05
+shader_parameter/paper_noise_scale = 0.35
+shader_parameter/speckle_amount = 0.06400000304
+shader_parameter/speckle_density = 1.67999996803664
+shader_parameter/speckle_scale = 5.999999877064
+shader_parameter/fiber_amount = 0.1110000052725
+shader_parameter/fiber_scale = 0.56999999470999
+
+[node name="DexFeed" type="Node2D" node_paths=PackedStringArray("back_button")]
+script = ExtResource("1_dex_feed")
+back_button = NodePath("UI/Control/VBoxContainer/Header/BackButton")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Background" type="ColorRect" parent="UI"]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_ic8ij")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Control" type="Control" parent="UI"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_dex_feed")
+theme = ExtResource("3_4phfc")
 
-[node name="Panel" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
+layout_mode = 0
+offset_right = 324.0
+offset_bottom = 85.0
+theme_override_constants/separation = 20
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="Header" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 
-[node name="BackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="BackButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 44)
 layout_mode = 2
 text = "<<"
 
-[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="Spacer2" type="Control" parent="UI/Control/VBoxContainer/Header"]
+custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Feed"
-vertical_alignment = 1
 
-[node name="RefreshButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="RefreshButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 44)
 layout_mode = 2
 text = "Refresh"
 
-[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="FilterBar" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="FilterBar" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="AllButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/FilterBar"]
+[node name="AllButton" type="Button" parent="UI/Control/VBoxContainer/FilterBar"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 44)
 layout_mode = 2
 text = "All Friends"
 
-[node name="FriendsDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/FilterBar"]
+[node name="FriendsDropdown" type="OptionButton" parent="UI/Control/VBoxContainer/FilterBar"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("3_4phfc")
+item_count = 1
+popup/item_0/id = 0
 
-[node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StatusLabel" type="Label" parent="UI/Control/CenterContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 horizontal_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="UI/Control/CenterContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="FeedContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ScrollContainer"]
+[node name="FeedContainer" type="VBoxContainer" parent="UI/Control/CenterContainer/ScrollContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
 [node name="LoadingOverlay" type="ColorRect" parent="."]
+unique_name_in_owner = true
 visible = false
-layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0

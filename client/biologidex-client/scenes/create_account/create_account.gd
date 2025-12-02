@@ -1,16 +1,16 @@
-extends Control
+extends Node2D
 
 # Create Account scene - Handles user registration
 # Shows registration form and creates new account via API
 
 # UI Elements
-@onready var email_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/EmailField/EmailInput
-@onready var username_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/UsernameField/UsernameInput
-@onready var password_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/PasswordField/PasswordInput
-@onready var confirm_password_input: LineEdit = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/ConfirmPasswordField2/ConfirmPasswordInput
-@onready var create_acct_button: Button = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/CreateAcctButton
-@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/StatusLabel
-@onready var loading_spinner: Label = $Panel/MarginContainer/VBoxContainer/Content/ContentMargin/CreateAcctForm/LoadingSpinner
+@onready var email_input: LineEdit = get_node("%EmailInput")
+@onready var username_input: LineEdit = get_node("%UsernameInput")
+@onready var password_input: LineEdit = get_node("%PasswordInput")
+@onready var confirm_password_input: LineEdit = get_node("%ConfirmPasswordInput")
+@onready var create_acct_button: Button = get_node("%CreateAcctButton")
+@onready var status_label: Label = get_node("%StatusLabel")
+@onready var loading_spinner: Label = get_node("%LoadingSpinner")
 
 # Services (accessed via ServiceLocator)
 var token_manager
