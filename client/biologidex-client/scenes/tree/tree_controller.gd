@@ -178,11 +178,16 @@ func _setup_touch_controller() -> void:
 	touch_controller.scroll_changed.connect(_on_scroll_changed)
 	touch_controller.scale_changed.connect(_on_scale_changed)
 
-	# Initialize with current values
+	# Configure zoom limits for tree viewing
+	touch_controller.min_scale = 0.1
+	touch_controller.max_scale = 10.0
+
+	# Set initial zoom level (larger = more zoomed in)
+	touch_controller.current_scale = 2.0
 	_scroll_offset = touch_controller.scroll_offset
 	_current_scale = touch_controller.current_scale
 
-	print("[TreeController] Touch controller connected")
+	print("[TreeController] Touch controller connected (initial scale: %.1f)" % _current_scale)
 
 
 func _setup_mode_dropdown() -> void:

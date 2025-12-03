@@ -6,8 +6,14 @@
 
 [node name="Tree" type="Node2D"]
 script = ExtResource("1_tree_controller")
+editor_preview = true
 
-; Tree rendering layer - below UI, transforms with gestures
+[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+layer = -1
+
+[node name="InteractiveBackground" parent="BackgroundLayer" instance=ExtResource("2_interactive_bg")]
+unique_name_in_owner = true
+
 [node name="TreeGraph" type="Node2D" parent="."]
 unique_name_in_owner = true
 
@@ -17,19 +23,15 @@ z_index = -1
 
 [node name="NodesLayer" type="Node2D" parent="TreeGraph"]
 unique_name_in_owner = true
-z_index = 0
 
 [node name="LabelsLayer" type="Node2D" parent="TreeGraph"]
 unique_name_in_owner = true
 z_index = 2
 
-; UI layer - fixed position, overlays tree
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UILayer" type="CanvasLayer" parent="."]
+layer = 10
 
-[node name="InteractiveBackground" parent="UI" instance=ExtResource("2_interactive_bg")]
-unique_name_in_owner = true
-
-[node name="Control" type="Control" parent="UI"]
+[node name="Control" type="Control" parent="UILayer"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -39,78 +41,81 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("3_theme")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
+[node name="VBoxContainer" type="VBoxContainer" parent="UILayer/Control"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
-[node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
+[node name="Header" type="HBoxContainer" parent="UILayer/Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
+mouse_filter = 2
 
-[node name="BackButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+[node name="BackButton" type="Button" parent="UILayer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 text = "<<"
 
-[node name="SearchBar" type="LineEdit" parent="UI/Control/VBoxContainer/Header"]
+[node name="SearchBar" type="LineEdit" parent="UILayer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Search animals..."
 
-[node name="ModeDropdown" type="OptionButton" parent="UI/Control/VBoxContainer/Header"]
+[node name="ModeDropdown" type="OptionButton" parent="UILayer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 44)
 layout_mode = 2
 
-[node name="ZoomControls" type="HBoxContainer" parent="UI/Control/VBoxContainer/Header"]
+[node name="ZoomControls" type="HBoxContainer" parent="UILayer/Control/VBoxContainer/Header"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 5
 
-[node name="ZoomInButton" type="Button" parent="UI/Control/VBoxContainer/Header/ZoomControls"]
+[node name="ZoomInButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 text = "+"
 
-[node name="ZoomOutButton" type="Button" parent="UI/Control/VBoxContainer/Header/ZoomControls"]
+[node name="ZoomOutButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 text = "-"
 
-[node name="ZoomResetButton" type="Button" parent="UI/Control/VBoxContainer/Header/ZoomControls"]
+[node name="ZoomResetButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 text = "○"
 
-[node name="CenterButton" type="Button" parent="UI/Control/VBoxContainer/Header/ZoomControls"]
+[node name="CenterButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Center on root"
 text = "◎"
 
-[node name="LoadingLabel" type="Label" parent="UI/Control/VBoxContainer"]
+[node name="LoadingLabel" type="Label" parent="UILayer/Control/VBoxContainer"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 text = "Loading tree..."
 horizontal_alignment = 1
 
-[node name="StatsLabel" type="Label" parent="UI/Control/VBoxContainer"]
+[node name="StatsLabel" type="Label" parent="UILayer/Control/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="UI/Control/VBoxContainer"]
+[node name="Spacer" type="Control" parent="UILayer/Control/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2

@@ -427,9 +427,21 @@
 			"chunks": [
 				{
 					"chunk_x": -1.0,
+					"chunk_y": -1.0,
+					"edge_count": 15.0,
+					"node_count": 16.0,
+					"world_bounds": {
+						"max_x": 0.0,
+						"max_y": 0.0,
+						"min_x": -2048.0,
+						"min_y": -2048.0
+					}
+				},
+				{
+					"chunk_x": -1.0,
 					"chunk_y": 0.0,
-					"edge_count": 51.0,
-					"node_count": 49.0,
+					"edge_count": 17.0,
+					"node_count": 16.0,
 					"world_bounds": {
 						"max_x": 0.0,
 						"max_y": 2048.0,
@@ -439,9 +451,21 @@
 				},
 				{
 					"chunk_x": 0.0,
+					"chunk_y": -1.0,
+					"edge_count": 15.0,
+					"node_count": 15.0,
+					"world_bounds": {
+						"max_x": 2048.0,
+						"max_y": 0.0,
+						"min_x": 0.0,
+						"min_y": -2048.0
+					}
+				},
+				{
+					"chunk_x": 0.0,
 					"chunk_y": 0.0,
-					"edge_count": 20.0,
-					"node_count": 21.0,
+					"edge_count": 28.0,
+					"node_count": 23.0,
 					"world_bounds": {
 						"max_x": 2048.0,
 						"max_y": 2048.0,
@@ -450,313 +474,331 @@
 					}
 				}
 			],
-			"total_chunks": 2.0,
+			"total_chunks": 4.0,
 			"world_bounds": [
-				-1079.8,
-				-204.8,
-				529.8,
-				1404.8
+				-1354.8,
+				-1354.8,
+				1354.8,
+				1354.8
 			]
 		},
 		"chunk_size": {
 			"height": 2048.0,
 			"width": 2048.0
 		},
+		"metadata": {
+			"angle_spread": 360.0,
+			"bounds": {
+				"max_x": 1150.0,
+				"max_y": 1150.0,
+				"min_x": -1150.0,
+				"min_y": -1150.0
+			},
+			"center": [
+				0.0,
+				0.0
+			],
+			"layout_type": "radial",
+			"min_radius": 100.0,
+			"radius_per_level": 150.0
+		},
 		"positions": {
 			"17fb41c6-36b6-4ce3-91b1-9b562f77b539": [
-				-875.0,
-				1200.0
+				0.0000000000000704171909509728,
+				-1150.0
 			],
 			"263b9933-bb73-4561-a6f6-206df8a8c777": [
-				-775.0,
-				1200.0
+				575.0,
+				-995.929214352104
 			],
 			"3464415a-1922-48eb-8382-953068234f8e": [
-				-675.0,
-				900.0
+				736.121593216773,
+				-425.0
 			],
 			"78e0ef26-d13c-4294-aea0-698584b4da9a": [
-				225.0,
-				1200.0
+				-575.0,
+				-995.929214352104
 			],
 			"7a04c580-bd95-4ec5-966a-9e6bc634b756": [
-				325.0,
-				450.0
+				-0.0000000000000734788079488412,
+				-400.0
 			],
 			"7bb83d90-628a-4df8-8390-d3f62888577f": [
-				-575.0,
-				1200.0
+				1150.0,
+				0.0
 			],
 			"8fa89dac-f2f3-4854-bb44-7bcf489318bb": [
-				-375.0,
-				1200.0
+				575.0,
+				995.929214352104
 			],
 			"a869d84c-41b8-4946-83b8-c16ff60cd01a": [
-				-175.0,
-				1200.0
+				-575.0,
+				995.929214352104
 			],
 			"c099a1d9-10e7-4721-a844-4709264377be": [
-				-475.0,
-				1200.0
+				995.929214352104,
+				575.0
 			],
 			"c203ac50-5955-4f6e-952d-b2df66745d9e": [
-				125.0,
-				1200.0
+				-995.929214352104,
+				-575.0
 			],
 			"class_Amphibia": [
-				-325.0,
-				450.0
+				103.527618041008,
+				386.370330515627
 			],
 			"class_Aves": [
-				-775.0,
-				450.0
+				200.0,
+				-346.410161513775
 			],
 			"class_Elasmobranchii": [
-				125.0,
-				450.0
+				-346.410161513775,
+				-200.0
 			],
 			"class_Malacostraca": [
-				225.0,
-				450.0
+				-200.0,
+				-346.410161513775
 			],
 			"class_Mammalia": [
-				-575.0,
-				450.0
+				400.0,
+				0.0
 			],
 			"class_Scyphozoa": [
-				-875.0,
-				450.0
+				0.0000000000000244929359829471,
+				-400.0
 			],
 			"class_Teleostei": [
-				-75.0,
-				450.0
+				-346.410161513776,
+				200.0
 			],
 			"d78a0ed8-4f2e-465f-ae7e-f57475f4e119": [
-				-75.0,
-				1200.0
+				-995.929214352104,
+				575.0
 			],
 			"dbd67f24-d139-45f6-9eda-f07c28341d52": [
-				-275.0,
-				1200.0
+				0.0000000000000704171909509728,
+				1150.0
 			],
 			"family_Arapaimidae": [
-				-75.0,
-				750.0
+				-606.217782649107,
+				350.0
 			],
 			"family_Canidae": [
-				-575.0,
-				750.0
+				700.0,
+				0.0
 			],
 			"family_Cryptobranchidae": [
-				-375.0,
-				750.0
+				350.0,
+				606.217782649107
 			],
 			"family_Felidae": [
-				-475.0,
-				750.0
+				606.217782649107,
+				350.0
 			],
 			"family_Heterodontidae": [
-				125.0,
-				750.0
+				-606.217782649107,
+				-350.0
 			],
 			"family_Hylidae": [
-				-275.0,
-				750.0
+				0.0000000000000428626379701574,
+				700.0
 			],
 			"family_Laridae": [
-				-775.0,
-				750.0
+				350.0,
+				-606.217782649107
 			],
 			"family_Macrocheiridae": [
-				225.0,
-				750.0
+				-350.0,
+				-606.217782649107
 			],
 			"family_Muraenidae": [
-				-175.0,
-				750.0
+				-350.0,
+				606.217782649107
 			],
 			"family_Pelagiidae": [
-				-875.0,
-				750.0
+				0.0000000000000428626379701574,
+				-700.0
 			],
 			"family_Syngnathidae": [
-				25.0,
-				750.0
+				-700.0,
+				0.0000000000000857252759403147
 			],
 			"family_Ursidae": [
-				-675.0,
-				750.0
+				606.217782649107,
+				-350.0
 			],
 			"fcf1d0c0-d49a-4305-b76a-1f01c79ae8a4": [
-				25.0,
-				1200.0
+				-1150.0,
+				0.000000000000140834381901946
 			],
 			"genus_Arapaima": [
-				-75.0,
-				900.0
+				-736.121593216773,
+				425.0
 			],
 			"genus_Bison": [
-				325.0,
-				150.0
+				-0.0000000000000183697019872103,
+				-100.0
 			],
 			"genus_Canis": [
-				-575.0,
-				900.0
+				850.0,
+				0.0
 			],
 			"genus_Chrysaora": [
-				-875.0,
-				900.0
+				0.0000000000000520474889637625,
+				-850.0
 			],
 			"genus_Cryptobranchus": [
-				-375.0,
-				900.0
+				425.0,
+				736.121593216773
 			],
 			"genus_Felis": [
-				-475.0,
-				900.0
+				736.121593216773,
+				425.0
 			],
 			"genus_Gymnothorax": [
-				-175.0,
-				900.0
+				-425.0,
+				736.121593216773
 			],
 			"genus_Heterodontus": [
-				125.0,
-				900.0
+				-736.121593216773,
+				-425.0
 			],
 			"genus_Larus": [
-				-775.0,
-				900.0
+				425.0,
+				-736.121593216773
 			],
 			"genus_Macrocheira": [
-				225.0,
-				900.0
+				-425.0,
+				-736.121593216773
 			],
 			"genus_Phyllopteryx": [
-				25.0,
-				900.0
+				-850.0,
+				0.000000000000104094977927525
 			],
 			"genus_Trachycephalus": [
-				-275.0,
-				900.0
+				0.0000000000000520474889637625,
+				850.0
 			],
 			"kingdom_Animalia": [
-				-325.0,
-				150.0
+				25.8819045102521,
+				96.5925826289068
 			],
 			"order_Anguilliformes": [
-				-175.0,
-				600.0
+				-275.0,
+				476.313972081441
 			],
 			"order_Anura": [
-				-275.0,
-				600.0
+				0.0000000000000336777869765522,
+				550.0
 			],
 			"order_Carnivora": [
-				-575.0,
-				600.0
+				550.0,
+				0.0
 			],
 			"order_Caudata": [
-				-375.0,
-				600.0
+				275.0,
+				476.313972081441
 			],
 			"order_Charadriiformes": [
-				-775.0,
-				600.0
+				275.0,
+				-476.313972081441
 			],
 			"order_Decapoda": [
-				225.0,
-				600.0
+				-275.0,
+				-476.313972081441
 			],
 			"order_Heterodontiformes": [
-				125.0,
-				600.0
+				-476.313972081441,
+				-275.0
 			],
 			"order_Osteoglossiformes": [
-				-75.0,
-				600.0
+				-476.313972081441,
+				275.0
 			],
 			"order_Semaeostomeae": [
-				-875.0,
-				600.0
+				0.0000000000000336777869765522,
+				-550.0
 			],
 			"order_Syngnathiformes": [
-				25.0,
-				600.0
+				-550.0,
+				0.0000000000000673555739531044
 			],
 			"phylum_Arthropoda": [
-				225.0,
-				300.0
+				-125.0,
+				-216.50635094611
 			],
 			"phylum_Chordata": [
-				-325.0,
-				300.0
+				64.7047612756302,
+				241.481456572267
 			],
 			"phylum_Cnidaria": [
-				-875.0,
-				300.0
+				0.0000000000000153080849893419,
+				-250.0
 			],
 			"root": [
 				0.0,
 				0.0
 			],
 			"species_Arapaima_gigas": [
-				-75.0,
-				1050.0
+				-866.025403784439,
+				500.0
 			],
 			"species_Bison_bison": [
-				325.0,
-				300.0
+				-0.0000000000000459242549680257,
+				-250.0
 			],
 			"species_Canis_familiaris": [
-				-575.0,
-				1050.0
+				1000.0,
+				0.0
 			],
 			"species_Chrysaora_fuscescens": [
-				-875.0,
-				1050.0
+				0.0000000000000612323399573677,
+				-1000.0
 			],
 			"species_Cryptobranchus_alleganiensis": [
-				-375.0,
-				1050.0
+				500.0,
+				866.025403784439
 			],
 			"species_Felis_catus": [
-				-475.0,
-				1050.0
+				866.025403784439,
+				500.0
 			],
 			"species_Gymnothorax_funebris": [
-				-175.0,
-				1050.0
+				-500.0,
+				866.025403784439
 			],
 			"species_Heterodontus_francisci": [
-				125.0,
-				1050.0
+				-866.025403784439,
+				-500.0
 			],
 			"species_Larus_occidentalis": [
-				-775.0,
-				1050.0
+				500.0,
+				-866.025403784439
 			],
 			"species_Macrocheira_kaempferi": [
-				225.0,
-				1050.0
+				-500.0,
+				-866.025403784438
 			],
 			"species_Phyllopteryx_taeniolatus": [
-				25.0,
-				1050.0
+				-1000.0,
+				0.000000000000122464679914735
 			],
 			"species_Trachycephalus_resinifictrix": [
-				-275.0,
-				1050.0
+				0.0000000000000612323399573677,
+				1000.0
 			]
 		},
+		"type": "radial",
 		"world_bounds": [
-			-1079.8,
-			-204.8,
-			529.8,
-			1404.8
+			-1354.8,
+			-1354.8,
+			1354.8,
+			1354.8
 		]
 	},
 	"metadata": {
-		"cache_key": "taxonomic_tree_friends_3f1acfa2-de78-4e49-ade2-4b5ae1f3a847",
+		"cache_key": "taxonomic_tree_friends_3f1acfa2-de78-4e49-ade2-4b5ae1f3a847_radial",
+		"layout_type": "radial",
 		"mode": "friends",
 		"scoped_users": 5.0,
 		"total_edges": 70.0,
@@ -775,8 +817,8 @@
 			"name": "Animalia",
 			"node_type": "taxonomic",
 			"position": [
-				-325.0,
-				150.0
+				25.8819045102521,
+				96.5925826289068
 			],
 			"rank": "kingdom",
 			"scientific_name": "Animalia",
@@ -792,8 +834,8 @@
 			"name": "Cnidaria",
 			"node_type": "taxonomic",
 			"position": [
-				-875.0,
-				300.0
+				0.0000000000000153080849893419,
+				-250.0
 			],
 			"rank": "phylum",
 			"scientific_name": "Cnidaria",
@@ -809,8 +851,8 @@
 			"name": "Scyphozoa",
 			"node_type": "taxonomic",
 			"position": [
-				-875.0,
-				450.0
+				0.0000000000000244929359829471,
+				-400.0
 			],
 			"rank": "class",
 			"scientific_name": "Scyphozoa",
@@ -826,8 +868,8 @@
 			"name": "Semaeostomeae",
 			"node_type": "taxonomic",
 			"position": [
-				-875.0,
-				600.0
+				0.0000000000000336777869765522,
+				-550.0
 			],
 			"rank": "order",
 			"scientific_name": "Semaeostomeae",
@@ -843,8 +885,8 @@
 			"name": "Pelagiidae",
 			"node_type": "taxonomic",
 			"position": [
-				-875.0,
-				750.0
+				0.0000000000000428626379701574,
+				-700.0
 			],
 			"rank": "family",
 			"scientific_name": "Pelagiidae",
@@ -860,8 +902,8 @@
 			"name": "Chrysaora",
 			"node_type": "taxonomic",
 			"position": [
-				-875.0,
-				900.0
+				0.0000000000000520474889637625,
+				-850.0
 			],
 			"rank": "genus",
 			"scientific_name": "Chrysaora",
@@ -877,8 +919,8 @@
 			"name": "fuscescens",
 			"node_type": "taxonomic",
 			"position": [
-				-875.0,
-				1050.0
+				0.0000000000000612323399573677,
+				-1000.0
 			],
 			"rank": "species",
 			"scientific_name": "fuscescens",
@@ -894,8 +936,8 @@
 			"name": "Chordata",
 			"node_type": "taxonomic",
 			"position": [
-				-325.0,
-				300.0
+				64.7047612756302,
+				241.481456572267
 			],
 			"rank": "phylum",
 			"scientific_name": "Chordata",
@@ -911,8 +953,8 @@
 			"name": "Aves",
 			"node_type": "taxonomic",
 			"position": [
-				-775.0,
-				450.0
+				200.0,
+				-346.410161513775
 			],
 			"rank": "class",
 			"scientific_name": "Aves",
@@ -928,8 +970,8 @@
 			"name": "Charadriiformes",
 			"node_type": "taxonomic",
 			"position": [
-				-775.0,
-				600.0
+				275.0,
+				-476.313972081441
 			],
 			"rank": "order",
 			"scientific_name": "Charadriiformes",
@@ -945,8 +987,8 @@
 			"name": "Laridae",
 			"node_type": "taxonomic",
 			"position": [
-				-775.0,
-				750.0
+				350.0,
+				-606.217782649107
 			],
 			"rank": "family",
 			"scientific_name": "Laridae",
@@ -962,8 +1004,8 @@
 			"name": "Larus",
 			"node_type": "taxonomic",
 			"position": [
-				-775.0,
-				900.0
+				425.0,
+				-736.121593216773
 			],
 			"rank": "genus",
 			"scientific_name": "Larus",
@@ -979,8 +1021,8 @@
 			"name": "occidentalis",
 			"node_type": "taxonomic",
 			"position": [
-				-775.0,
-				1050.0
+				500.0,
+				-866.025403784439
 			],
 			"rank": "species",
 			"scientific_name": "occidentalis",
@@ -996,8 +1038,8 @@
 			"name": "Mammalia",
 			"node_type": "taxonomic",
 			"position": [
-				-575.0,
-				450.0
+				400.0,
+				0.0
 			],
 			"rank": "class",
 			"scientific_name": "Mammalia",
@@ -1013,8 +1055,8 @@
 			"name": "Carnivora",
 			"node_type": "taxonomic",
 			"position": [
-				-575.0,
-				600.0
+				550.0,
+				0.0
 			],
 			"rank": "order",
 			"scientific_name": "Carnivora",
@@ -1030,8 +1072,8 @@
 			"name": "Ursidae",
 			"node_type": "taxonomic",
 			"position": [
-				-675.0,
-				750.0
+				606.217782649107,
+				-350.0
 			],
 			"rank": "family",
 			"scientific_name": "Ursidae",
@@ -1047,8 +1089,8 @@
 			"name": "Canidae",
 			"node_type": "taxonomic",
 			"position": [
-				-575.0,
-				750.0
+				700.0,
+				0.0
 			],
 			"rank": "family",
 			"scientific_name": "Canidae",
@@ -1064,8 +1106,8 @@
 			"name": "Canis",
 			"node_type": "taxonomic",
 			"position": [
-				-575.0,
-				900.0
+				850.0,
+				0.0
 			],
 			"rank": "genus",
 			"scientific_name": "Canis",
@@ -1081,8 +1123,8 @@
 			"name": "familiaris",
 			"node_type": "taxonomic",
 			"position": [
-				-575.0,
-				1050.0
+				1000.0,
+				0.0
 			],
 			"rank": "species",
 			"scientific_name": "familiaris",
@@ -1098,8 +1140,8 @@
 			"name": "Felidae",
 			"node_type": "taxonomic",
 			"position": [
-				-475.0,
-				750.0
+				606.217782649107,
+				350.0
 			],
 			"rank": "family",
 			"scientific_name": "Felidae",
@@ -1115,8 +1157,8 @@
 			"name": "Felis",
 			"node_type": "taxonomic",
 			"position": [
-				-475.0,
-				900.0
+				736.121593216773,
+				425.0
 			],
 			"rank": "genus",
 			"scientific_name": "Felis",
@@ -1132,8 +1174,8 @@
 			"name": "catus",
 			"node_type": "taxonomic",
 			"position": [
-				-475.0,
-				1050.0
+				866.025403784439,
+				500.0
 			],
 			"rank": "species",
 			"scientific_name": "catus",
@@ -1149,8 +1191,8 @@
 			"name": "Amphibia",
 			"node_type": "taxonomic",
 			"position": [
-				-325.0,
-				450.0
+				103.527618041008,
+				386.370330515627
 			],
 			"rank": "class",
 			"scientific_name": "Amphibia",
@@ -1166,8 +1208,8 @@
 			"name": "Caudata",
 			"node_type": "taxonomic",
 			"position": [
-				-375.0,
-				600.0
+				275.0,
+				476.313972081441
 			],
 			"rank": "order",
 			"scientific_name": "Caudata",
@@ -1183,8 +1225,8 @@
 			"name": "Cryptobranchidae",
 			"node_type": "taxonomic",
 			"position": [
-				-375.0,
-				750.0
+				350.0,
+				606.217782649107
 			],
 			"rank": "family",
 			"scientific_name": "Cryptobranchidae",
@@ -1200,8 +1242,8 @@
 			"name": "Cryptobranchus",
 			"node_type": "taxonomic",
 			"position": [
-				-375.0,
-				900.0
+				425.0,
+				736.121593216773
 			],
 			"rank": "genus",
 			"scientific_name": "Cryptobranchus",
@@ -1217,8 +1259,8 @@
 			"name": "alleganiensis",
 			"node_type": "taxonomic",
 			"position": [
-				-375.0,
-				1050.0
+				500.0,
+				866.025403784439
 			],
 			"rank": "species",
 			"scientific_name": "alleganiensis",
@@ -1234,8 +1276,8 @@
 			"name": "Anura",
 			"node_type": "taxonomic",
 			"position": [
-				-275.0,
-				600.0
+				0.0000000000000336777869765522,
+				550.0
 			],
 			"rank": "order",
 			"scientific_name": "Anura",
@@ -1251,8 +1293,8 @@
 			"name": "Hylidae",
 			"node_type": "taxonomic",
 			"position": [
-				-275.0,
-				750.0
+				0.0000000000000428626379701574,
+				700.0
 			],
 			"rank": "family",
 			"scientific_name": "Hylidae",
@@ -1268,8 +1310,8 @@
 			"name": "Trachycephalus",
 			"node_type": "taxonomic",
 			"position": [
-				-275.0,
-				900.0
+				0.0000000000000520474889637625,
+				850.0
 			],
 			"rank": "genus",
 			"scientific_name": "Trachycephalus",
@@ -1285,8 +1327,8 @@
 			"name": "resinifictrix",
 			"node_type": "taxonomic",
 			"position": [
-				-275.0,
-				1050.0
+				0.0000000000000612323399573677,
+				1000.0
 			],
 			"rank": "species",
 			"scientific_name": "resinifictrix",
@@ -1302,8 +1344,8 @@
 			"name": "Teleostei",
 			"node_type": "taxonomic",
 			"position": [
-				-75.0,
-				450.0
+				-346.410161513776,
+				200.0
 			],
 			"rank": "class",
 			"scientific_name": "Teleostei",
@@ -1319,8 +1361,8 @@
 			"name": "Anguilliformes",
 			"node_type": "taxonomic",
 			"position": [
-				-175.0,
-				600.0
+				-275.0,
+				476.313972081441
 			],
 			"rank": "order",
 			"scientific_name": "Anguilliformes",
@@ -1336,8 +1378,8 @@
 			"name": "Muraenidae",
 			"node_type": "taxonomic",
 			"position": [
-				-175.0,
-				750.0
+				-350.0,
+				606.217782649107
 			],
 			"rank": "family",
 			"scientific_name": "Muraenidae",
@@ -1353,8 +1395,8 @@
 			"name": "Gymnothorax",
 			"node_type": "taxonomic",
 			"position": [
-				-175.0,
-				900.0
+				-425.0,
+				736.121593216773
 			],
 			"rank": "genus",
 			"scientific_name": "Gymnothorax",
@@ -1370,8 +1412,8 @@
 			"name": "funebris",
 			"node_type": "taxonomic",
 			"position": [
-				-175.0,
-				1050.0
+				-500.0,
+				866.025403784439
 			],
 			"rank": "species",
 			"scientific_name": "funebris",
@@ -1387,8 +1429,8 @@
 			"name": "Osteoglossiformes",
 			"node_type": "taxonomic",
 			"position": [
-				-75.0,
-				600.0
+				-476.313972081441,
+				275.0
 			],
 			"rank": "order",
 			"scientific_name": "Osteoglossiformes",
@@ -1404,8 +1446,8 @@
 			"name": "Arapaimidae",
 			"node_type": "taxonomic",
 			"position": [
-				-75.0,
-				750.0
+				-606.217782649107,
+				350.0
 			],
 			"rank": "family",
 			"scientific_name": "Arapaimidae",
@@ -1421,8 +1463,8 @@
 			"name": "Arapaima",
 			"node_type": "taxonomic",
 			"position": [
-				-75.0,
-				900.0
+				-736.121593216773,
+				425.0
 			],
 			"rank": "genus",
 			"scientific_name": "Arapaima",
@@ -1438,8 +1480,8 @@
 			"name": "gigas",
 			"node_type": "taxonomic",
 			"position": [
-				-75.0,
-				1050.0
+				-866.025403784439,
+				500.0
 			],
 			"rank": "species",
 			"scientific_name": "gigas",
@@ -1455,8 +1497,8 @@
 			"name": "Syngnathiformes",
 			"node_type": "taxonomic",
 			"position": [
-				25.0,
-				600.0
+				-550.0,
+				0.0000000000000673555739531044
 			],
 			"rank": "order",
 			"scientific_name": "Syngnathiformes",
@@ -1472,8 +1514,8 @@
 			"name": "Syngnathidae",
 			"node_type": "taxonomic",
 			"position": [
-				25.0,
-				750.0
+				-700.0,
+				0.0000000000000857252759403147
 			],
 			"rank": "family",
 			"scientific_name": "Syngnathidae",
@@ -1489,8 +1531,8 @@
 			"name": "Phyllopteryx",
 			"node_type": "taxonomic",
 			"position": [
-				25.0,
-				900.0
+				-850.0,
+				0.000000000000104094977927525
 			],
 			"rank": "genus",
 			"scientific_name": "Phyllopteryx",
@@ -1506,8 +1548,8 @@
 			"name": "taeniolatus",
 			"node_type": "taxonomic",
 			"position": [
-				25.0,
-				1050.0
+				-1000.0,
+				0.000000000000122464679914735
 			],
 			"rank": "species",
 			"scientific_name": "taeniolatus",
@@ -1523,8 +1565,8 @@
 			"name": "Elasmobranchii",
 			"node_type": "taxonomic",
 			"position": [
-				125.0,
-				450.0
+				-346.410161513775,
+				-200.0
 			],
 			"rank": "class",
 			"scientific_name": "Elasmobranchii",
@@ -1540,8 +1582,8 @@
 			"name": "Heterodontiformes",
 			"node_type": "taxonomic",
 			"position": [
-				125.0,
-				600.0
+				-476.313972081441,
+				-275.0
 			],
 			"rank": "order",
 			"scientific_name": "Heterodontiformes",
@@ -1557,8 +1599,8 @@
 			"name": "Heterodontidae",
 			"node_type": "taxonomic",
 			"position": [
-				125.0,
-				750.0
+				-606.217782649107,
+				-350.0
 			],
 			"rank": "family",
 			"scientific_name": "Heterodontidae",
@@ -1574,8 +1616,8 @@
 			"name": "Heterodontus",
 			"node_type": "taxonomic",
 			"position": [
-				125.0,
-				900.0
+				-736.121593216773,
+				-425.0
 			],
 			"rank": "genus",
 			"scientific_name": "Heterodontus",
@@ -1591,8 +1633,8 @@
 			"name": "francisci",
 			"node_type": "taxonomic",
 			"position": [
-				125.0,
-				1050.0
+				-866.025403784439,
+				-500.0
 			],
 			"rank": "species",
 			"scientific_name": "francisci",
@@ -1608,8 +1650,8 @@
 			"name": "Arthropoda",
 			"node_type": "taxonomic",
 			"position": [
-				225.0,
-				300.0
+				-125.0,
+				-216.50635094611
 			],
 			"rank": "phylum",
 			"scientific_name": "Arthropoda",
@@ -1625,8 +1667,8 @@
 			"name": "Malacostraca",
 			"node_type": "taxonomic",
 			"position": [
-				225.0,
-				450.0
+				-200.0,
+				-346.410161513775
 			],
 			"rank": "class",
 			"scientific_name": "Malacostraca",
@@ -1642,8 +1684,8 @@
 			"name": "Decapoda",
 			"node_type": "taxonomic",
 			"position": [
-				225.0,
-				600.0
+				-275.0,
+				-476.313972081441
 			],
 			"rank": "order",
 			"scientific_name": "Decapoda",
@@ -1659,8 +1701,8 @@
 			"name": "Macrocheiridae",
 			"node_type": "taxonomic",
 			"position": [
-				225.0,
-				750.0
+				-350.0,
+				-606.217782649107
 			],
 			"rank": "family",
 			"scientific_name": "Macrocheiridae",
@@ -1676,8 +1718,8 @@
 			"name": "Macrocheira",
 			"node_type": "taxonomic",
 			"position": [
-				225.0,
-				900.0
+				-425.0,
+				-736.121593216773
 			],
 			"rank": "genus",
 			"scientific_name": "Macrocheira",
@@ -1693,8 +1735,8 @@
 			"name": "kaempferi",
 			"node_type": "taxonomic",
 			"position": [
-				225.0,
-				1050.0
+				-500.0,
+				-866.025403784438
 			],
 			"rank": "species",
 			"scientific_name": "kaempferi",
@@ -1710,8 +1752,8 @@
 			"name": "Bison",
 			"node_type": "taxonomic",
 			"position": [
-				325.0,
-				150.0
+				-0.0000000000000183697019872103,
+				-100.0
 			],
 			"rank": "genus",
 			"scientific_name": "Bison",
@@ -1727,8 +1769,8 @@
 			"name": "bison",
 			"node_type": "taxonomic",
 			"position": [
-				325.0,
-				300.0
+				-0.0000000000000459242549680257,
+				-250.0
 			],
 			"rank": "species",
 			"scientific_name": "bison",
@@ -1756,8 +1798,8 @@
 			"id": "17fb41c6-36b6-4ce3-91b1-9b562f77b539",
 			"node_type": "animal",
 			"position": [
-				-875.0,
-				1200.0
+				0.0000000000000704171909509728,
+				-1150.0
 			],
 			"scientific_name": "Chrysaora fuscescens",
 			"taxonomy": {
@@ -1794,8 +1836,8 @@
 			"id": "263b9933-bb73-4561-a6f6-206df8a8c777",
 			"node_type": "animal",
 			"position": [
-				-775.0,
-				1200.0
+				575.0,
+				-995.929214352104
 			],
 			"scientific_name": "Larus occidentalis wymani",
 			"taxonomy": {
@@ -1832,8 +1874,8 @@
 			"id": "3464415a-1922-48eb-8382-953068234f8e",
 			"node_type": "animal",
 			"position": [
-				-675.0,
-				900.0
+				736.121593216773,
+				-425.0
 			],
 			"scientific_name": "Ailuropoda",
 			"taxonomy": {
@@ -1870,8 +1912,8 @@
 			"id": "78e0ef26-d13c-4294-aea0-698584b4da9a",
 			"node_type": "animal",
 			"position": [
-				225.0,
-				1200.0
+				-575.0,
+				-995.929214352104
 			],
 			"scientific_name": "Macrocheira kaempferi",
 			"taxonomy": {
@@ -1908,8 +1950,8 @@
 			"id": "7a04c580-bd95-4ec5-966a-9e6bc634b756",
 			"node_type": "animal",
 			"position": [
-				325.0,
-				450.0
+				-0.0000000000000734788079488412,
+				-400.0
 			],
 			"scientific_name": "Bison bison bison",
 			"taxonomy": {
@@ -1946,8 +1988,8 @@
 			"id": "7bb83d90-628a-4df8-8390-d3f62888577f",
 			"node_type": "animal",
 			"position": [
-				-575.0,
-				1200.0
+				1150.0,
+				0.0
 			],
 			"scientific_name": "Canis familiaris",
 			"taxonomy": {
@@ -1984,8 +2026,8 @@
 			"id": "8fa89dac-f2f3-4854-bb44-7bcf489318bb",
 			"node_type": "animal",
 			"position": [
-				-375.0,
-				1200.0
+				575.0,
+				995.929214352104
 			],
 			"scientific_name": "Cryptobranchus alleganiensis",
 			"taxonomy": {
@@ -2022,8 +2064,8 @@
 			"id": "a869d84c-41b8-4946-83b8-c16ff60cd01a",
 			"node_type": "animal",
 			"position": [
-				-175.0,
-				1200.0
+				-575.0,
+				995.929214352104
 			],
 			"scientific_name": "Gymnothorax funebris",
 			"taxonomy": {
@@ -2060,8 +2102,8 @@
 			"id": "c099a1d9-10e7-4721-a844-4709264377be",
 			"node_type": "animal",
 			"position": [
-				-475.0,
-				1200.0
+				995.929214352104,
+				575.0
 			],
 			"scientific_name": "Felis catus",
 			"taxonomy": {
@@ -2098,8 +2140,8 @@
 			"id": "c203ac50-5955-4f6e-952d-b2df66745d9e",
 			"node_type": "animal",
 			"position": [
-				125.0,
-				1200.0
+				-995.929214352104,
+				-575.0
 			],
 			"scientific_name": "Heterodontus francisci",
 			"taxonomy": {
@@ -2136,8 +2178,8 @@
 			"id": "d78a0ed8-4f2e-465f-ae7e-f57475f4e119",
 			"node_type": "animal",
 			"position": [
-				-75.0,
-				1200.0
+				-995.929214352104,
+				575.0
 			],
 			"scientific_name": "Arapaima gigas",
 			"taxonomy": {
@@ -2174,8 +2216,8 @@
 			"id": "dbd67f24-d139-45f6-9eda-f07c28341d52",
 			"node_type": "animal",
 			"position": [
-				-275.0,
-				1200.0
+				0.0000000000000704171909509728,
+				1150.0
 			],
 			"scientific_name": "Trachycephalus resinifictrix",
 			"taxonomy": {
@@ -2212,8 +2254,8 @@
 			"id": "fcf1d0c0-d49a-4305-b76a-1f01c79ae8a4",
 			"node_type": "animal",
 			"position": [
-				25.0,
-				1200.0
+				-1150.0,
+				0.000000000000140834381901946
 			],
 			"scientific_name": "Phyllopteryx taeniolatus",
 			"taxonomy": {

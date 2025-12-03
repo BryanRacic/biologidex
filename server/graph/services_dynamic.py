@@ -55,8 +55,8 @@ class DynamicTaxonomicTreeService:
         if layout_type == self.LAYOUT_RADIAL:
             self.layout_engine = RadialReingoldTilfordLayout(
                 angle_spread=360.0,
-                radius_per_level=150.0,
-                min_radius=100.0
+                radius_per_level=400.0,  # Increased for better readability
+                min_radius=300.0  # Larger inner radius
             )
         else:
             self.layout_engine = ReingoldTilfordLayout()

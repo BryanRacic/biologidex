@@ -9,6 +9,9 @@ class_name TreeRenderer
 
 const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
 
+# Theme for labels
+var _theme: Theme = preload("res://theme.tres")
+
 # =============================================================================
 # Signals
 # =============================================================================
@@ -22,14 +25,14 @@ signal node_unhovered()
 # =============================================================================
 
 # Visual settings - Animal nodes
-const NODE_SIZE_BASE: float = 10.0
-const NODE_SIZE_USER: float = 16.0
-const NODE_SIZE_FRIEND: float = 14.0
-const NODE_SIZE_DISCOVERER_BONUS: float = 2.0
+const NODE_SIZE_BASE: float = 20.0
+const NODE_SIZE_USER: float = 32.0
+const NODE_SIZE_FRIEND: float = 28.0
+const NODE_SIZE_DISCOVERER_BONUS: float = 4.0
 
 # Visual settings - Taxonomy nodes
-const TAXONOMY_NODE_SIZE: float = 6.0
-const COLOR_TAXONOMY: Color = Color(0.6, 0.6, 0.6, 0.8)
+const TAXONOMY_NODE_SIZE: float = 12.0
+const COLOR_TAXONOMY: Color = Color(0, 0, 0, 1)
 const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
 
 # Rank-specific size multipliers
@@ -49,9 +52,9 @@ const RANK_SIZE_MULTIPLIERS = {
 const COLOR_USER_CAPTURED: Color = Color(0.13, 0.59, 0.95, 1.0)
 const COLOR_FRIEND_CAPTURED: Color = Color(0.30, 0.69, 0.31, 1.0)
 const COLOR_BOTH_CAPTURED: Color = Color(0.48, 0.12, 0.64, 1.0)
-const COLOR_UNCAPTURED: Color = Color(0.46, 0.46, 0.46, 1.0)
-const COLOR_SELECTED: Color = Color(1.0, 0.92, 0.23, 1.0)
-const COLOR_EDGE: Color = Color(0.26, 0.26, 0.26, 0.3)
+const COLOR_UNCAPTURED: Color = Color(0, 0, 0, 1)
+const COLOR_SELECTED: Color = Color(0, 0, 0, 1)
+const COLOR_EDGE: Color = Color(0, 0, 0, 1)
 
 # Performance settings
 const MAX_VISIBLE_NODES: int = 50000
@@ -103,7 +106,7 @@ var nodes_by_position: Dictionary = {}
 
 # Label management
 var taxonomy_labels: Dictionary = {}
-const MIN_ZOOM_FOR_LABELS: float = 0.8
+const MIN_ZOOM_FOR_LABELS: float = 0.3  # Show labels at most zoom levels
 
 # =============================================================================
 # Initialization
@@ -458,11 +461,10 @@ func _render_taxonomy_labels() -> void:
 		if should_show_label:
 			var label = Label.new()
 			label.text = label_text
-			label.add_theme_font_size_override("font_size", 10)
-			label.add_theme_color_override("font_color", Color.WHITE)
-			label.add_theme_color_override("font_outline_color", Color.BLACK)
-			label.add_theme_constant_override("outline_size", 2)
-			label.position = render_data.position + Vector2(-20, 10)
+			label.theme = _theme
+			# Position label below and slightly right of node
+			var node_size = NODE_SIZE_BASE * render_data.scale
+			label.position = render_data.position + Vector2(-node_size, node_size + 10)
 
 			labels_container.add_child(label)
 			taxonomy_labels[render_data.node.id] = label
