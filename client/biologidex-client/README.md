@@ -184,6 +184,17 @@ var thumb = ImageProcessor.generate_thumbnail(image)
 3. Verify memory usage (Godot Profiler)
 4. Test web export compatibility
 
+### Debug: Caching Tree Data
+To cache tree API responses for offline testing:
+
+1. Edit `features/server_interface/api/services/tree_service.gd`
+2. Set `DEBUG_CACHE_TREE_RESPONSE = true` (line 10)
+3. Run the app and navigate to the tree view
+4. Tree data is saved to `res://resources/tree.json`
+5. Set back to `false` when done
+
+This is useful for testing tree rendering without server dependency.
+
 ### Web Export
 ```bash
 # Export from Godot Editor or use script

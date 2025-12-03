@@ -11,17 +11,17 @@ const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
 # Note: Services (APIManager, NavigationManager) are automatically initialized by BaseSceneNode
 
 # Node references (back_button, is_loading inherited from BaseSceneNode)
-@onready var search_bar: LineEdit = $VBoxContainer/Toolbar/SearchBar
-@onready var mode_dropdown: OptionButton = $VBoxContainer/Toolbar/ModeDropdown
-@onready var zoom_in_button: Button = $VBoxContainer/Toolbar/ZoomControls/ZoomInButton
-@onready var zoom_out_button: Button = $VBoxContainer/Toolbar/ZoomControls/ZoomOutButton
-@onready var zoom_reset_button: Button = $VBoxContainer/Toolbar/ZoomControls/ZoomResetButton
-@onready var loading_label: Label = $VBoxContainer/LoadingLabel
-@onready var stats_label: Label = $VBoxContainer/StatsLabel
-@onready var viewport_container: SubViewportContainer = $VBoxContainer/ViewportContainer
-@onready var sub_viewport: SubViewport = $VBoxContainer/ViewportContainer/SubViewport
-@onready var tree_world: Node2D = $VBoxContainer/ViewportContainer/SubViewport/TreeWorld
-@onready var tree_camera: Camera2D = $VBoxContainer/ViewportContainer/SubViewport/TreeWorld/Camera2D
+@onready var search_bar: LineEdit = %SearchBar
+@onready var mode_dropdown: OptionButton = %ModeDropdown
+@onready var zoom_in_button: Button = %ZoomInButton
+@onready var zoom_out_button: Button = %ZoomOutButton
+@onready var zoom_reset_button: Button = %ZoomResetButton
+@onready var loading_label: Label = %LoadingLabel
+@onready var stats_label: Label = %StatsLabel
+@onready var viewport_container: SubViewportContainer = %ViewportContainer
+@onready var sub_viewport: SubViewport = %SubViewport
+@onready var tree_world: Node2D = %TreeWorld
+@onready var tree_camera: Camera2D = %Camera2D
 
 # Tree data
 var current_tree_data: TreeDataModels.TreeData = null
@@ -45,7 +45,7 @@ func _on_scene_ready() -> void:
 	print("[TreeController] Scene ready (refactored v2)")
 
 	# Wire up UI elements from scene (BaseSceneNode members)
-	back_button = $VBoxContainer/Toolbar/BackButton
+	back_button = %BackButton
 	# Connect back button (set after BaseSceneNode._setup_common_ui(), so connect manually)
 	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
 		back_button.pressed.connect(_on_back_pressed)
@@ -78,14 +78,13 @@ func _on_scene_ready() -> void:
 	# Setup mode dropdown
 	_setup_mode_dropdown()
 
-	# Setup viewport
-	_setup_viewport()
+	# Setup viewport (async - waits for layout)
+	await _setup_viewport()
 
 	# Setup renderer
 	_setup_renderer()
 
 	# Initial load
-	await get_tree().process_frame
 	load_tree()
 
 
@@ -101,7 +100,18 @@ func _setup_mode_dropdown() -> void:
 
 func _setup_viewport() -> void:
 	"""Setup SubViewport for rendering."""
-	sub_viewport.size = Vector2i(1280, 720)
+	# Wait for layout to complete so container has correct size
+	await get_tree().process_frame
+
+	# Size SubViewport to match container (or use fallback)
+	var container_size = viewport_container.size
+	if container_size.x > 0 and container_size.y > 0:
+		sub_viewport.size = Vector2i(int(container_size.x), int(container_size.y))
+		print("[TreeController] SubViewport sized to container: ", sub_viewport.size)
+	else:
+		sub_viewport.size = Vector2i(1280, 720)
+		print("[TreeController] SubViewport using fallback size: ", sub_viewport.size)
+
 	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
 

@@ -1,0 +1,2252 @@
+{
+	"edges": [
+		{
+			"rank_transition": "root_to_kingdom",
+			"relationship": "parent_child",
+			"source": "root",
+			"target": "kingdom_Animalia"
+		},
+		{
+			"rank_transition": "kingdom_to_phylum",
+			"relationship": "parent_child",
+			"source": "kingdom_Animalia",
+			"target": "phylum_Cnidaria"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Cnidaria",
+			"target": "class_Scyphozoa"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Scyphozoa",
+			"target": "order_Semaeostomeae"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Semaeostomeae",
+			"target": "family_Pelagiidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Pelagiidae",
+			"target": "genus_Chrysaora"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Chrysaora",
+			"target": "species_Chrysaora_fuscescens"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Chrysaora_fuscescens",
+			"target": "17fb41c6-36b6-4ce3-91b1-9b562f77b539"
+		},
+		{
+			"rank_transition": "kingdom_to_phylum",
+			"relationship": "parent_child",
+			"source": "kingdom_Animalia",
+			"target": "phylum_Chordata"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Chordata",
+			"target": "class_Aves"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Aves",
+			"target": "order_Charadriiformes"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Charadriiformes",
+			"target": "family_Laridae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Laridae",
+			"target": "genus_Larus"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Larus",
+			"target": "species_Larus_occidentalis"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Larus_occidentalis",
+			"target": "263b9933-bb73-4561-a6f6-206df8a8c777"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Chordata",
+			"target": "class_Mammalia"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Mammalia",
+			"target": "order_Carnivora"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Carnivora",
+			"target": "family_Ursidae"
+		},
+		{
+			"rank_transition": "family_to_species",
+			"relationship": "parent_child",
+			"source": "family_Ursidae",
+			"target": "3464415a-1922-48eb-8382-953068234f8e"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Carnivora",
+			"target": "family_Canidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Canidae",
+			"target": "genus_Canis"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Canis",
+			"target": "species_Canis_familiaris"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Canis_familiaris",
+			"target": "7bb83d90-628a-4df8-8390-d3f62888577f"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Carnivora",
+			"target": "family_Felidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Felidae",
+			"target": "genus_Felis"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Felis",
+			"target": "species_Felis_catus"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Felis_catus",
+			"target": "c099a1d9-10e7-4721-a844-4709264377be"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Chordata",
+			"target": "class_Amphibia"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Amphibia",
+			"target": "order_Caudata"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Caudata",
+			"target": "family_Cryptobranchidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Cryptobranchidae",
+			"target": "genus_Cryptobranchus"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Cryptobranchus",
+			"target": "species_Cryptobranchus_alleganiensis"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Cryptobranchus_alleganiensis",
+			"target": "8fa89dac-f2f3-4854-bb44-7bcf489318bb"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Amphibia",
+			"target": "order_Anura"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Anura",
+			"target": "family_Hylidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Hylidae",
+			"target": "genus_Trachycephalus"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Trachycephalus",
+			"target": "species_Trachycephalus_resinifictrix"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Trachycephalus_resinifictrix",
+			"target": "dbd67f24-d139-45f6-9eda-f07c28341d52"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Chordata",
+			"target": "class_Teleostei"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Teleostei",
+			"target": "order_Anguilliformes"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Anguilliformes",
+			"target": "family_Muraenidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Muraenidae",
+			"target": "genus_Gymnothorax"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Gymnothorax",
+			"target": "species_Gymnothorax_funebris"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Gymnothorax_funebris",
+			"target": "a869d84c-41b8-4946-83b8-c16ff60cd01a"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Teleostei",
+			"target": "order_Osteoglossiformes"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Osteoglossiformes",
+			"target": "family_Arapaimidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Arapaimidae",
+			"target": "genus_Arapaima"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Arapaima",
+			"target": "species_Arapaima_gigas"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Arapaima_gigas",
+			"target": "d78a0ed8-4f2e-465f-ae7e-f57475f4e119"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Teleostei",
+			"target": "order_Syngnathiformes"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Syngnathiformes",
+			"target": "family_Syngnathidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Syngnathidae",
+			"target": "genus_Phyllopteryx"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Phyllopteryx",
+			"target": "species_Phyllopteryx_taeniolatus"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Phyllopteryx_taeniolatus",
+			"target": "fcf1d0c0-d49a-4305-b76a-1f01c79ae8a4"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Chordata",
+			"target": "class_Elasmobranchii"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Elasmobranchii",
+			"target": "order_Heterodontiformes"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Heterodontiformes",
+			"target": "family_Heterodontidae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Heterodontidae",
+			"target": "genus_Heterodontus"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Heterodontus",
+			"target": "species_Heterodontus_francisci"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Heterodontus_francisci",
+			"target": "c203ac50-5955-4f6e-952d-b2df66745d9e"
+		},
+		{
+			"rank_transition": "kingdom_to_phylum",
+			"relationship": "parent_child",
+			"source": "kingdom_Animalia",
+			"target": "phylum_Arthropoda"
+		},
+		{
+			"rank_transition": "phylum_to_class",
+			"relationship": "parent_child",
+			"source": "phylum_Arthropoda",
+			"target": "class_Malacostraca"
+		},
+		{
+			"rank_transition": "class_to_order",
+			"relationship": "parent_child",
+			"source": "class_Malacostraca",
+			"target": "order_Decapoda"
+		},
+		{
+			"rank_transition": "order_to_family",
+			"relationship": "parent_child",
+			"source": "order_Decapoda",
+			"target": "family_Macrocheiridae"
+		},
+		{
+			"rank_transition": "family_to_genus",
+			"relationship": "parent_child",
+			"source": "family_Macrocheiridae",
+			"target": "genus_Macrocheira"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Macrocheira",
+			"target": "species_Macrocheira_kaempferi"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Macrocheira_kaempferi",
+			"target": "78e0ef26-d13c-4294-aea0-698584b4da9a"
+		},
+		{
+			"rank_transition": "root_to_genus",
+			"relationship": "parent_child",
+			"source": "root",
+			"target": "genus_Bison"
+		},
+		{
+			"rank_transition": "genus_to_species",
+			"relationship": "parent_child",
+			"source": "genus_Bison",
+			"target": "species_Bison_bison"
+		},
+		{
+			"rank_transition": "species_to_species",
+			"relationship": "parent_child",
+			"source": "species_Bison_bison",
+			"target": "7a04c580-bd95-4ec5-966a-9e6bc634b756"
+		}
+	],
+	"layout": {
+		"chunk_metadata": {
+			"chunk_size": 2048.0,
+			"chunks": [
+				{
+					"chunk_x": -1.0,
+					"chunk_y": 0.0,
+					"edge_count": 51.0,
+					"node_count": 49.0,
+					"world_bounds": {
+						"max_x": 0.0,
+						"max_y": 2048.0,
+						"min_x": -2048.0,
+						"min_y": 0.0
+					}
+				},
+				{
+					"chunk_x": 0.0,
+					"chunk_y": 0.0,
+					"edge_count": 20.0,
+					"node_count": 21.0,
+					"world_bounds": {
+						"max_x": 2048.0,
+						"max_y": 2048.0,
+						"min_x": 0.0,
+						"min_y": 0.0
+					}
+				}
+			],
+			"total_chunks": 2.0,
+			"world_bounds": [
+				-1079.8,
+				-204.8,
+				529.8,
+				1404.8
+			]
+		},
+		"chunk_size": {
+			"height": 2048.0,
+			"width": 2048.0
+		},
+		"positions": {
+			"17fb41c6-36b6-4ce3-91b1-9b562f77b539": [
+				-875.0,
+				1200.0
+			],
+			"263b9933-bb73-4561-a6f6-206df8a8c777": [
+				-775.0,
+				1200.0
+			],
+			"3464415a-1922-48eb-8382-953068234f8e": [
+				-675.0,
+				900.0
+			],
+			"78e0ef26-d13c-4294-aea0-698584b4da9a": [
+				225.0,
+				1200.0
+			],
+			"7a04c580-bd95-4ec5-966a-9e6bc634b756": [
+				325.0,
+				450.0
+			],
+			"7bb83d90-628a-4df8-8390-d3f62888577f": [
+				-575.0,
+				1200.0
+			],
+			"8fa89dac-f2f3-4854-bb44-7bcf489318bb": [
+				-375.0,
+				1200.0
+			],
+			"a869d84c-41b8-4946-83b8-c16ff60cd01a": [
+				-175.0,
+				1200.0
+			],
+			"c099a1d9-10e7-4721-a844-4709264377be": [
+				-475.0,
+				1200.0
+			],
+			"c203ac50-5955-4f6e-952d-b2df66745d9e": [
+				125.0,
+				1200.0
+			],
+			"class_Amphibia": [
+				-325.0,
+				450.0
+			],
+			"class_Aves": [
+				-775.0,
+				450.0
+			],
+			"class_Elasmobranchii": [
+				125.0,
+				450.0
+			],
+			"class_Malacostraca": [
+				225.0,
+				450.0
+			],
+			"class_Mammalia": [
+				-575.0,
+				450.0
+			],
+			"class_Scyphozoa": [
+				-875.0,
+				450.0
+			],
+			"class_Teleostei": [
+				-75.0,
+				450.0
+			],
+			"d78a0ed8-4f2e-465f-ae7e-f57475f4e119": [
+				-75.0,
+				1200.0
+			],
+			"dbd67f24-d139-45f6-9eda-f07c28341d52": [
+				-275.0,
+				1200.0
+			],
+			"family_Arapaimidae": [
+				-75.0,
+				750.0
+			],
+			"family_Canidae": [
+				-575.0,
+				750.0
+			],
+			"family_Cryptobranchidae": [
+				-375.0,
+				750.0
+			],
+			"family_Felidae": [
+				-475.0,
+				750.0
+			],
+			"family_Heterodontidae": [
+				125.0,
+				750.0
+			],
+			"family_Hylidae": [
+				-275.0,
+				750.0
+			],
+			"family_Laridae": [
+				-775.0,
+				750.0
+			],
+			"family_Macrocheiridae": [
+				225.0,
+				750.0
+			],
+			"family_Muraenidae": [
+				-175.0,
+				750.0
+			],
+			"family_Pelagiidae": [
+				-875.0,
+				750.0
+			],
+			"family_Syngnathidae": [
+				25.0,
+				750.0
+			],
+			"family_Ursidae": [
+				-675.0,
+				750.0
+			],
+			"fcf1d0c0-d49a-4305-b76a-1f01c79ae8a4": [
+				25.0,
+				1200.0
+			],
+			"genus_Arapaima": [
+				-75.0,
+				900.0
+			],
+			"genus_Bison": [
+				325.0,
+				150.0
+			],
+			"genus_Canis": [
+				-575.0,
+				900.0
+			],
+			"genus_Chrysaora": [
+				-875.0,
+				900.0
+			],
+			"genus_Cryptobranchus": [
+				-375.0,
+				900.0
+			],
+			"genus_Felis": [
+				-475.0,
+				900.0
+			],
+			"genus_Gymnothorax": [
+				-175.0,
+				900.0
+			],
+			"genus_Heterodontus": [
+				125.0,
+				900.0
+			],
+			"genus_Larus": [
+				-775.0,
+				900.0
+			],
+			"genus_Macrocheira": [
+				225.0,
+				900.0
+			],
+			"genus_Phyllopteryx": [
+				25.0,
+				900.0
+			],
+			"genus_Trachycephalus": [
+				-275.0,
+				900.0
+			],
+			"kingdom_Animalia": [
+				-325.0,
+				150.0
+			],
+			"order_Anguilliformes": [
+				-175.0,
+				600.0
+			],
+			"order_Anura": [
+				-275.0,
+				600.0
+			],
+			"order_Carnivora": [
+				-575.0,
+				600.0
+			],
+			"order_Caudata": [
+				-375.0,
+				600.0
+			],
+			"order_Charadriiformes": [
+				-775.0,
+				600.0
+			],
+			"order_Decapoda": [
+				225.0,
+				600.0
+			],
+			"order_Heterodontiformes": [
+				125.0,
+				600.0
+			],
+			"order_Osteoglossiformes": [
+				-75.0,
+				600.0
+			],
+			"order_Semaeostomeae": [
+				-875.0,
+				600.0
+			],
+			"order_Syngnathiformes": [
+				25.0,
+				600.0
+			],
+			"phylum_Arthropoda": [
+				225.0,
+				300.0
+			],
+			"phylum_Chordata": [
+				-325.0,
+				300.0
+			],
+			"phylum_Cnidaria": [
+				-875.0,
+				300.0
+			],
+			"root": [
+				0.0,
+				0.0
+			],
+			"species_Arapaima_gigas": [
+				-75.0,
+				1050.0
+			],
+			"species_Bison_bison": [
+				325.0,
+				300.0
+			],
+			"species_Canis_familiaris": [
+				-575.0,
+				1050.0
+			],
+			"species_Chrysaora_fuscescens": [
+				-875.0,
+				1050.0
+			],
+			"species_Cryptobranchus_alleganiensis": [
+				-375.0,
+				1050.0
+			],
+			"species_Felis_catus": [
+				-475.0,
+				1050.0
+			],
+			"species_Gymnothorax_funebris": [
+				-175.0,
+				1050.0
+			],
+			"species_Heterodontus_francisci": [
+				125.0,
+				1050.0
+			],
+			"species_Larus_occidentalis": [
+				-775.0,
+				1050.0
+			],
+			"species_Macrocheira_kaempferi": [
+				225.0,
+				1050.0
+			],
+			"species_Phyllopteryx_taeniolatus": [
+				25.0,
+				1050.0
+			],
+			"species_Trachycephalus_resinifictrix": [
+				-275.0,
+				1050.0
+			]
+		},
+		"world_bounds": [
+			-1079.8,
+			-204.8,
+			529.8,
+			1404.8
+		]
+	},
+	"metadata": {
+		"cache_key": "taxonomic_tree_friends_3f1acfa2-de78-4e49-ade2-4b5ae1f3a847",
+		"mode": "friends",
+		"scoped_users": 5.0,
+		"total_edges": 70.0,
+		"total_nodes": 70.0,
+		"user_id": "3f1acfa2-de78-4e49-ade2-4b5ae1f3a847",
+		"username": "admin"
+	},
+	"nodes": [
+		{
+			"animal_count": 12.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 3.0,
+			"id": "kingdom_Animalia",
+			"name": "Animalia",
+			"node_type": "taxonomic",
+			"position": [
+				-325.0,
+				150.0
+			],
+			"rank": "kingdom",
+			"scientific_name": "Animalia",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "phylum_Cnidaria",
+			"name": "Cnidaria",
+			"node_type": "taxonomic",
+			"position": [
+				-875.0,
+				300.0
+			],
+			"rank": "phylum",
+			"scientific_name": "Cnidaria",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "class_Scyphozoa",
+			"name": "Scyphozoa",
+			"node_type": "taxonomic",
+			"position": [
+				-875.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Scyphozoa",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Semaeostomeae",
+			"name": "Semaeostomeae",
+			"node_type": "taxonomic",
+			"position": [
+				-875.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Semaeostomeae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Pelagiidae",
+			"name": "Pelagiidae",
+			"node_type": "taxonomic",
+			"position": [
+				-875.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Pelagiidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Chrysaora",
+			"name": "Chrysaora",
+			"node_type": "taxonomic",
+			"position": [
+				-875.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Chrysaora",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Chrysaora_fuscescens",
+			"name": "fuscescens",
+			"node_type": "taxonomic",
+			"position": [
+				-875.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "fuscescens",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 10.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 5.0,
+			"id": "phylum_Chordata",
+			"name": "Chordata",
+			"node_type": "taxonomic",
+			"position": [
+				-325.0,
+				300.0
+			],
+			"rank": "phylum",
+			"scientific_name": "Chordata",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "class_Aves",
+			"name": "Aves",
+			"node_type": "taxonomic",
+			"position": [
+				-775.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Aves",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Charadriiformes",
+			"name": "Charadriiformes",
+			"node_type": "taxonomic",
+			"position": [
+				-775.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Charadriiformes",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Laridae",
+			"name": "Laridae",
+			"node_type": "taxonomic",
+			"position": [
+				-775.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Laridae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Larus",
+			"name": "Larus",
+			"node_type": "taxonomic",
+			"position": [
+				-775.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Larus",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Larus_occidentalis",
+			"name": "occidentalis",
+			"node_type": "taxonomic",
+			"position": [
+				-775.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "occidentalis",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 3.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "class_Mammalia",
+			"name": "Mammalia",
+			"node_type": "taxonomic",
+			"position": [
+				-575.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Mammalia",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 3.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 3.0,
+			"id": "order_Carnivora",
+			"name": "Carnivora",
+			"node_type": "taxonomic",
+			"position": [
+				-575.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Carnivora",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Ursidae",
+			"name": "Ursidae",
+			"node_type": "taxonomic",
+			"position": [
+				-675.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Ursidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Canidae",
+			"name": "Canidae",
+			"node_type": "taxonomic",
+			"position": [
+				-575.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Canidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Canis",
+			"name": "Canis",
+			"node_type": "taxonomic",
+			"position": [
+				-575.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Canis",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Canis_familiaris",
+			"name": "familiaris",
+			"node_type": "taxonomic",
+			"position": [
+				-575.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "familiaris",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Felidae",
+			"name": "Felidae",
+			"node_type": "taxonomic",
+			"position": [
+				-475.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Felidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Felis",
+			"name": "Felis",
+			"node_type": "taxonomic",
+			"position": [
+				-475.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Felis",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Felis_catus",
+			"name": "catus",
+			"node_type": "taxonomic",
+			"position": [
+				-475.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "catus",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 2.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 2.0,
+			"id": "class_Amphibia",
+			"name": "Amphibia",
+			"node_type": "taxonomic",
+			"position": [
+				-325.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Amphibia",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Caudata",
+			"name": "Caudata",
+			"node_type": "taxonomic",
+			"position": [
+				-375.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Caudata",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Cryptobranchidae",
+			"name": "Cryptobranchidae",
+			"node_type": "taxonomic",
+			"position": [
+				-375.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Cryptobranchidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Cryptobranchus",
+			"name": "Cryptobranchus",
+			"node_type": "taxonomic",
+			"position": [
+				-375.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Cryptobranchus",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Cryptobranchus_alleganiensis",
+			"name": "alleganiensis",
+			"node_type": "taxonomic",
+			"position": [
+				-375.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "alleganiensis",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Anura",
+			"name": "Anura",
+			"node_type": "taxonomic",
+			"position": [
+				-275.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Anura",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Hylidae",
+			"name": "Hylidae",
+			"node_type": "taxonomic",
+			"position": [
+				-275.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Hylidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Trachycephalus",
+			"name": "Trachycephalus",
+			"node_type": "taxonomic",
+			"position": [
+				-275.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Trachycephalus",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Trachycephalus_resinifictrix",
+			"name": "resinifictrix",
+			"node_type": "taxonomic",
+			"position": [
+				-275.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "resinifictrix",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 3.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 3.0,
+			"id": "class_Teleostei",
+			"name": "Teleostei",
+			"node_type": "taxonomic",
+			"position": [
+				-75.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Teleostei",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Anguilliformes",
+			"name": "Anguilliformes",
+			"node_type": "taxonomic",
+			"position": [
+				-175.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Anguilliformes",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Muraenidae",
+			"name": "Muraenidae",
+			"node_type": "taxonomic",
+			"position": [
+				-175.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Muraenidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Gymnothorax",
+			"name": "Gymnothorax",
+			"node_type": "taxonomic",
+			"position": [
+				-175.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Gymnothorax",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Gymnothorax_funebris",
+			"name": "funebris",
+			"node_type": "taxonomic",
+			"position": [
+				-175.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "funebris",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Osteoglossiformes",
+			"name": "Osteoglossiformes",
+			"node_type": "taxonomic",
+			"position": [
+				-75.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Osteoglossiformes",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Arapaimidae",
+			"name": "Arapaimidae",
+			"node_type": "taxonomic",
+			"position": [
+				-75.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Arapaimidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Arapaima",
+			"name": "Arapaima",
+			"node_type": "taxonomic",
+			"position": [
+				-75.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Arapaima",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Arapaima_gigas",
+			"name": "gigas",
+			"node_type": "taxonomic",
+			"position": [
+				-75.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "gigas",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Syngnathiformes",
+			"name": "Syngnathiformes",
+			"node_type": "taxonomic",
+			"position": [
+				25.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Syngnathiformes",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Syngnathidae",
+			"name": "Syngnathidae",
+			"node_type": "taxonomic",
+			"position": [
+				25.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Syngnathidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Phyllopteryx",
+			"name": "Phyllopteryx",
+			"node_type": "taxonomic",
+			"position": [
+				25.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Phyllopteryx",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Phyllopteryx_taeniolatus",
+			"name": "taeniolatus",
+			"node_type": "taxonomic",
+			"position": [
+				25.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "taeniolatus",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "class_Elasmobranchii",
+			"name": "Elasmobranchii",
+			"node_type": "taxonomic",
+			"position": [
+				125.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Elasmobranchii",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Heterodontiformes",
+			"name": "Heterodontiformes",
+			"node_type": "taxonomic",
+			"position": [
+				125.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Heterodontiformes",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Heterodontidae",
+			"name": "Heterodontidae",
+			"node_type": "taxonomic",
+			"position": [
+				125.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Heterodontidae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Heterodontus",
+			"name": "Heterodontus",
+			"node_type": "taxonomic",
+			"position": [
+				125.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Heterodontus",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Heterodontus_francisci",
+			"name": "francisci",
+			"node_type": "taxonomic",
+			"position": [
+				125.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "francisci",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "phylum_Arthropoda",
+			"name": "Arthropoda",
+			"node_type": "taxonomic",
+			"position": [
+				225.0,
+				300.0
+			],
+			"rank": "phylum",
+			"scientific_name": "Arthropoda",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "class_Malacostraca",
+			"name": "Malacostraca",
+			"node_type": "taxonomic",
+			"position": [
+				225.0,
+				450.0
+			],
+			"rank": "class",
+			"scientific_name": "Malacostraca",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "order_Decapoda",
+			"name": "Decapoda",
+			"node_type": "taxonomic",
+			"position": [
+				225.0,
+				600.0
+			],
+			"rank": "order",
+			"scientific_name": "Decapoda",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "family_Macrocheiridae",
+			"name": "Macrocheiridae",
+			"node_type": "taxonomic",
+			"position": [
+				225.0,
+				750.0
+			],
+			"rank": "family",
+			"scientific_name": "Macrocheiridae",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Macrocheira",
+			"name": "Macrocheira",
+			"node_type": "taxonomic",
+			"position": [
+				225.0,
+				900.0
+			],
+			"rank": "genus",
+			"scientific_name": "Macrocheira",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Macrocheira_kaempferi",
+			"name": "kaempferi",
+			"node_type": "taxonomic",
+			"position": [
+				225.0,
+				1050.0
+			],
+			"rank": "species",
+			"scientific_name": "kaempferi",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "genus_Bison",
+			"name": "Bison",
+			"node_type": "taxonomic",
+			"position": [
+				325.0,
+				150.0
+			],
+			"rank": "genus",
+			"scientific_name": "Bison",
+			"type": "taxonomic"
+		},
+		{
+			"animal_count": 1.0,
+			"capture_count": 0.0,
+			"captured_by_friends": [],
+			"captured_by_user": false,
+			"children_count": 1.0,
+			"id": "species_Bison_bison",
+			"name": "bison",
+			"node_type": "taxonomic",
+			"position": [
+				325.0,
+				300.0
+			],
+			"rank": "species",
+			"scientific_name": "bison",
+			"type": "taxonomic"
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:23:49.710296+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Pacific sea nettle",
+			"conservation_status": "NE",
+			"creation_index": 9.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "17fb41c6-36b6-4ce3-91b1-9b562f77b539",
+			"node_type": "animal",
+			"position": [
+				-875.0,
+				1200.0
+			],
+			"scientific_name": "Chrysaora fuscescens",
+			"taxonomy": {
+				"class": "Scyphozoa",
+				"family": "Pelagiidae",
+				"genus": "Chrysaora",
+				"kingdom": "Animalia",
+				"order": "Semaeostomeae",
+				"phylum": "Cnidaria",
+				"species": "fuscescens"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:24:57.148976+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Western Gull",
+			"conservation_status": "NE",
+			"creation_index": 10.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "263b9933-bb73-4561-a6f6-206df8a8c777",
+			"node_type": "animal",
+			"position": [
+				-775.0,
+				1200.0
+			],
+			"scientific_name": "Larus occidentalis wymani",
+			"taxonomy": {
+				"class": "Aves",
+				"family": "Laridae",
+				"genus": "Larus",
+				"kingdom": "Animalia",
+				"order": "Charadriiformes",
+				"phylum": "Chordata",
+				"species": "occidentalis"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T21:46:49.047934+00:00",
+					"user_id": "60ee1b2c-e98b-4354-bd84-ed479b25e2f8",
+					"username": "icebear"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "giant panda",
+			"conservation_status": "NE",
+			"creation_index": 15.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "60ee1b2c-e98b-4354-bd84-ed479b25e2f8",
+				"username": "icebear"
+			},
+			"id": "3464415a-1922-48eb-8382-953068234f8e",
+			"node_type": "animal",
+			"position": [
+				-675.0,
+				900.0
+			],
+			"scientific_name": "Ailuropoda",
+			"taxonomy": {
+				"class": "Mammalia",
+				"family": "Ursidae",
+				"genus": "",
+				"kingdom": "Animalia",
+				"order": "Carnivora",
+				"phylum": "Chordata",
+				"species": ""
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:20:44.114844+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Japanese spider crab",
+			"conservation_status": "NE",
+			"creation_index": 6.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "78e0ef26-d13c-4294-aea0-698584b4da9a",
+			"node_type": "animal",
+			"position": [
+				225.0,
+				1200.0
+			],
+			"scientific_name": "Macrocheira kaempferi",
+			"taxonomy": {
+				"class": "Malacostraca",
+				"family": "Macrocheiridae",
+				"genus": "Macrocheira",
+				"kingdom": "Animalia",
+				"order": "Decapoda",
+				"phylum": "Arthropoda",
+				"species": "kaempferi"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T01:25:13.827343+00:00",
+					"user_id": "86444549-0aab-4ac8-8a8e-1fc852134a51",
+					"username": "Egg"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "plains bison",
+			"conservation_status": "NE",
+			"creation_index": 13.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "86444549-0aab-4ac8-8a8e-1fc852134a51",
+				"username": "Egg"
+			},
+			"id": "7a04c580-bd95-4ec5-966a-9e6bc634b756",
+			"node_type": "animal",
+			"position": [
+				325.0,
+				450.0
+			],
+			"scientific_name": "Bison bison bison",
+			"taxonomy": {
+				"class": "",
+				"family": "",
+				"genus": "Bison",
+				"kingdom": "",
+				"order": "",
+				"phylum": "",
+				"species": "bison"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 4.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-21T23:37:22.638726+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": true,
+			"common_name": "domestic dog",
+			"conservation_status": "NE",
+			"creation_index": 1.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "7bb83d90-628a-4df8-8390-d3f62888577f",
+			"node_type": "animal",
+			"position": [
+				-575.0,
+				1200.0
+			],
+			"scientific_name": "Canis familiaris",
+			"taxonomy": {
+				"class": "Mammalia",
+				"family": "Canidae",
+				"genus": "Canis",
+				"kingdom": "Animalia",
+				"order": "Carnivora",
+				"phylum": "Chordata",
+				"species": "familiaris"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:22:58.870510+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Eastern Hellbender",
+			"conservation_status": "NE",
+			"creation_index": 8.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "8fa89dac-f2f3-4854-bb44-7bcf489318bb",
+			"node_type": "animal",
+			"position": [
+				-375.0,
+				1200.0
+			],
+			"scientific_name": "Cryptobranchus alleganiensis",
+			"taxonomy": {
+				"class": "Amphibia",
+				"family": "Cryptobranchidae",
+				"genus": "Cryptobranchus",
+				"kingdom": "Animalia",
+				"order": "Caudata",
+				"phylum": "Chordata",
+				"species": "alleganiensis"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:25:34.127626+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "green moray eel",
+			"conservation_status": "NE",
+			"creation_index": 11.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "a869d84c-41b8-4946-83b8-c16ff60cd01a",
+			"node_type": "animal",
+			"position": [
+				-175.0,
+				1200.0
+			],
+			"scientific_name": "Gymnothorax funebris",
+			"taxonomy": {
+				"class": "Teleostei",
+				"family": "Muraenidae",
+				"genus": "Gymnothorax",
+				"kingdom": "Animalia",
+				"order": "Anguilliformes",
+				"phylum": "Chordata",
+				"species": "funebris"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T01:28:14.202536+00:00",
+					"user_id": "86444549-0aab-4ac8-8a8e-1fc852134a51",
+					"username": "Egg"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "domestic cat",
+			"conservation_status": "NE",
+			"creation_index": 14.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "86444549-0aab-4ac8-8a8e-1fc852134a51",
+				"username": "Egg"
+			},
+			"id": "c099a1d9-10e7-4721-a844-4709264377be",
+			"node_type": "animal",
+			"position": [
+				-475.0,
+				1200.0
+			],
+			"scientific_name": "Felis catus",
+			"taxonomy": {
+				"class": "Mammalia",
+				"family": "Felidae",
+				"genus": "Felis",
+				"kingdom": "Animalia",
+				"order": "Carnivora",
+				"phylum": "Chordata",
+				"species": "catus"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:22:07.948909+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Horn Shark",
+			"conservation_status": "NE",
+			"creation_index": 7.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "c203ac50-5955-4f6e-952d-b2df66745d9e",
+			"node_type": "animal",
+			"position": [
+				125.0,
+				1200.0
+			],
+			"scientific_name": "Heterodontus francisci",
+			"taxonomy": {
+				"class": "Elasmobranchii",
+				"family": "Heterodontidae",
+				"genus": "Heterodontus",
+				"kingdom": "Animalia",
+				"order": "Heterodontiformes",
+				"phylum": "Chordata",
+				"species": "francisci"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:17:17.865887+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Arapaima",
+			"conservation_status": "NE",
+			"creation_index": 2.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "d78a0ed8-4f2e-465f-ae7e-f57475f4e119",
+			"node_type": "animal",
+			"position": [
+				-75.0,
+				1200.0
+			],
+			"scientific_name": "Arapaima gigas",
+			"taxonomy": {
+				"class": "Teleostei",
+				"family": "Arapaimidae",
+				"genus": "Arapaima",
+				"kingdom": "Animalia",
+				"order": "Osteoglossiformes",
+				"phylum": "Chordata",
+				"species": "gigas"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:18:00.368609+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "Amazon milk frog",
+			"conservation_status": "NE",
+			"creation_index": 3.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "dbd67f24-d139-45f6-9eda-f07c28341d52",
+			"node_type": "animal",
+			"position": [
+				-275.0,
+				1200.0
+			],
+			"scientific_name": "Trachycephalus resinifictrix",
+			"taxonomy": {
+				"class": "Amphibia",
+				"family": "Hylidae",
+				"genus": "Trachycephalus",
+				"kingdom": "Animalia",
+				"order": "Anura",
+				"phylum": "Chordata",
+				"species": "resinifictrix"
+			},
+			"type": "animal",
+			"verified": true
+		},
+		{
+			"capture_count": 1.0,
+			"captured_by_friends": [
+				{
+					"captured_at": "2025-11-22T00:18:44.132070+00:00",
+					"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+					"username": "Bryan"
+				}
+			],
+			"captured_by_user": false,
+			"common_name": "weedy seadragon",
+			"conservation_status": "NE",
+			"creation_index": 4.0,
+			"discoverer": {
+				"is_friend": true,
+				"is_self": false,
+				"user_id": "034d5ca1-9c2c-4f72-bd7c-a372b3148e5e",
+				"username": "Bryan"
+			},
+			"id": "fcf1d0c0-d49a-4305-b76a-1f01c79ae8a4",
+			"node_type": "animal",
+			"position": [
+				25.0,
+				1200.0
+			],
+			"scientific_name": "Phyllopteryx taeniolatus",
+			"taxonomy": {
+				"class": "Teleostei",
+				"family": "Syngnathidae",
+				"genus": "Phyllopteryx",
+				"kingdom": "Animalia",
+				"order": "Syngnathiformes",
+				"phylum": "Chordata",
+				"species": "taeniolatus"
+			},
+			"type": "animal",
+			"verified": true
+		}
+	],
+	"stats": {
+		"friend_captures": 13.0,
+		"mode": "friends",
+		"scope": {
+			"is_admin_view": false,
+			"users_included": 5.0
+		},
+		"shared_with_friends": 1.0,
+		"total_animals": 13.0,
+		"total_edges": 70.0,
+		"total_nodes": 70.0,
+		"unique_class": 7.0,
+		"unique_family": 12.0,
+		"unique_genus": 12.0,
+		"unique_kingdom": 1.0,
+		"unique_order": 10.0,
+		"unique_phylum": 3.0,
+		"unique_to_user": 0.0,
+		"user_captures": 3.0
+	}
+}

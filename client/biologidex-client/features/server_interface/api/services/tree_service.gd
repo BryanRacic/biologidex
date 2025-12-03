@@ -5,6 +5,11 @@ class_name TreeService
 
 const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
 
+## Debug flag: When enabled, caches tree API responses to res://resources/tree.json
+## Useful for offline testing. Only works in editor (res:// is read-only in exports).
+const DEBUG_CACHE_TREE_RESPONSE: bool = true
+const DEBUG_CACHE_PATH: String = "res://resources/tree.json"
+
 signal tree_loaded(tree_data: TreeDataModels.TreeData)
 signal tree_load_failed(error: APITypes.APIError)
 signal chunk_loaded(chunk_id: Vector2i, chunk_data: Dictionary)
@@ -55,12 +60,33 @@ func _on_fetch_tree_success(response: Dictionary, context: Dictionary) -> void:
 	_log("Nodes: %d" % response.get("nodes", []).size())
 	_log("Edges: %d" % response.get("edges", []).size())
 
+	# Debug: Cache response to JSON file for testing
+	if DEBUG_CACHE_TREE_RESPONSE:
+		_cache_tree_response(response)
+
 	# Parse response into TreeData object
 	var tree_data = TreeDataModels.TreeData.new(response)
 	tree_loaded.emit(tree_data)
 
 	if context.callback and context.callback.is_valid():
 		context.callback.call(response, 200)
+
+
+func _cache_tree_response(response: Dictionary) -> void:
+	"""Save tree response to JSON file for offline testing."""
+	# Ensure resources directory exists
+	var dir = DirAccess.open("res://")
+	if dir and not dir.dir_exists("resources"):
+		dir.make_dir("resources")
+
+	var json_string = JSON.stringify(response, "\t")
+	var file = FileAccess.open(DEBUG_CACHE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		file.close()
+		_log("DEBUG: Cached tree response to %s (%d bytes)" % [DEBUG_CACHE_PATH, json_string.length()])
+	else:
+		push_error("[TreeService] Failed to cache tree response: %s" % FileAccess.get_open_error())
 
 func _on_fetch_tree_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "fetch_tree")
