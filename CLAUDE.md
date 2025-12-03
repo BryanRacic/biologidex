@@ -84,11 +84,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
 
-**Touch-Interactive Background (Refactored 2025-12-02)**:
+**Touch-Interactive Background (Updated 2025-12-03)**:
 - **InteractiveBackground** (`features/ui/components/interactive_background/`): Self-contained reusable component
   - `interactive_background.tscn`: Prefab scene - just instance it, no wiring needed
   - `interactive_background.gd`: Auto-connects shader to touch controller signals
-  - `background_touch_controller.gd`: Pan/zoom gesture handler (moved from features/home/)
+  - `background_touch_controller.gd`: Pan/zoom gesture handler with threshold-based detection
 - **paper.gdshader** (`shaders/paper.gdshader`): Accepts `scroll` (Vector2) and `scale` (float) uniforms
 - **Gesture support**: Single-finger/mouse drag (pan), two-finger pinch (zoom), scroll wheel (zoom)
 - **Inertia**: Momentum-based scrolling with exponential decay after release
@@ -96,7 +96,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - GitHub issues: #95941 (iOS index overflow), #94346 (multitouch relative), #3772 (cross-platform)
 - **Project settings** (`project.godot`):
   - `pointing/emulate_touch_from_mouse = true` (desktop testing)
-  - `pointing/emulate_mouse_from_touch = false` (prevent double-handling)
+  - `pointing/emulate_mouse_from_touch = true` (mobile buttons work via emulated mouse clicks)
+- **Input handling strategy**:
+  - TouchController uses `MOUSE_FILTER_PASS` (not STOP) to allow events through to buttons
+  - 10px `drag_threshold` distinguishes taps from drags - taps pass through, drags are consumed
+  - Touch events only tracked for pinch zoom; single-touch handled via mouse emulation
+  - Buttons receive emulated mouse clicks on mobile, work correctly
 - **Scene integration**: Instance `InteractiveBackground` as first child in UI CanvasLayer
 - **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
 - **Scenes using component**: home, login, create_acct, camera, dex, dex_feed (NOT social, tree)
