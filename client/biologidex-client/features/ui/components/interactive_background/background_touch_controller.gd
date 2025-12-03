@@ -56,16 +56,39 @@ func _ready() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	# Handle touch events
+	# With emulate_mouse_from_touch=true, we only handle mouse events.
+	# Touch events are converted to mouse events automatically, so handling
+	# both would cause double-panning. Mouse-only handling works for:
+	# - Desktop: real mouse events
+	# - Mobile: touch → emulated mouse events
+	#
+	# We still track touch for multi-touch gestures (pinch zoom) since
+	# mouse emulation doesn't preserve multi-touch information.
+
 	if event is InputEventScreenTouch:
-		var should_accept := _handle_screen_touch(event as InputEventScreenTouch)
-		if should_accept:
-			accept_event()
+		# Track multi-touch state for pinch zoom detection
+		var touch_event := event as InputEventScreenTouch
+		if touch_event.pressed:
+			_touch_state[touch_event.index] = touch_event.position
+		else:
+			_touch_state.erase(touch_event.index)
+			# Reset pinch base state when fingers lifted
+			if _touch_state.size() < 2:
+				_base_touch_state.clear()
+		# Don't consume - let it become a mouse event
+		return
 	elif event is InputEventScreenDrag:
-		var should_accept := _handle_screen_drag(event as InputEventScreenDrag)
-		if should_accept:
+		# Update touch position for pinch zoom
+		var drag_event := event as InputEventScreenDrag
+		if _touch_state.has(drag_event.index):
+			_touch_state[drag_event.index] = drag_event.position
+		# Handle pinch zoom when 2+ fingers
+		if _touch_state.size() >= 2:
+			_handle_pinch_zoom()
 			accept_event()
-	# Handle mouse events (for desktop/web mouse users)
+		# Single finger drag - let mouse emulation handle it
+		return
+	# Handle mouse events (works for both desktop and mobile via emulation)
 	elif event is InputEventMouseButton:
 		var should_accept := _handle_mouse_button(event as InputEventMouseButton)
 		if should_accept:
@@ -189,6 +212,44 @@ func _handle_two_finger_gesture() -> void:
 			scale_changed.emit(current_scale)
 
 	# Calculate pan from midpoint movement
+	var current_center := (p1 + p2) / 2.0
+	var base_center := (bp1 + bp2) / 2.0
+	var center_delta := current_center - base_center
+
+	scroll_offset = _base_scroll - center_delta * pan_sensitivity
+
+
+func _handle_pinch_zoom() -> void:
+	"""Handle pinch zoom from raw touch state (used when mouse emulation is active)."""
+	if _touch_state.size() < 2:
+		return
+
+	var keys: Array = _touch_state.keys()
+	var p1: Vector2 = _touch_state[keys[0]]
+	var p2: Vector2 = _touch_state[keys[1]]
+	var current_distance := p1.distance_to(p2)
+
+	# Initialize base state if needed
+	if _base_touch_state.size() < 2:
+		_base_touch_state = _touch_state.duplicate()
+		_base_scale = current_scale
+		_base_scroll = scroll_offset
+		_base_pinch_distance = current_distance
+		return
+
+	# Calculate zoom
+	if _base_pinch_distance > 10.0:
+		var scale_factor := current_distance / _base_pinch_distance
+		var new_scale := clampf(_base_scale * scale_factor, min_scale, max_scale)
+
+		if absf(new_scale - current_scale) > 0.001:
+			current_scale = new_scale
+			scale_changed.emit(current_scale)
+
+	# Calculate pan from midpoint movement
+	var base_keys: Array = _base_touch_state.keys()
+	var bp1: Vector2 = _base_touch_state[base_keys[0]]
+	var bp2: Vector2 = _base_touch_state[base_keys[1]]
 	var current_center := (p1 + p2) / 2.0
 	var base_center := (bp1 + bp2) / 2.0
 	var center_delta := current_center - base_center
