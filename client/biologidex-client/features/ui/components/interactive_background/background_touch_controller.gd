@@ -70,6 +70,9 @@ func _gui_input(event: InputEvent) -> void:
 		var touch_event := event as InputEventScreenTouch
 		if touch_event.pressed:
 			_touch_state[touch_event.index] = touch_event.position
+			# Stop inertia on first touch to prevent velocity pollution
+			if _touch_state.size() == 1:
+				_stop_inertia()
 		else:
 			_touch_state.erase(touch_event.index)
 			# Reset pinch base state when fingers lifted
@@ -257,6 +260,9 @@ func _handle_pinch_zoom() -> void:
 	scroll_offset = _base_scroll - center_delta * pan_sensitivity
 	scroll_changed.emit(scroll_offset)
 
+	# Record pinch center for velocity calculation (enables inertia after pinch)
+	_record_position_sample(current_center)
+
 
 func _update_base_state() -> void:
 	_base_touch_state = _touch_state.duplicate()
@@ -396,7 +402,8 @@ func _calculate_velocity() -> Vector2:
 	if time_delta < 0.001:
 		return Vector2.ZERO
 
-	return (oldest_pos - newest_pos) / time_delta
+	# Velocity = direction of movement = newest - oldest (not inverted)
+	return (newest_pos - oldest_pos) / time_delta
 
 
 func _start_inertia() -> void:
@@ -422,5 +429,8 @@ func reset() -> void:
 	_base_touch_state.clear()
 	_mouse_dragging = false
 	_mouse_drag_recognized = false
+	# Clear velocity tracking state (prevents stale samples affecting next gesture)
+	_last_positions.clear()
+	_last_times.clear()
 	scroll_changed.emit(scroll_offset)
 	scale_changed.emit(current_scale)

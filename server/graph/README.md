@@ -172,7 +172,6 @@ Pre-order traversal applying modifiers to get final positions:
 ### Current Limitations
 1. Fixed spacing (100 units horizontal, 150 units vertical)
 2. No variable node size support
-3. No collision detection for overlapping labels
 
 ### Future Enhancements
 1. Variable node sizes based on content
@@ -228,7 +227,45 @@ Pre-order traversal applying modifiers to get final positions:
 - [Rachel's Algorithm Walkthrough](https://rachel53461.wordpress.com/2014/04/20/algorithm-for-drawing-trees/)
 - [William Yao's Functional Approach](https://williamyaoh.com/posts/2023-04-22-drawing-trees-functionally.html)
 
+## Client-Side Rendering (Godot)
+
+The Godot client (`client/biologidex-client/features/tree/`) handles tree visualization:
+
+### Key Files
+- `tree_controller.gd`: Orchestrates tree loading, transform handling, UI
+- `tree_renderer.gd`: Node/edge rendering, culling, label management
+- `tree_data_models.gd`: Data structures matching server API response
+
+### Coordinate Space Convention
+**CRITICAL**: All tree code must use consistent coordinate conventions:
+- `scroll_offset`: World-space position at viewport center
+- Transform: `screen = (world - scroll_offset) * scale + viewport_center`
+- To center on world position: `scroll_offset = pos` (NOT `pos * scale`)
+
+### Rendering Features (Updated 2025-12-03)
+- **Frustum culling**: Only renders nodes/edges intersecting view rect
+- **Edge visibility**: Uses bounding box intersection (not endpoint visibility)
+- **Label overlap detection**: Priority-based culling with screen-space distance checks
+- **Zoom-based label filtering**: Higher taxonomic ranks shown at all zoom levels
+- **Screen-space culling margin**: 200px buffer converted to world-space
+
+### Performance Considerations
+- Edges re-render on any view change (scroll or scale)
+- MultiMesh used for batch node rendering
+- Maximum 100 labels rendered simultaneously
+- 60px minimum spacing between labels
+
 ## Changelog
+
+### 2025-12-03
+- **FIX**: Corrected coordinate space conventions in view rect calculation
+- **FIX**: Edge visibility now uses bounding box intersection (edges visible when zoomed in)
+- **FIX**: Edges re-render on scroll changes (not just scale changes)
+- **FIX**: Touch controller velocity calculation direction corrected
+- **FIX**: Inertia cleared on touch start to prevent velocity pollution
+- **FEATURE**: Label overlap detection with priority-based culling
+- **FEATURE**: Zoom-based label filtering by taxonomic rank
+- **FEATURE**: Pinch zoom center tracking for post-pinch inertia
 
 ### 2025-11-18
 - **CRITICAL FIX**: Resolved node overlap bug for multiple animals per species

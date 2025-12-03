@@ -58,12 +58,19 @@ State management:
 **Use cases**: Managing application state, reactive updates
 
 ### tree/
-Tree visualization:
-- `tree_cache.gd`: Tree data caching
-- `tree_data_models.gd`: Tree data structures
-- `tree_renderer.gd`: Tree rendering logic
+Taxonomic tree visualization with radial layout:
+- `tree_cache.gd`: Dual-layer caching (memory + disk)
+- `tree_data_models.gd`: Data structures matching server API (TaxonomicNode, TreeEdge, TreeData)
+- `tree_renderer.gd`: High-performance rendering with MultiMesh, frustum culling, label management
 
-**Use cases**: Displaying taxonomic tree
+**Key features**:
+- Frustum culling with screen-space margin (200px converted to world-space)
+- Edge visibility via bounding box intersection (not just endpoint checks)
+- Priority-based label overlap detection with 60px minimum spacing
+- Zoom-based label filtering (higher ranks visible at all zoom levels)
+- Coordinate convention: `scroll_offset` = world-space position at viewport center
+
+**Use cases**: Displaying taxonomic tree, navigating animal relationships
 
 ### ui/
 Reusable UI components:

@@ -219,6 +219,20 @@ func _setup_renderer() -> void:
 # =============================================================================
 # Transform Handling
 # =============================================================================
+#
+# COORDINATE SPACE CONVENTIONS:
+# - scroll_offset: The world-space position that appears at viewport center
+#   - When scroll_offset = (0,0), the world origin (0,0) is at viewport center
+#   - scroll_offset IS the world center directly (no scaling needed)
+# - World space: Tree node positions are in world coordinates
+#   - Root node is at (0,0), other nodes radiate outward
+# - Transform: tree_graph.transform.origin = viewport_center - scroll_offset * scale
+#   - Screen position of world point W: screen = (W - scroll_offset) * scale + viewport_center
+#
+# To center on a world position `pos`:
+#   scroll_offset = pos
+#
+# =============================================================================
 
 func _on_scroll_changed(offset: Vector2) -> void:
 	"""Handle scroll offset changes from touch controller."""
@@ -412,9 +426,9 @@ func _on_search_results(results: Array) -> void:
 		var position_array = first_result.get("position", [0, 0])
 		if position_array is Array and position_array.size() >= 2:
 			var pos = Vector2(position_array[0], position_array[1])
-			# Set scroll offset to center on this position
+			# Set scroll offset to center on this position (scroll_offset = world center)
 			if touch_controller:
-				touch_controller.scroll_offset = pos * _current_scale
+				touch_controller.scroll_offset = pos
 				touch_controller.scroll_changed.emit(touch_controller.scroll_offset)
 				print("[TreeController] Centered on: ", first_result.get("scientific_name", ""))
 

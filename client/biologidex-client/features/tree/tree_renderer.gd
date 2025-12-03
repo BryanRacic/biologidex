@@ -58,7 +58,7 @@ const COLOR_EDGE: Color = Color(0, 0, 0, 1)
 
 # Performance settings
 const MAX_VISIBLE_NODES: int = 50000
-const CULL_MARGIN: float = 100.0
+const CULL_MARGIN_SCREEN: float = 200.0  # Screen-space pixels outside viewport for culling buffer
 const BEZIER_SEGMENTS: int = 8
 
 # =============================================================================
@@ -107,6 +107,8 @@ var nodes_by_position: Dictionary = {}
 # Label management
 var taxonomy_labels: Dictionary = {}
 const MIN_ZOOM_FOR_LABELS: float = 0.3  # Show labels at most zoom levels
+const MAX_LABELS: int = 100  # Maximum labels to render at once
+const MIN_LABEL_SPACING_SCREEN: float = 60.0  # Minimum screen pixels between label centers
 
 # =============================================================================
 # Initialization
@@ -225,16 +227,19 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 	"""Update view parameters (called when transform changes)."""
 	var old_scale = _current_scale
+	var old_scroll = _scroll_offset
 	_scroll_offset = scroll
 	_current_scale = scale
 	_viewport_center = center
 	_viewport_size = get_viewport_rect().size
 
 	if tree_data:
+		var view_changed = (scale != old_scale) or (scroll != old_scroll)
 		_update_visible_nodes()
 		_update_multimesh()
-		# Re-render edges when scale changes (width depends on scale)
-		if scale != old_scale:
+		# Re-render edges when view changes (scroll or scale)
+		# Edge visibility depends on view rect intersection, so must update when panning
+		if view_changed:
 			_render_radial_edges()
 		_render_taxonomy_labels()
 
@@ -283,9 +288,16 @@ func _update_visible_nodes() -> void:
 
 
 func _get_view_rect() -> Rect2:
-	"""Get current view rectangle in world coordinates."""
-	var half_size = (_viewport_size / 2.0) / _current_scale + Vector2(CULL_MARGIN, CULL_MARGIN)
-	var center = _scroll_offset / _current_scale
+	"""Get current view rectangle in world coordinates.
+	Culling margin is defined in screen-space and converted to world-space
+	so it remains consistent regardless of zoom level.
+
+	Note: scroll_offset represents the world position at viewport center
+	(matches transform convention in tree_controller.gd)."""
+	var margin_world = CULL_MARGIN_SCREEN / _current_scale
+	var half_size = (_viewport_size / 2.0) / _current_scale + Vector2(margin_world, margin_world)
+	# scroll_offset IS the world center (not divided by scale)
+	var center = _scroll_offset
 
 	return Rect2(center - half_size, half_size * 2)
 
@@ -325,7 +337,9 @@ func _update_multimesh() -> void:
 # =============================================================================
 
 func _render_radial_edges() -> void:
-	"""Render edges as curved lines for radial layout."""
+	"""Render edges as curved lines for radial layout.
+	Edges are rendered if they intersect the view rect, not just if both endpoints are visible.
+	This prevents edges from disappearing when zoomed in on child nodes."""
 	if not edges_container:
 		return
 
@@ -336,15 +350,21 @@ func _render_radial_edges() -> void:
 	if not tree_data:
 		return
 
-	var visible_ids = {}
-	for rd in visible_nodes:
-		visible_ids[rd.node.id] = true
-
+	var view_rect = _get_view_rect()
 	var rendered = 0
 	var max_edges = 10000
 
 	for edge in tree_data.edges:
-		if visible_ids.has(edge.source) and visible_ids.has(edge.target):
+		var source_node = tree_data.get_node_by_id(edge.source)
+		var target_node = tree_data.get_node_by_id(edge.target)
+
+		if not source_node or not target_node:
+			continue
+
+		# Check if edge's bounding box intersects the view rect
+		# This catches edges where one or both endpoints are outside but the edge crosses through
+		var edge_rect = Rect2(source_node.position, Vector2.ZERO).expand(target_node.position)
+		if view_rect.intersects(edge_rect):
 			_draw_radial_edge(edge)
 			rendered += 1
 			if rendered >= max_edges:
@@ -445,7 +465,8 @@ func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModel
 
 func _render_taxonomy_labels() -> void:
 	"""Render labels for taxonomy nodes and dex animal nodes (zoom-dependent).
-	Labels are counter-scaled to maintain crisp screen-space rendering."""
+	Labels are counter-scaled to maintain crisp screen-space rendering.
+	Uses priority-based culling and overlap detection to ensure readability."""
 	for label in taxonomy_labels.values():
 		label.queue_free()
 	taxonomy_labels.clear()
@@ -457,40 +478,125 @@ func _render_taxonomy_labels() -> void:
 	if _current_scale < MIN_ZOOM_FOR_LABELS:
 		return
 
-	# Counter-scale factor: labels render at screen resolution, not world resolution
-	var inverse_scale = 1.0 / _current_scale
-
+	# Collect label candidates with their priority
+	var candidates: Array = []
 	for render_data in visible_nodes:
 		var label_text = ""
 		var should_show_label = false
 
 		if render_data.node.is_taxonomic():
-			label_text = render_data.node.name
-			should_show_label = true
+			# Only show taxonomy labels for higher ranks at lower zoom levels
+			if _should_show_taxonomy_label_at_zoom(render_data.node):
+				label_text = render_data.node.name
+				should_show_label = true
 		elif render_data.node.is_animal():
 			if render_data.node.captured_by_user or render_data.node.captured_by_friends.size() > 0:
 				label_text = render_data.node.common_name if render_data.node.common_name else render_data.node.scientific_name
 				should_show_label = true
 
-		if should_show_label:
-			var label = Label.new()
-			label.text = label_text
-			label.theme = _theme
-			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if should_show_label and not label_text.is_empty():
+			candidates.append({
+				"render_data": render_data,
+				"label_text": label_text,
+				"priority": _get_label_priority(render_data)
+			})
 
-			# Counter-scale to render at screen resolution (prevents pixelation)
-			label.scale = Vector2(inverse_scale, inverse_scale)
+	# Sort by priority (higher priority first)
+	candidates.sort_custom(func(a, b): return a.priority > b.priority)
 
-			labels_container.add_child(label)
+	# Place labels with overlap detection
+	var placed_positions: Array[Vector2] = []  # Screen-space positions of placed labels
+	var labels_created = 0
+	var inverse_scale = 1.0 / _current_scale
 
-			# Position label below and centered on node
-			# Use get_minimum_size() to get label dimensions before layout
-			var label_size = label.get_minimum_size()
-			var node_size = NODE_SIZE_BASE * render_data.scale
-			var offset = Vector2(-label_size.x * inverse_scale / 2.0, node_size + 5 * inverse_scale)
-			label.position = render_data.position + offset
+	for candidate in candidates:
+		if labels_created >= MAX_LABELS:
+			break
 
-			taxonomy_labels[render_data.node.id] = label
+		var render_data = candidate.render_data
+
+		# Calculate screen position of label center
+		var node_size = NODE_SIZE_BASE * render_data.scale
+		var label_screen_pos = _world_to_screen(render_data.position + Vector2(0, node_size + 10))
+
+		# Check for overlap with already placed labels
+		var overlaps = false
+		for placed_pos in placed_positions:
+			if label_screen_pos.distance_to(placed_pos) < MIN_LABEL_SPACING_SCREEN:
+				overlaps = true
+				break
+
+		if overlaps:
+			continue
+
+		# Create the label
+		var label = Label.new()
+		label.text = candidate.label_text
+		label.theme = _theme
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		# Counter-scale to render at screen resolution (prevents pixelation)
+		label.scale = Vector2(inverse_scale, inverse_scale)
+
+		labels_container.add_child(label)
+
+		# Position label below and centered on node
+		var label_size = label.get_minimum_size()
+		var offset = Vector2(-label_size.x * inverse_scale / 2.0, node_size + 5 * inverse_scale)
+		label.position = render_data.position + offset
+
+		taxonomy_labels[render_data.node.id] = label
+		placed_positions.append(label_screen_pos)
+		labels_created += 1
+
+
+func _should_show_taxonomy_label_at_zoom(node: TreeDataModels.TaxonomicNode) -> bool:
+	"""Determine if a taxonomy node's label should be shown at current zoom level.
+	Higher ranks are shown at all zoom levels; lower ranks require more zoom."""
+	match node.rank:
+		TreeDataModels.TaxonomicRank.ROOT, TreeDataModels.TaxonomicRank.KINGDOM:
+			return _current_scale >= 0.1
+		TreeDataModels.TaxonomicRank.PHYLUM, TreeDataModels.TaxonomicRank.CLASS:
+			return _current_scale >= 0.3
+		TreeDataModels.TaxonomicRank.ORDER, TreeDataModels.TaxonomicRank.FAMILY:
+			return _current_scale >= 0.5
+		TreeDataModels.TaxonomicRank.SUBFAMILY, TreeDataModels.TaxonomicRank.GENUS:
+			return _current_scale >= 1.0
+		_:
+			return _current_scale >= 1.5
+
+
+func _get_label_priority(render_data: NodeRenderData) -> float:
+	"""Calculate priority for a label. Higher values = more important.
+	Priority is based on: taxonomic rank (higher = more important), capture status, discoverer status."""
+	var priority: float = 0.0
+
+	if render_data.node.is_taxonomic():
+		# Taxonomic nodes get base priority from rank (root=100, kingdom=90, etc)
+		priority = 100.0 - float(render_data.node.rank) * 10.0
+	else:
+		# Animal nodes: base priority is lower than most taxonomy
+		priority = 20.0
+
+		# Boost for user captures
+		if render_data.node.captured_by_user:
+			priority += 15.0
+		elif render_data.node.captured_by_friends.size() > 0:
+			priority += 10.0
+
+		# Boost for discoverer status
+		if render_data.node.discoverer.get("is_self", false):
+			priority += 10.0
+		elif render_data.node.discoverer.get("is_friend", false):
+			priority += 5.0
+
+	return priority
+
+
+func _world_to_screen(world_pos: Vector2) -> Vector2:
+	"""Convert world position to screen coordinates.
+	Matches transform: screen = (world - scroll_offset) * scale + viewport_center"""
+	return (world_pos - _scroll_offset) * _current_scale + _viewport_center
 
 
 # =============================================================================
@@ -569,9 +675,9 @@ func _handle_mouse_motion(screen_pos: Vector2) -> void:
 
 
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
-	"""Convert screen position to world coordinates."""
-	# Account for current transform: position = (screen - center) / scale + scroll / scale
-	return (screen_pos - _viewport_center) / _current_scale + _scroll_offset / _current_scale
+	"""Convert screen position to world coordinates.
+	Inverse of transform: screen = (world - scroll_offset) * scale + viewport_center"""
+	return (screen_pos - _viewport_center) / _current_scale + _scroll_offset
 
 
 func _get_grid_key(pos: Vector2) -> Vector2i:

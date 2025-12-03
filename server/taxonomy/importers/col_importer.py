@@ -18,6 +18,57 @@ class CatalogueOfLifeImporter(BaseImporter):
 
     API_BASE = "https://api.checklistbank.org"
 
+    def run(self):
+        """
+        Override base run() to add parent ID linking step.
+
+        The COL import requires a second pass after normalization to link:
+        - Synonyms to their accepted names (via parentID)
+        - Accepted taxa to their taxonomic parents (via parentID)
+        """
+        from django.utils import timezone
+
+        try:
+            self.import_job.status = 'downloading'
+            self.import_job.started_at = timezone.now()
+            self.import_job.save()
+
+            # Download data
+            file_path = self.download_data()
+            self.import_job.file_path = file_path
+            self.import_job.status = 'processing'
+            self.import_job.save()
+
+            # Parse and import to raw tables
+            self.parse_file(file_path)
+
+            # Transform and normalize
+            self.import_job.status = 'importing'
+            self.import_job.save()
+            self.normalize_data()
+
+            # COL-specific: Link parent IDs after all records exist
+            # This sets accepted_name FK for synonyms and parent FK for taxa
+            self._link_parent_ids()
+
+            # Finalize
+            self.import_job.status = 'completed'
+            self.import_job.completed_at = timezone.now()
+            self.import_job.records_imported = self.stats['records_imported']
+            self.import_job.records_failed = self.stats['records_failed']
+            self.import_job.error_log = {'errors': self.stats['errors'][:100]}
+            self.import_job.save()
+
+            logger.info(f"Import job {self.import_job.id} completed: {self.stats['records_imported']} imported, {self.stats['records_failed']} failed")
+
+        except Exception as e:
+            logger.error(f"Import failed: {e}")
+            self.import_job.status = 'failed'
+            self.import_job.completed_at = timezone.now()
+            self.import_job.error_log = {'fatal_error': str(e)}
+            self.import_job.save()
+            raise
+
     def download_data(self) -> str:
         """Download COL dataset"""
         logger.info("=" * 80)
@@ -720,3 +771,124 @@ class CatalogueOfLifeImporter(BaseImporter):
             'bacterial': 'icnp'
         }
         return code_map.get(col_code.lower(), '')
+
+    def _link_parent_ids(self):
+        """
+        Second pass: Link parentID references after all records are created.
+
+        Per ColDP spec (https://github.com/CatalogueOfLife/coldp):
+        - For synonyms: parentID points to the accepted taxon
+        - For accepted taxa: parentID points to the taxonomic parent
+
+        This MUST run after normalize_data() since parent records may not exist
+        when child records are processed in the first pass.
+        """
+        from taxonomy.models import Taxonomy
+        from taxonomy.raw_models import RawCatalogueOfLife
+
+        logger.info("=" * 80)
+        logger.info("STEP: LINKING PARENT IDs (synonyms → accepted names)")
+        logger.info("=" * 80)
+
+        # Build lookup of COL ID → Taxonomy object
+        logger.info("Building COL ID → Taxonomy lookup...")
+        taxonomy_by_col_id = {}
+        for tax in Taxonomy.objects.filter(source=self.source).only('id', 'source_taxon_id', 'status'):
+            taxonomy_by_col_id[tax.source_taxon_id] = tax
+        logger.info(f"Loaded {len(taxonomy_by_col_id):,} taxonomy records for lookup")
+
+        # Process raw records that have parent_id set
+        logger.info("Finding records with parent_id to link...")
+        raw_records_with_parent = RawCatalogueOfLife.objects.filter(
+            import_job=self.import_job,
+            is_processed=True
+        ).exclude(parent_id='').values('col_id', 'parent_id', 'status')
+
+        total_count = raw_records_with_parent.count()
+        logger.info(f"Found {total_count:,} records with parent_id to process")
+
+        # Track statistics
+        synonyms_linked = 0
+        parents_linked = 0
+        not_found_count = 0
+        error_count = 0
+
+        batch_size = 5000
+        batch_updates_accepted_name = []
+        batch_updates_parent = []
+        processed = 0
+        last_log = 0
+
+        for raw in raw_records_with_parent.iterator(chunk_size=batch_size):
+            try:
+                col_id = raw['col_id']
+                parent_id = raw['parent_id']
+                status = raw['status']
+
+                # Get the taxonomy record for this col_id
+                taxonomy = taxonomy_by_col_id.get(col_id)
+                if not taxonomy:
+                    not_found_count += 1
+                    continue
+
+                # Get the parent/accepted taxonomy record
+                parent_taxonomy = taxonomy_by_col_id.get(parent_id)
+                if not parent_taxonomy:
+                    not_found_count += 1
+                    continue
+
+                # Link based on status
+                if status.lower() == 'synonym':
+                    # For synonyms, parentID = accepted taxon
+                    batch_updates_accepted_name.append(
+                        Taxonomy(id=taxonomy.id, accepted_name_id=parent_taxonomy.id)
+                    )
+                    synonyms_linked += 1
+                else:
+                    # For accepted taxa, parentID = taxonomic parent
+                    batch_updates_parent.append(
+                        Taxonomy(id=taxonomy.id, parent_id=parent_taxonomy.id)
+                    )
+                    parents_linked += 1
+
+                processed += 1
+
+                # Bulk update in batches
+                if len(batch_updates_accepted_name) >= batch_size:
+                    Taxonomy.objects.bulk_update(batch_updates_accepted_name, ['accepted_name_id'])
+                    batch_updates_accepted_name = []
+
+                if len(batch_updates_parent) >= batch_size:
+                    Taxonomy.objects.bulk_update(batch_updates_parent, ['parent_id'])
+                    batch_updates_parent = []
+
+                # Log progress every 50k records
+                if processed - last_log >= 50000:
+                    logger.info(
+                        f"Progress: {processed:,}/{total_count:,} processed, "
+                        f"synonyms linked: {synonyms_linked:,}, "
+                        f"parents linked: {parents_linked:,}"
+                    )
+                    last_log = processed
+
+            except Exception as e:
+                error_count += 1
+                if error_count <= 10:
+                    logger.error(f"Error linking {raw.get('col_id', 'unknown')}: {e}")
+
+        # Process remaining batches
+        if batch_updates_accepted_name:
+            Taxonomy.objects.bulk_update(batch_updates_accepted_name, ['accepted_name_id'])
+        if batch_updates_parent:
+            Taxonomy.objects.bulk_update(batch_updates_parent, ['parent_id'])
+
+        # Final statistics
+        logger.info("=" * 80)
+        logger.info("PARENT ID LINKING COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Total processed:       {processed:,}")
+        logger.info(f"Synonyms → accepted:   {synonyms_linked:,}")
+        logger.info(f"Taxa → parent:         {parents_linked:,}")
+        logger.info(f"Not found (skipped):   {not_found_count:,}")
+        logger.info(f"Errors:                {error_count}")
+        logger.info("✓ Parent ID linking completed successfully")

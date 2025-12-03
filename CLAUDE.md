@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-02)
+## Status (2025-12-03)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -105,6 +105,28 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Scene integration**: Instance `InteractiveBackground` as first child in UI CanvasLayer
 - **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
 - **Scenes using component**: home, login, create_acct, camera, dex, dex_feed (NOT social, tree)
+
+**Taxonomic Tree Visualization (Updated 2025-12-03)**:
+- **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
+  - `scroll_offset`: World-space position that appears at viewport center
+  - When `scroll_offset = (0,0)`, world origin is at viewport center
+  - Transform formula: `screen = (world - scroll_offset) * scale + viewport_center`
+  - To center on world position `pos`: `scroll_offset = pos` (NOT `pos * scale`)
+- **View culling**: `_get_view_rect()` returns world-space rect; center = `scroll_offset` directly
+- **Coordinate conversion**:
+  - `world_to_screen(W)`: `(W - scroll_offset) * scale + viewport_center`
+  - `screen_to_world(S)`: `(S - viewport_center) / scale + scroll_offset`
+- **Edge rendering**: Must re-render on ANY view change (scroll OR scale), not just scale changes
+- **Edge visibility**: Use bounding box intersection (`Rect2.expand().intersects()`), not endpoint visibility
+- **Culling margin**: Define in screen-space pixels, convert to world-space (`margin / scale`)
+- **Label overlap**: Priority-based culling with screen-space distance checks; zoom-based filtering by taxonomic rank
+- **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data)
+
+**Touch Controller Velocity (Updated 2025-12-03)**:
+- **Velocity direction**: `newest_pos - oldest_pos` (NOT `oldest - newest` which inverts momentum)
+- **Stop inertia on touch start**: Call `_stop_inertia()` when first finger touches to clear old velocity samples
+- **Pinch zoom velocity**: Record pinch center position for velocity calculation to enable inertia after pinch
+- **Reset state completely**: `reset()` must clear `_last_positions` and `_last_times` arrays
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)

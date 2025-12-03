@@ -475,6 +475,25 @@ Options:
 - --force: Skip recent import check
 - --file: Use local zip file instead of downloading
 
+`link_col_parents` - Link synonym records to their accepted names
+```bash
+poetry run python manage.py link_col_parents [--dry-run] [--batch-size N]
+```
+Options:
+- --dry-run: Preview what would be linked without making changes
+- --batch-size: Batch size for bulk updates (default: 5000)
+
+**Purpose:** Per the [ColDP specification](https://github.com/CatalogueOfLife/coldp), the `parentID` field in COL data has dual meaning:
+- For `status='synonym'`: `parentID` points to the **accepted taxon**
+- For `status='accepted'`: `parentID` points to the taxonomic parent
+
+This command links the `parentID` to the appropriate FK field (`accepted_name` for synonyms, `parent` for accepted taxa). This is essential for proper synonym resolution during CV identification - without it, synonyms like "Bison bison" won't resolve to their accepted name "Bos bison" and will have missing taxonomy hierarchy.
+
+**When to run:**
+- After `import_col` completes (new imports run this automatically)
+- One-time migration for existing databases imported before this fix
+- If synonym lookups aren't resolving to accepted names with full taxonomy
+
 **Celery Tasks:**
 
 - `run_import_job(job_id)` - Async import with retry logic
@@ -1743,6 +1762,7 @@ distributions[threat_status] → animal.conservation_status
 **Management Commands:**
 - `/server/accounts/management/commands/seed_test_users.py` - Create test data
 - `/server/taxonomy/management/commands/import_col.py` - Import COL data
+- `/server/taxonomy/management/commands/link_col_parents.py` - Link synonyms to accepted names
 
 **Fixtures:**
 - `/server/taxonomy/fixtures/ranks.json` - Taxonomic rank reference data (20 ranks)

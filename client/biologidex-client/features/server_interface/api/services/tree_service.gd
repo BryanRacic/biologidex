@@ -155,7 +155,7 @@ func search_tree(
 		push_error("[TreeService] Search query cannot be empty")
 		var error = APITypes.APIError.new(400, "Query cannot be empty", "Query cannot be empty")
 		search_failed.emit(error)
-		if callback:
+		if callback and callback.is_valid():
 			callback.call({"error": "Query cannot be empty"}, 400)
 		return
 
