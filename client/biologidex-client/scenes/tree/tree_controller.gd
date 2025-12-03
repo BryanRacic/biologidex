@@ -1,3 +1,4 @@
+@tool
 """
 TreeController - Main orchestrator for taxonomic tree visualization.
 Coordinates data loading, rendering, and user interaction.
@@ -7,6 +8,14 @@ extends BaseSceneNode
 
 const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
+
+# Editor preview: Load tree from cached JSON file for UI development
+const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
+@export var editor_preview: bool = false:
+	set(value):
+		editor_preview = value
+		if Engine.is_editor_hint() and value:
+			_load_editor_preview()
 
 # Note: Services (APIManager, NavigationManager) are automatically initialized by BaseSceneNode
 
@@ -39,8 +48,79 @@ var is_panning: bool = false
 var last_mouse_position: Vector2 = Vector2.ZERO
 
 
+# =============================================================================
+# Editor Preview
+# =============================================================================
+
+func _load_editor_preview() -> void:
+	"""Load tree data from cached JSON for editor preview."""
+	if not Engine.is_editor_hint():
+		return
+
+	print("[TreeController] Loading editor preview from: ", EDITOR_PREVIEW_PATH)
+
+	# Check if file exists
+	if not FileAccess.file_exists(EDITOR_PREVIEW_PATH):
+		push_warning("[TreeController] Editor preview file not found: %s\nRun the app with DEBUG_CACHE_TREE_RESPONSE=true to generate it." % EDITOR_PREVIEW_PATH)
+		return
+
+	# Load JSON
+	var file = FileAccess.open(EDITOR_PREVIEW_PATH, FileAccess.READ)
+	if not file:
+		push_error("[TreeController] Failed to open editor preview file")
+		return
+
+	var json_string = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	var error = json.parse(json_string)
+	if error != OK:
+		push_error("[TreeController] Failed to parse editor preview JSON: %s" % json.get_error_message())
+		return
+
+	var response = json.data as Dictionary
+	if not response:
+		push_error("[TreeController] Editor preview JSON is not a valid dictionary")
+		return
+
+	print("[TreeController] Loaded %d nodes, %d edges from cache" % [
+		response.get("nodes", []).size(),
+		response.get("edges", []).size()
+	])
+
+	# Parse into TreeData
+	current_tree_data = TreeDataModels.TreeData.new(response)
+
+	# Setup renderer if needed
+	if not tree_renderer and tree_world:
+		_setup_renderer_for_editor()
+
+	# Render
+	_render_tree()
+	_update_stats_display()
+
+	print("[TreeController] Editor preview loaded successfully")
+
+
+func _setup_renderer_for_editor() -> void:
+	"""Setup renderer in editor mode."""
+	tree_renderer = TreeRenderer.new()
+	tree_renderer.name = "EditorTreeRenderer"
+	tree_world.add_child(tree_renderer)
+
+	if tree_camera:
+		tree_renderer.set_camera(tree_camera)
+
+	print("[TreeController] Editor TreeRenderer initialized")
+
+
 func _on_scene_ready() -> void:
 	"""Called by BaseSceneNode after managers are initialized"""
+	# Skip runtime initialization in editor
+	if Engine.is_editor_hint():
+		return
+
 	scene_name = "TreeController"
 	print("[TreeController] Scene ready (refactored v2)")
 
@@ -335,6 +415,8 @@ func _on_back_button_pressed() -> void:
 
 func _input(event: InputEvent) -> void:
 	"""Handle input events for camera control."""
+	if Engine.is_editor_hint():
+		return
 	if not tree_camera or not is_initialized:
 		return
 
@@ -469,6 +551,14 @@ func _update_stats_display() -> void:
 
 func _exit_tree() -> void:
 	"""Cleanup when exiting tree view."""
+	if Engine.is_editor_hint():
+		# Editor cleanup - just free renderer
+		if tree_renderer:
+			tree_renderer.clear()
+			tree_renderer.queue_free()
+			tree_renderer = null
+		return
+
 	print("[TreeController] Cleaning up")
 
 	# Clean up renderer
@@ -477,7 +567,7 @@ func _exit_tree() -> void:
 		tree_renderer.queue_free()
 		tree_renderer = null
 
-	# Disconnect signals
+	# Disconnect signals (only at runtime - autoloads not available in editor)
 	if APIManager.tree.tree_loaded.is_connected(_on_tree_loaded):
 		APIManager.tree.tree_loaded.disconnect(_on_tree_loaded)
 	if APIManager.tree.tree_load_failed.is_connected(_on_tree_load_failed):

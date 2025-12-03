@@ -1,3 +1,4 @@
+@tool
 """
 Data models for taxonomic tree visualization.
 Matches server API response structure from DynamicTaxonomicTreeService.

@@ -195,6 +195,17 @@ To cache tree API responses for offline testing:
 
 This is useful for testing tree rendering without server dependency.
 
+### Editor Preview: Tree Scene
+To preview the tree visualization directly in the Godot editor:
+
+1. First, generate `res://resources/tree.json` using the caching method above
+2. Open `scenes/tree/tree.tscn` in the editor
+3. Select the root `Tree` node
+4. In the Inspector, enable **Editor Preview** checkbox
+5. The tree will render in the editor viewport using cached data
+
+This allows UI development and troubleshooting without running the app.
+
 ### Web Export
 ```bash
 # Export from Godot Editor or use script

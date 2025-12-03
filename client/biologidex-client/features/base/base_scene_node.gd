@@ -1,3 +1,4 @@
+@tool
 class_name BaseSceneNode extends Node2D
 
 # Base class for all 2D Scene Nodes
@@ -28,6 +29,10 @@ signal scene_exiting
 
 
 func _ready() -> void:
+	# Skip runtime initialization in editor - subclasses handle their own editor preview
+	if Engine.is_editor_hint():
+		return
+
 	_initialize_managers()
 	_setup_common_ui()
 	_check_authentication()
@@ -146,6 +151,8 @@ func show_success(message: String) -> void:
 
 func _on_back_pressed() -> void:
 	"""Handle back button press"""
+	if Engine.is_editor_hint():
+		return
 	print("[%s] Back button pressed" % scene_name)
 	scene_exiting.emit()
 	NavigationManager.go_back()
@@ -157,6 +164,8 @@ func _on_back_pressed() -> void:
 
 func _notification(what: int) -> void:
 	"""Handle lifecycle notifications"""
+	if Engine.is_editor_hint():
+		return
 	match what:
 		NOTIFICATION_VISIBILITY_CHANGED:
 			if visible:

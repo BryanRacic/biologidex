@@ -1,3 +1,4 @@
+@tool
 """
 TreeRenderer - High-performance rendering engine for taxonomic tree visualization.
 Handles batch rendering of nodes, edges, and interactions using MultiMeshInstance2D.
