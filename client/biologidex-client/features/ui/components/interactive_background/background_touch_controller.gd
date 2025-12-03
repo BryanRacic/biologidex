@@ -4,6 +4,9 @@ extends Control
 ## Handles touch/mouse gestures for panning and zooming the shader background.
 ## Designed for web export compatibility across all platforms.
 ## Uses position-based tracking (not touch index) to work around iOS web bugs.
+##
+## IMPORTANT: Uses MOUSE_FILTER_PASS with gesture thresholds to allow taps
+## to pass through to buttons while capturing drag/pan gestures.
 
 signal scroll_changed(offset: Vector2)
 signal scale_changed(new_scale: float)
@@ -18,6 +21,7 @@ signal gesture_ended()
 @export var inertia_enabled: bool = true
 @export var inertia_decay: float = 5.0  # Higher = faster slowdown
 @export var inertia_stop_threshold: float = 1.0  # px/sec
+@export var drag_threshold: float = 10.0  # px movement before considered a drag
 
 # State
 var scroll_offset: Vector2 = Vector2.ZERO
@@ -25,6 +29,8 @@ var current_scale: float = 1.0
 
 # Touch tracking (position-based for web compatibility)
 var _touch_state: Dictionary = {}  # { index: Vector2 position }
+var _touch_start_positions: Dictionary = {}  # { index: Vector2 } - where each touch began
+var _gesture_recognized: bool = false  # True once movement exceeds threshold
 var _base_touch_state: Dictionary = {}  # State when finger count changed
 var _base_scroll: Vector2 = Vector2.ZERO
 var _base_scale: float = 1.0
@@ -39,56 +45,92 @@ const VELOCITY_MAX_AGE: float = 0.1  # seconds
 
 # Mouse state
 var _mouse_dragging: bool = false
+var _mouse_drag_recognized: bool = false  # True once mouse drag exceeds threshold
+var _mouse_start_pos: Vector2 = Vector2.ZERO
 var _mouse_last_pos: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
-	# Ensure we receive input
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Use PASS to allow taps to reach buttons underneath
+	mouse_filter = Control.MOUSE_FILTER_PASS
 
 
 func _gui_input(event: InputEvent) -> void:
 	# Handle touch events
 	if event is InputEventScreenTouch:
-		_handle_screen_touch(event as InputEventScreenTouch)
+		var should_accept := _handle_screen_touch(event as InputEventScreenTouch)
+		if should_accept:
+			accept_event()
 	elif event is InputEventScreenDrag:
-		_handle_screen_drag(event as InputEventScreenDrag)
+		var should_accept := _handle_screen_drag(event as InputEventScreenDrag)
+		if should_accept:
+			accept_event()
 	# Handle mouse events (for desktop/web mouse users)
 	elif event is InputEventMouseButton:
-		_handle_mouse_button(event as InputEventMouseButton)
+		var should_accept := _handle_mouse_button(event as InputEventMouseButton)
+		if should_accept:
+			accept_event()
 	elif event is InputEventMouseMotion:
-		_handle_mouse_motion(event as InputEventMouseMotion)
+		var should_accept := _handle_mouse_motion(event as InputEventMouseMotion)
+		if should_accept:
+			accept_event()
 
 
-func _handle_screen_touch(event: InputEventScreenTouch) -> void:
+func _handle_screen_touch(event: InputEventScreenTouch) -> bool:
 	var prev_finger_count := _touch_state.size()
 
 	if event.pressed:
-		# Finger down
+		# Finger down - track but don't consume yet (might be a tap on a button)
 		_touch_state[event.index] = event.position
+		_touch_start_positions[event.index] = event.position
 		_stop_inertia()
 
 		if prev_finger_count == 0:
+			_gesture_recognized = false  # Reset for new gesture
 			gesture_started.emit()
+
+		# Two fingers = pinch zoom, immediately recognize as gesture
+		if _touch_state.size() >= 2:
+			_gesture_recognized = true
 	else:
 		# Finger up
 		_touch_state.erase(event.index)
+		_touch_start_positions.erase(event.index)
 
 		if _touch_state.size() == 0:
-			_start_inertia()
+			var was_gesture := _gesture_recognized
+			if _gesture_recognized:
+				_start_inertia()
+			_gesture_recognized = false
 			gesture_ended.emit()
+			# Only consume touch-up if we recognized a gesture (not a tap)
+			return was_gesture
 
 	# Finger count changed - reset base state
 	if _touch_state.size() != prev_finger_count:
 		_update_base_state()
 
+	# Accept multi-touch immediately, single touch only after gesture recognized
+	return _touch_state.size() >= 2 or _gesture_recognized
 
-func _handle_screen_drag(event: InputEventScreenDrag) -> void:
+
+func _handle_screen_drag(event: InputEventScreenDrag) -> bool:
 	if not _touch_state.has(event.index):
-		return
+		return false
 
 	# Update position (use absolute position, not relative - web compatibility)
 	_touch_state[event.index] = event.position
+
+	# Check if drag exceeds threshold to recognize as gesture
+	if not _gesture_recognized and _touch_start_positions.has(event.index):
+		var start_pos: Vector2 = _touch_start_positions[event.index]
+		var distance := event.position.distance_to(start_pos)
+		if distance >= drag_threshold:
+			_gesture_recognized = true
+
+	# Only process pan/zoom once gesture is recognized
+	if not _gesture_recognized:
+		return false
 
 	# Track for inertia
 	_record_position_sample(event.position)
@@ -99,6 +141,8 @@ func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 		_handle_single_finger_pan()
 	elif finger_count == 2:
 		_handle_two_finger_gesture()
+
+	return true  # Consume drag events once gesture is recognized
 
 
 func _handle_single_finger_pan() -> void:
@@ -165,29 +209,50 @@ func _update_base_state() -> void:
 		_base_pinch_distance = pos0.distance_to(pos1)
 
 
-func _handle_mouse_button(event: InputEventMouseButton) -> void:
+func _handle_mouse_button(event: InputEventMouseButton) -> bool:
 	# Left click for pan
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			_mouse_dragging = true
+			_mouse_drag_recognized = false  # Reset - might be a click on a button
+			_mouse_start_pos = event.position
 			_mouse_last_pos = event.position
 			_stop_inertia()
 			gesture_started.emit()
+			# Don't consume mouse down - let clicks reach buttons
+			return false
 		else:
 			_mouse_dragging = false
-			_start_inertia()
+			var was_drag := _mouse_drag_recognized
+			if _mouse_drag_recognized:
+				_start_inertia()
+			_mouse_drag_recognized = false
 			gesture_ended.emit()
+			# Only consume mouse up if we were dragging (not clicking a button)
+			return was_drag
 
-	# Scroll wheel for zoom
+	# Scroll wheel for zoom - always consume
 	elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 		_zoom_at_point(event.position, 1.1)
+		return true
 	elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 		_zoom_at_point(event.position, 0.9)
+		return true
+
+	return false
 
 
-func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
+func _handle_mouse_motion(event: InputEventMouseMotion) -> bool:
 	if not _mouse_dragging:
-		return
+		return false
+
+	# Check if drag exceeds threshold to recognize as gesture
+	if not _mouse_drag_recognized:
+		var distance := event.position.distance_to(_mouse_start_pos)
+		if distance >= drag_threshold:
+			_mouse_drag_recognized = true
+		else:
+			return false  # Not yet a drag, let motion pass through
 
 	var delta := event.position - _mouse_last_pos
 	_mouse_last_pos = event.position
@@ -198,6 +263,8 @@ func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
 	# Apply pan
 	scroll_offset -= delta * pan_sensitivity
 	scroll_changed.emit(scroll_offset)
+
+	return true  # Consume motion events once drag is recognized
 
 
 func _zoom_at_point(point: Vector2, factor: float) -> void:
@@ -289,6 +356,10 @@ func reset() -> void:
 	current_scale = 1.0
 	_velocity = Vector2.ZERO
 	_touch_state.clear()
+	_touch_start_positions.clear()
+	_gesture_recognized = false
 	_base_touch_state.clear()
+	_mouse_dragging = false
+	_mouse_drag_recognized = false
 	scroll_changed.emit(scroll_offset)
 	scale_changed.emit(current_scale)
