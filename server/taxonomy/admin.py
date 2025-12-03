@@ -195,8 +195,8 @@ class TaxonomyAdmin(admin.ModelAdmin):
             percent = float(obj.completeness_score) * 100
             color = 'green' if percent >= 80 else 'orange' if percent >= 50 else 'red'
             return format_html(
-                '<span style="color: {};">{:.0f}%</span>',
-                color, percent
+                '<span style="color: {};">{}%</span>',
+                color, f'{percent:.0f}'
             )
         return '-'
     completeness_display.short_description = 'Completeness'
