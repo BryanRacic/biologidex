@@ -1,28 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://b12e8gabmy5f0"]
+[gd_scene load_steps=5 format=3 uid="uid://b12e8gabmy5f0"]
 
 [ext_resource type="Script" uid="uid://cc3lv4isgvhri" path="res://scenes/camera/camera.gd" id="1_camera"]
 [ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
-[ext_resource type="Shader" uid="uid://bktd7dhf70op1" path="res://shaders/paper.gdshader" id="3_u3rx3"]
+[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="3_intbg"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="5_4ph7v"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_qr7cc"]
-resource_local_to_scene = true
-shader = ExtResource("3_u3rx3")
-shader_parameter/scroll = Vector2(0, 0)
-shader_parameter/grid_scale = 22.0
-shader_parameter/line_px = 0.5
-shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
-shader_parameter/line_alpha = 0.06999999843536
-shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
-shader_parameter/paper_noise_amount = 0.05
-shader_parameter/paper_noise_scale = 0.35
-shader_parameter/speckle_amount = 0.06400000304
-shader_parameter/speckle_density = 1.67999996803664
-shader_parameter/speckle_scale = 5.999999877064
-shader_parameter/fiber_amount = 0.1110000052725
-shader_parameter/fiber_scale = 0.56999999470999
-
-[sub_resource type="Theme" id="Theme_u3rx3"]
 
 [node name="Camera" type="Node2D" node_paths=PackedStringArray("back_button", "status_label", "loading_spinner")]
 script = ExtResource("1_camera")
@@ -32,14 +13,7 @@ loading_spinner = NodePath("UI/Control/CenterContainer/VBoxContainer/LoadingSpin
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="Background" type="ColorRect" parent="UI"]
-unique_name_in_owner = true
-material = SubResource("ShaderMaterial_qr7cc")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="InteractiveBackground" parent="UI" instance=ExtResource("3_intbg")]
 
 [node name="Control" type="Control" parent="UI"]
 layout_mode = 3
@@ -48,6 +22,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 theme = ExtResource("5_4ph7v")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
@@ -77,13 +52,14 @@ mouse_filter = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/Control/CenterContainer"]
 layout_mode = 2
-theme = SubResource("Theme_u3rx3")
 theme_override_constants/separation = 30
 alignment = 1
+mouse_filter = 2
 
 [node name="InstructionLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -91,6 +67,7 @@ autowrap_mode = 3
 
 [node name="Spacer2" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
+mouse_filter = 2
 
 [node name="RecordImage" parent="UI/Control/CenterContainer/VBoxContainer" instance=ExtResource("3_qqjab")]
 unique_name_in_owner = true
@@ -119,6 +96,7 @@ text = "Select Photo"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "currentstatus"
 horizontal_alignment = 1
@@ -127,6 +105,7 @@ autowrap_mode = 3
 [node name="ResultLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -135,6 +114,7 @@ autowrap_mode = 3
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 
@@ -170,6 +150,7 @@ text = "Manual Entry"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
-text = "⏳ Processing..."
+text = "Processing..."
 horizontal_alignment = 1

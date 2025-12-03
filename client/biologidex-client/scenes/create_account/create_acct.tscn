@@ -1,39 +1,15 @@
-[gd_scene load_steps=5 format=3 uid="uid://makmcpxt2lki"]
+[gd_scene load_steps=4 format=3 uid="uid://makmcpxt2lki"]
 
 [ext_resource type="Script" uid="uid://biibm8pg2qced" path="res://scenes/create_account/create_account.gd" id="1_create_account"]
-[ext_resource type="Shader" uid="uid://bktd7dhf70op1" path="res://shaders/paper.gdshader" id="2_1ank7"]
+[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="2_intbg"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="3_ulc17"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_rlmxn"]
-resource_local_to_scene = true
-shader = ExtResource("2_1ank7")
-shader_parameter/scroll = Vector2(0, 0)
-shader_parameter/grid_scale = 22.0
-shader_parameter/line_px = 0.5
-shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
-shader_parameter/line_alpha = 0.06999999843536
-shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
-shader_parameter/paper_noise_amount = 0.05
-shader_parameter/paper_noise_scale = 0.35
-shader_parameter/speckle_amount = 0.06400000304
-shader_parameter/speckle_density = 1.67999996803664
-shader_parameter/speckle_scale = 5.999999877064
-shader_parameter/fiber_amount = 0.1110000052725
-shader_parameter/fiber_scale = 0.56999999470999
 
 [node name="CreateAccount" type="Node2D"]
 script = ExtResource("1_create_account")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="Background" type="ColorRect" parent="UI"]
-unique_name_in_owner = true
-material = SubResource("ShaderMaterial_rlmxn")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="InteractiveBackground" parent="UI" instance=ExtResource("2_intbg")]
 
 [node name="Control" type="Control" parent="UI"]
 layout_mode = 3
@@ -42,6 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
 [node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
 layout_mode = 1
@@ -50,19 +27,23 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/Control/CenterContainer"]
 layout_mode = 2
 theme = ExtResource("3_ulc17")
 theme_override_constants/separation = 30
 alignment = 1
+mouse_filter = 2
 
 [node name="EmailField2" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
+mouse_filter = 2
 
 [node name="EmailLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer/EmailField2"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Email:"
 
@@ -80,9 +61,11 @@ expand_to_text_length = true
 layout_mode = 2
 theme = ExtResource("3_ulc17")
 alignment = 1
+mouse_filter = 2
 
 [node name="UsernameLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer/UsernameField"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Username:"
 
@@ -99,9 +82,11 @@ expand_to_text_length = true
 [node name="PasswordField" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
+mouse_filter = 2
 
 [node name="PasswordLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer/PasswordField"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Password:"
 
@@ -118,9 +103,11 @@ secret = true
 [node name="ConfirmPasswordField" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
+mouse_filter = 2
 
 [node name="ConfirmPasswordLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer/ConfirmPasswordField"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Confirm Password:"
 
@@ -137,6 +124,7 @@ secret = true
 [node name="Spacer3" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
+mouse_filter = 2
 
 [node name="CreateAcctButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
@@ -150,6 +138,7 @@ text = "Create Account"
 [node name="StatusLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -157,6 +146,7 @@ autowrap_mode = 3
 [node name="LoadingSpinner" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Loading..."
 horizontal_alignment = 1

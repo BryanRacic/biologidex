@@ -3,10 +3,6 @@ extends Node2D
 # Home scene - Main screen after login
 # Provides navigation to main app features
 
-# Background settings
-@onready var mat := get_node("%Background").material as ShaderMaterial
-@onready var touch_controller: BackgroundTouchController = get_node("%TouchController")
-
 # UI Elements
 @onready var camera_button: Button = get_node("%CameraButton")
 @onready var dex_button: Button = get_node("%DexButton")
@@ -34,10 +30,6 @@ func _ready() -> void:
 		navigation_manager.navigate_to("res://scenes/login/login.tscn", true)
 		return
 
-	# Connect touch controller signals for background interaction
-	touch_controller.scroll_changed.connect(_on_scroll_changed)
-	touch_controller.scale_changed.connect(_on_scale_changed)
-
 	# Connect navigation buttons
 	camera_button.pressed.connect(_on_camera_pressed)
 	dex_button.pressed.connect(_on_dex_pressed)
@@ -46,13 +38,6 @@ func _ready() -> void:
 	social_button.pressed.connect(_on_social_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
 
-
-func _on_scroll_changed(offset: Vector2) -> void:
-	mat.set_shader_parameter("scroll", offset)
-
-
-func _on_scale_changed(new_scale: float) -> void:
-	mat.set_shader_parameter("scale", new_scale)
 
 func _initialize_services() -> void:
 	"""Initialize service references from autoloads"""

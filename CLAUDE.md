@@ -17,7 +17,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Two-step image upload workflow (convert → download → analyze)
 - ✅ Multiple animal detection support with selection API
 - ✅ Client-side image rotation with post-conversion transformations
-- ✅ Touch-interactive paper background with pan/zoom (home screen, expanding to all scenes)
+- ✅ Touch-interactive paper background with pan/zoom (all scenes via InteractiveBackground component)
 
 ---
 
@@ -84,9 +84,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
 
-**Touch-Interactive Background**:
-- **BackgroundTouchController** (`features/home/background_touch_controller.gd`): Reusable pan/zoom gesture handler
-- **paper.gdshader**: Accepts `scroll` (Vector2) and `scale` (float) uniforms for pan/zoom
+**Touch-Interactive Background (Refactored 2025-12-02)**:
+- **InteractiveBackground** (`features/ui/components/interactive_background/`): Self-contained reusable component
+  - `interactive_background.tscn`: Prefab scene - just instance it, no wiring needed
+  - `interactive_background.gd`: Auto-connects shader to touch controller signals
+  - `background_touch_controller.gd`: Pan/zoom gesture handler (moved from features/home/)
+- **paper.gdshader** (`shaders/paper.gdshader`): Accepts `scroll` (Vector2) and `scale` (float) uniforms
 - **Gesture support**: Single-finger/mouse drag (pan), two-finger pinch (zoom), scroll wheel (zoom)
 - **Inertia**: Momentum-based scrolling with exponential decay after release
 - **Web compatibility**: Uses position-based touch tracking (not index) to work around iOS web bugs
@@ -94,8 +97,9 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Project settings** (`project.godot`):
   - `pointing/emulate_touch_from_mouse = true` (desktop testing)
   - `pointing/emulate_mouse_from_touch = false` (prevent double-handling)
-- **Scene integration**: TouchController between Background and UI Control layers
-- **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through to TouchController; buttons keep default STOP
+- **Scene integration**: Instance `InteractiveBackground` as first child in UI CanvasLayer
+- **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
+- **Scenes using component**: home, login, create_acct, camera, dex, dex_feed (NOT social, tree)
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)

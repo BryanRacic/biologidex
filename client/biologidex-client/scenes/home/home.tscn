@@ -1,28 +1,9 @@
-[gd_scene load_steps=9 format=3 uid="uid://ckyi1jswjv153"]
+[gd_scene load_steps=7 format=3 uid="uid://ckyi1jswjv153"]
 
 [ext_resource type="Script" uid="uid://dxro5hjb7xtf3" path="res://scenes/home/home.gd" id="1_uqaih"]
 [ext_resource type="FontFile" uid="uid://bjta0at8yg7i7" path="res://resources/fonts/Fraunces/Fraunces-VariableFont_SOFT,WONK,opsz,wght.ttf" id="2_vut6t"]
-[ext_resource type="Shader" uid="uid://bktd7dhf70op1" path="res://shaders/paper.gdshader" id="3_4jjk6"]
+[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="3_intbg"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="4_vut6t"]
-[ext_resource type="Script" path="res://features/home/background_touch_controller.gd" id="5_touch"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_crhkp"]
-resource_local_to_scene = true
-shader = ExtResource("3_4jjk6")
-shader_parameter/scroll = Vector2(0, 0)
-shader_parameter/scale = 1.0
-shader_parameter/grid_scale = 22.0
-shader_parameter/line_px = 0.5
-shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
-shader_parameter/line_alpha = 0.06999999843536
-shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
-shader_parameter/paper_noise_amount = 0.05
-shader_parameter/paper_noise_scale = 0.35
-shader_parameter/speckle_amount = 0.06400000304
-shader_parameter/speckle_density = 1.67999996803664
-shader_parameter/speckle_scale = 5.999999877064
-shader_parameter/fiber_amount = 0.1110000052725
-shader_parameter/fiber_scale = 0.56999999470999
 
 [sub_resource type="Theme" id="Theme_vut6t"]
 
@@ -36,25 +17,7 @@ script = ExtResource("1_uqaih")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="Background" type="ColorRect" parent="UI"]
-unique_name_in_owner = true
-material = SubResource("ShaderMaterial_crhkp")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="TouchController" type="Control" parent="UI"]
-unique_name_in_owner = true
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 0
-script = ExtResource("5_touch")
+[node name="InteractiveBackground" parent="UI" instance=ExtResource("3_intbg")]
 
 [node name="Control" type="Control" parent="UI"]
 layout_mode = 3
