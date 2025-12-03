@@ -5,10 +5,9 @@ extends Node2D
 
 # Background settings
 @onready var mat := get_node("%Background").material as ShaderMaterial
-@export var scroll_speed := Vector2(30.0, 20.0) # px/sec
-var scroll_accum := Vector2.ZERO
+@onready var touch_controller: BackgroundTouchController = get_node("%TouchController")
 
-# UI Elementsad
+# UI Elements
 @onready var camera_button: Button = get_node("%CameraButton")
 @onready var dex_button: Button = get_node("%DexButton")
 @onready var feed_button: Button = get_node("%FeedButton")
@@ -35,6 +34,10 @@ func _ready() -> void:
 		navigation_manager.navigate_to("res://scenes/login/login.tscn", true)
 		return
 
+	# Connect touch controller signals for background interaction
+	touch_controller.scroll_changed.connect(_on_scroll_changed)
+	touch_controller.scale_changed.connect(_on_scale_changed)
+
 	# Connect navigation buttons
 	camera_button.pressed.connect(_on_camera_pressed)
 	dex_button.pressed.connect(_on_dex_pressed)
@@ -43,9 +46,13 @@ func _ready() -> void:
 	social_button.pressed.connect(_on_social_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
 
-func _process(delta):
-	scroll_accum += scroll_speed * delta
-	mat.set_shader_parameter("scroll", scroll_accum)
+
+func _on_scroll_changed(offset: Vector2) -> void:
+	mat.set_shader_parameter("scroll", offset)
+
+
+func _on_scale_changed(new_scale: float) -> void:
+	mat.set_shader_parameter("scale", new_scale)
 
 func _initialize_services() -> void:
 	"""Initialize service references from autoloads"""

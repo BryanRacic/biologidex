@@ -1,6 +1,7 @@
 shader_type canvas_item;
 
 uniform vec2 scroll = vec2(0.0); // pixel scroll offset (driven by script)
+uniform float scale : hint_range(0.5, 4.0) = 1.0; // zoom multiplier (driven by script)
 
 uniform float grid_scale : hint_range(8.0, 64.0, 0.5) = 24.0;    // px per cell
 uniform float line_px    : hint_range(0.5, 3.0, 0.1) = 1.0;      // px line width
@@ -59,7 +60,12 @@ mat2 rot(float a){
 }
 
 void fragment() {
-    vec2 px = FRAGCOORD.xy + scroll;
+    // Apply scale to coordinates - dividing zooms in, scroll adjusted for consistent pan speed
+    vec2 scaled_scroll = scroll / scale;
+    vec2 px = (FRAGCOORD.xy / scale) + scaled_scroll;
+
+    // Keep grid lines same screen-width at all zoom levels
+    float scaled_line = line_px / scale;
 
     // -----------------------
     // Base paper noise
@@ -116,8 +122,8 @@ void fragment() {
     // -----------------------
     vec2 cell_pos = mod(px, grid_scale);
 
-    float vline = step(cell_pos.x, line_px) + step(grid_scale - cell_pos.x, line_px);
-    float hline = step(cell_pos.y, line_px) + step(grid_scale - cell_pos.y, line_px);
+    float vline = step(cell_pos.x, scaled_line) + step(grid_scale - cell_pos.x, scaled_line);
+    float hline = step(cell_pos.y, scaled_line) + step(grid_scale - cell_pos.y, scaled_line);
     float grid_mask = clamp(vline + hline, 0.0, 1.0);
 
     col = mix(col, line_color.rgb, grid_mask * line_alpha);
