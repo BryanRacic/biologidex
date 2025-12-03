@@ -65,7 +65,7 @@ class InvalidateCacheView(APIView):
 class DynamicTreeView(APIView):
     """
     Dynamic user-specific taxonomic tree endpoint.
-    Supports multiple modes via query parameters.
+    Supports multiple modes and layout types via query parameters.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -77,9 +77,15 @@ class DynamicTreeView(APIView):
             - mode: personal|friends|selected|global (default: friends)
             - friend_ids: comma-separated friend IDs for selected mode
             - use_cache: true|false (default: true)
+            - layout: vertical|radial (default: radial)
         """
         mode = request.query_params.get('mode', DynamicTaxonomicTreeService.MODE_FRIENDS)
         use_cache = request.query_params.get('use_cache', 'true').lower() == 'true'
+        layout_type = request.query_params.get('layout', DynamicTaxonomicTreeService.LAYOUT_RADIAL)
+
+        # Validate layout type
+        if layout_type not in [DynamicTaxonomicTreeService.LAYOUT_VERTICAL, DynamicTaxonomicTreeService.LAYOUT_RADIAL]:
+            layout_type = DynamicTaxonomicTreeService.LAYOUT_RADIAL
 
         # Parse friend IDs for selected mode
         friend_ids = []
@@ -106,7 +112,8 @@ class DynamicTreeView(APIView):
             service = DynamicTaxonomicTreeService(
                 user=request.user,
                 mode=mode,
-                selected_friend_ids=friend_ids
+                selected_friend_ids=friend_ids,
+                layout_type=layout_type
             )
 
             tree_data = service.get_tree_data(use_cache=use_cache)

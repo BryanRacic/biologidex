@@ -21,19 +21,22 @@ signal friends_list_received(friends: Array)
 
 ## Fetch complete tree data from server
 ## friend_ids should be an array of UUID strings (not integers)
+## layout_type: "vertical" or "radial" (default: "radial")
 func fetch_tree(
 	mode: APITypes.TreeMode = APITypes.TreeMode.FRIENDS,
 	friend_ids: Array = [],
 	use_cache: bool = true,
+	layout_type: String = "radial",
 	callback: Callable = Callable()
 ) -> void:
 	var mode_str = APITypes.get_tree_mode_string(mode)
-	_log("Fetching tree (mode: %s)" % mode_str)
+	_log("Fetching tree (mode: %s, layout: %s)" % [mode_str, layout_type])
 
 	# Build query params
 	var params = {
 		"mode": mode_str,
-		"use_cache": "true" if use_cache else "false"
+		"use_cache": "true" if use_cache else "false",
+		"layout": layout_type
 	}
 
 	# Add friend_ids for selected mode (expects UUID strings)

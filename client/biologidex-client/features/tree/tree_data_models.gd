@@ -148,15 +148,24 @@ class TreeLayoutData extends Resource:
 	"""
 	Layout information for the entire tree.
 	Maps to server 'layout' object.
+	Supports both vertical and radial layout types.
 	"""
 	@export var positions: Dictionary = {}  # node_id -> Vector2
 	@export var world_bounds: Rect2 = Rect2()
 	@export var chunk_metadata: Dictionary = {}
 	@export var chunk_size: Vector2 = Vector2(2048, 2048)
+	@export var layout_type: String = "radial"  # "vertical" or "radial"
+	@export var layout_metadata: Dictionary = {}  # Radial-specific: angle_spread, radius_per_level, center
 
 	func _init(data: Dictionary = {}) -> void:
 		if data.is_empty():
 			return
+
+		# Parse layout type
+		layout_type = data.get("type", "radial")
+
+		# Parse layout metadata (radial-specific)
+		layout_metadata = data.get("metadata", {})
 
 		# Parse positions
 		var positions_dict = data.get("positions", {})
@@ -191,6 +200,19 @@ class TreeLayoutData extends Resource:
 			chunk_size_dict.get("width", 2048),
 			chunk_size_dict.get("height", 2048)
 		)
+
+	func is_radial() -> bool:
+		"""Check if this is a radial layout."""
+		return layout_type == "radial"
+
+	func get_center() -> Vector2:
+		"""Get center point (for radial, it's origin; for vertical, it's bounds center)."""
+		if is_radial():
+			var center_arr = layout_metadata.get("center", [0, 0])
+			if center_arr is Array and center_arr.size() >= 2:
+				return Vector2(center_arr[0], center_arr[1])
+			return Vector2.ZERO
+		return world_bounds.get_center()
 
 
 class TreeChunk extends Resource:
@@ -273,6 +295,7 @@ class TreeMetadata extends Resource:
 	Maps to server 'metadata' object.
 	"""
 	@export var mode: String = ""
+	@export var layout_type: String = "radial"  # "vertical" or "radial"
 	@export var user_id: String = ""
 	@export var username: String = ""
 	@export var scoped_users: String = ""  # Number or "all"
@@ -285,6 +308,7 @@ class TreeMetadata extends Resource:
 			return
 
 		mode = data.get("mode", "")
+		layout_type = data.get("layout_type", "radial")
 		user_id = data.get("user_id", "")
 		username = data.get("username", "")
 

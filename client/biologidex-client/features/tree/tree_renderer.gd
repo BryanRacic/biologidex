@@ -1,7 +1,8 @@
 @tool
 """
-TreeRenderer - High-performance rendering engine for taxonomic tree visualization.
-Handles batch rendering of nodes, edges, and interactions using MultiMeshInstance2D.
+TreeRenderer - High-performance rendering engine for radial taxonomic tree visualization.
+Handles batch rendering of nodes, curved edges, and interactions using MultiMeshInstance2D.
+Updated to work with external transform control (no internal camera).
 """
 extends Node2D
 class_name TreeRenderer
@@ -28,10 +29,10 @@ const NODE_SIZE_DISCOVERER_BONUS: float = 2.0
 
 # Visual settings - Taxonomy nodes
 const TAXONOMY_NODE_SIZE: float = 6.0
-const COLOR_TAXONOMY: Color = Color(0.6, 0.6, 0.6, 0.8)  # Gray with transparency
+const COLOR_TAXONOMY: Color = Color(0.6, 0.6, 0.6, 0.8)
 const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
 
-# Rank-specific size multipliers (hierarchy visual emphasis)
+# Rank-specific size multipliers
 const RANK_SIZE_MULTIPLIERS = {
 	TreeDataModels.TaxonomicRank.ROOT: 1.5,
 	TreeDataModels.TaxonomicRank.KINGDOM: 1.4,
@@ -45,38 +46,33 @@ const RANK_SIZE_MULTIPLIERS = {
 }
 
 # Colors - Animal nodes
-const COLOR_USER_CAPTURED: Color = Color(0.13, 0.59, 0.95, 1.0)  # #2196F3
-const COLOR_FRIEND_CAPTURED: Color = Color(0.30, 0.69, 0.31, 1.0)  # #4CAF50
-const COLOR_BOTH_CAPTURED: Color = Color(0.48, 0.12, 0.64, 1.0)  # #7B1FA2
-const COLOR_UNCAPTURED: Color = Color(0.46, 0.46, 0.46, 1.0)  # #757575
-const COLOR_SELECTED: Color = Color(1.0, 0.92, 0.23, 1.0)  # Yellow
-const COLOR_EDGE: Color = Color(0.26, 0.26, 0.26, 0.3)  # #424242 with alpha
+const COLOR_USER_CAPTURED: Color = Color(0.13, 0.59, 0.95, 1.0)
+const COLOR_FRIEND_CAPTURED: Color = Color(0.30, 0.69, 0.31, 1.0)
+const COLOR_BOTH_CAPTURED: Color = Color(0.48, 0.12, 0.64, 1.0)
+const COLOR_UNCAPTURED: Color = Color(0.46, 0.46, 0.46, 1.0)
+const COLOR_SELECTED: Color = Color(1.0, 0.92, 0.23, 1.0)
+const COLOR_EDGE: Color = Color(0.26, 0.26, 0.26, 0.3)
 
 # Performance settings
 const MAX_VISIBLE_NODES: int = 50000
-const CULL_MARGIN: float = 100.0  # Extra margin for frustum culling
+const CULL_MARGIN: float = 100.0
+const BEZIER_SEGMENTS: int = 8
 
 # =============================================================================
-# Node References
+# Rendering containers (injected from controller)
 # =============================================================================
 
-var camera: Camera2D = null
-var tree_data: TreeDataModels.TreeData = null
-
-# Rendering nodes
-var nodes_multimesh: MultiMeshInstance2D = null
 var edges_container: Node2D = null
+var nodes_container: Node2D = null
 var labels_container: Node2D = null
 
-# Label management
-var taxonomy_labels: Dictionary = {}  # node_id -> Label
-const MIN_ZOOM_FOR_LABELS: float = 0.8  # Only show labels when zoomed in
+# MultiMesh for batch rendering
+var nodes_multimesh: MultiMeshInstance2D = null
 
 # =============================================================================
 # State
 # =============================================================================
 
-# Render data
 class NodeRenderData:
 	var node: TreeDataModels.TaxonomicNode
 	var position: Vector2
@@ -90,46 +86,61 @@ class NodeRenderData:
 		position = n.position
 		scale = 1.0
 
+var tree_data: TreeDataModels.TreeData = null
 var render_nodes: Array[NodeRenderData] = []
 var visible_nodes: Array[NodeRenderData] = []
 var selected_node: TreeDataModels.TaxonomicNode = null
 var hovered_node: TreeDataModels.TaxonomicNode = null
 
+# View state (updated by controller)
+var _scroll_offset: Vector2 = Vector2.ZERO
+var _current_scale: float = 1.0
+var _viewport_center: Vector2 = Vector2.ZERO
+var _viewport_size: Vector2 = Vector2(1280, 720)
+
 # Spatial indexing for click detection
-var nodes_by_position: Dictionary = {}  # Simplified for now, quadtree later
+var nodes_by_position: Dictionary = {}
+
+# Label management
+var taxonomy_labels: Dictionary = {}
+const MIN_ZOOM_FOR_LABELS: float = 0.8
 
 # =============================================================================
 # Initialization
 # =============================================================================
 
 func _ready() -> void:
-	print("[TreeRenderer] Initializing renderer")
+	print("[TreeRenderer] Initializing radial renderer")
 
-	# Create rendering nodes
+
+func setup_containers(edges: Node2D, nodes: Node2D, labels: Node2D) -> void:
+	"""Setup rendering containers from controller."""
+	edges_container = edges
+	nodes_container = nodes
+	labels_container = labels
+
+	# Create MultiMesh in nodes container
 	_setup_multimesh()
-	_setup_edges_container()
-	_setup_labels_container()
 
-	print("[TreeRenderer] Renderer ready")
+	print("[TreeRenderer] Containers configured")
 
 
 func _setup_multimesh() -> void:
-	"""Setup MultiMeshInstance2D for batch rendering nodes."""
-	nodes_multimesh = MultiMeshInstance2D.new()
-	add_child(nodes_multimesh)
+	"""Setup MultiMeshInstance2D for batch rendering."""
+	if not nodes_container:
+		return
 
-	# Create MultiMesh
+	nodes_multimesh = MultiMeshInstance2D.new()
+	nodes_container.add_child(nodes_multimesh)
+
 	var multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	multimesh.use_colors = true
 	multimesh.use_custom_data = false
-
-	# Create a simple circle mesh for nodes
-	var mesh = _create_circle_mesh(NODE_SIZE_BASE)
-	multimesh.mesh = mesh
+	multimesh.mesh = _create_circle_mesh(NODE_SIZE_BASE)
 
 	nodes_multimesh.multimesh = multimesh
-	nodes_multimesh.z_index = 1  # Nodes above edges
+	nodes_multimesh.z_index = 1
 
 	print("[TreeRenderer] MultiMesh setup complete")
 
@@ -141,11 +152,9 @@ func _create_circle_mesh(radius: float) -> ArrayMesh:
 	var colors = PackedColorArray()
 	var indices = PackedInt32Array()
 
-	# Center vertex
 	vertices.append(Vector2.ZERO)
 	colors.append(Color.WHITE)
 
-	# Circle vertices
 	for i in range(segments + 1):
 		var angle = (float(i) / segments) * TAU
 		var x = cos(angle) * radius
@@ -153,13 +162,11 @@ func _create_circle_mesh(radius: float) -> ArrayMesh:
 		vertices.append(Vector2(x, y))
 		colors.append(Color.WHITE)
 
-	# Triangle fan indices
 	for i in range(segments):
 		indices.append(0)
 		indices.append(i + 1)
 		indices.append(i + 2)
 
-	# Create mesh
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -172,35 +179,9 @@ func _create_circle_mesh(radius: float) -> ArrayMesh:
 	return array_mesh
 
 
-func _setup_edges_container() -> void:
-	"""Setup container for edge rendering."""
-	edges_container = Node2D.new()
-	edges_container.name = "EdgesContainer"
-	add_child(edges_container)
-	edges_container.z_index = 0  # Edges below nodes
-
-	print("[TreeRenderer] Edges container setup complete")
-
-
-func _setup_labels_container() -> void:
-	"""Setup container for label rendering."""
-	labels_container = Node2D.new()
-	labels_container.name = "LabelsContainer"
-	add_child(labels_container)
-	labels_container.z_index = 2  # Labels above nodes
-
-	print("[TreeRenderer] Labels container setup complete")
-
-
 # =============================================================================
 # Public API
 # =============================================================================
-
-func set_camera(cam: Camera2D) -> void:
-	"""Set the camera for frustum culling."""
-	camera = cam
-	print("[TreeRenderer] Camera set")
-
 
 func render_tree(data: TreeDataModels.TreeData) -> void:
 	"""Render the complete tree data."""
@@ -211,7 +192,6 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	print("[TreeRenderer] Rendering tree with %d nodes" % data.nodes.size())
 	tree_data = data
 
-	# Clear previous render data
 	render_nodes.clear()
 	visible_nodes.clear()
 	nodes_by_position.clear()
@@ -223,7 +203,7 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 		render_data.scale = _get_node_scale(node)
 		render_nodes.append(render_data)
 
-		# Add to spatial index (simplified - just grid cells)
+		# Add to spatial index
 		var grid_key = _get_grid_key(node.position)
 		if not nodes_by_position.has(grid_key):
 			nodes_by_position[grid_key] = []
@@ -231,23 +211,25 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 
 	print("[TreeRenderer] Built render data for %d nodes" % render_nodes.size())
 
-	# Update visible nodes and render
 	_update_visible_nodes()
 	_update_multimesh()
-	_render_edges()
+	_render_radial_edges()
 	_render_taxonomy_labels()
 
 	print("[TreeRenderer] Tree rendering complete")
 
 
-func update_view() -> void:
-	"""Update the view based on camera position (call this when camera moves)."""
-	if not tree_data:
-		return
+func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
+	"""Update view parameters (called when transform changes)."""
+	_scroll_offset = scroll
+	_current_scale = scale
+	_viewport_center = center
+	_viewport_size = get_viewport_rect().size
 
-	_update_visible_nodes()
-	_update_multimesh()
-	_render_taxonomy_labels()
+	if tree_data:
+		_update_visible_nodes()
+		_update_multimesh()
+		_render_taxonomy_labels()
 
 
 func clear() -> void:
@@ -260,11 +242,10 @@ func clear() -> void:
 	if nodes_multimesh and nodes_multimesh.multimesh:
 		nodes_multimesh.multimesh.instance_count = 0
 
-	# Clear edges
-	for child in edges_container.get_children():
-		child.queue_free()
+	if edges_container:
+		for child in edges_container.get_children():
+			child.queue_free()
 
-	# Clear labels
 	for label in taxonomy_labels.values():
 		label.queue_free()
 	taxonomy_labels.clear()
@@ -273,48 +254,33 @@ func clear() -> void:
 
 
 # =============================================================================
-# Rendering Implementation
+# Frustum Culling
 # =============================================================================
 
 func _update_visible_nodes() -> void:
-	"""Update which nodes are visible based on camera frustum."""
+	"""Update which nodes are visible based on current view."""
 	visible_nodes.clear()
 
-	if not camera:
-		# No camera, show all nodes (up to limit)
-		for i in range(mini(render_nodes.size(), MAX_VISIBLE_NODES)):
-			visible_nodes.append(render_nodes[i])
-		return
+	# Get view bounds in world space
+	var view_rect = _get_view_rect()
 
-	# Get camera frustum in world coordinates
-	var viewport_size = get_viewport_rect().size
-	var camera_zoom = camera.zoom.x
-	var camera_pos = camera.global_position
-
-	# Calculate frustum bounds with margin
-	var half_width = (viewport_size.x / (2.0 * camera_zoom)) + CULL_MARGIN
-	var half_height = (viewport_size.y / (2.0 * camera_zoom)) + CULL_MARGIN
-
-	var frustum = Rect2(
-		camera_pos.x - half_width,
-		camera_pos.y - half_height,
-		half_width * 2,
-		half_height * 2
-	)
-
-	# Cull nodes outside frustum
 	for render_data in render_nodes:
-		if frustum.has_point(render_data.position):
+		if view_rect.has_point(render_data.position):
 			render_data.is_visible = true
 			visible_nodes.append(render_data)
 		else:
 			render_data.is_visible = false
 
-		# Stop if we hit the limit
 		if visible_nodes.size() >= MAX_VISIBLE_NODES:
 			break
 
-	# print("[TreeRenderer] Visible nodes: %d / %d" % [visible_nodes.size(), render_nodes.size()])
+
+func _get_view_rect() -> Rect2:
+	"""Get current view rectangle in world coordinates."""
+	var half_size = (_viewport_size / 2.0) / _current_scale + Vector2(CULL_MARGIN, CULL_MARGIN)
+	var center = _scroll_offset / _current_scale
+
+	return Rect2(center - half_size, half_size * 2)
 
 
 func _update_multimesh() -> void:
@@ -325,25 +291,20 @@ func _update_multimesh() -> void:
 	var multimesh = nodes_multimesh.multimesh
 	multimesh.instance_count = visible_nodes.size()
 
-	# Update each instance
 	for i in range(visible_nodes.size()):
 		var render_data = visible_nodes[i]
 		render_data.instance_index = i
 
-		# Set transform (position and scale)
 		var transform = Transform2D()
 		transform = transform.scaled(Vector2(render_data.scale, render_data.scale))
 		transform.origin = render_data.position
 		multimesh.set_instance_transform_2d(i, transform)
 
-		# Set color
 		var color = render_data.color
 
-		# Apply selection/hover overlay
 		if render_data.node == selected_node:
 			color = COLOR_SELECTED
 		elif render_data.node == hovered_node:
-			# Different hover effect for taxonomy vs animal nodes
 			if render_data.node.is_taxonomic():
 				color = COLOR_TAXONOMY_HOVER
 			else:
@@ -352,37 +313,39 @@ func _update_multimesh() -> void:
 		multimesh.set_instance_color(i, color)
 
 
-func _render_edges() -> void:
-	"""Render edges between nodes."""
-	# Clear existing edges
+# =============================================================================
+# Radial Edge Rendering
+# =============================================================================
+
+func _render_radial_edges() -> void:
+	"""Render edges as curved lines for radial layout."""
+	if not edges_container:
+		return
+
+	# Clear existing
 	for child in edges_container.get_children():
 		child.queue_free()
 
 	if not tree_data:
 		return
 
-	# For now, only render edges for visible nodes (performance optimization)
-	var visible_node_ids = {}
-	for render_data in visible_nodes:
-		visible_node_ids[render_data.node.id] = true
+	var visible_ids = {}
+	for rd in visible_nodes:
+		visible_ids[rd.node.id] = true
 
-	var edges_rendered = 0
-	var max_edges = 10000  # Limit edges for performance
+	var rendered = 0
+	var max_edges = 10000
 
 	for edge in tree_data.edges:
-		# Only render if both nodes are visible
-		if visible_node_ids.has(edge.source) and visible_node_ids.has(edge.target):
-			_draw_edge(edge)
-			edges_rendered += 1
-
-			if edges_rendered >= max_edges:
+		if visible_ids.has(edge.source) and visible_ids.has(edge.target):
+			_draw_radial_edge(edge)
+			rendered += 1
+			if rendered >= max_edges:
 				break
 
-	# print("[TreeRenderer] Rendered %d edges" % edges_rendered)
 
-
-func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
-	"""Draw a single edge with style based on node types."""
+func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
+	"""Draw a radial edge (curved for aesthetic)."""
 	var source_node = tree_data.get_node_by_id(edge.source)
 	var target_node = tree_data.get_node_by_id(edge.target)
 
@@ -390,55 +353,105 @@ func _draw_edge(edge: TreeDataModels.TreeEdge) -> void:
 		return
 
 	var line = Line2D.new()
-	line.add_point(source_node.position)
-	line.add_point(target_node.position)
-	line.antialiased = false  # Performance
 
-	# Vary edge appearance based on node types
-	if source_node.is_taxonomic() and target_node.is_taxonomic():
-		# Taxonomy to taxonomy: thicker, more visible (hierarchical structure)
-		line.width = 2.0
-		line.default_color = Color(0.4, 0.4, 0.4, 0.5)
-	elif source_node.is_taxonomic() and target_node.is_animal():
-		# Taxonomy to animal: visible connections to dex entries
-		line.width = 1.5
-		line.default_color = Color(0.4, 0.4, 0.4, 0.6)
+	var source_radius = source_node.position.length()
+
+	if source_radius < 1.0:
+		# Source is root (center) - straight line
+		line.add_point(source_node.position)
+		line.add_point(target_node.position)
 	else:
-		# Default (shouldn't happen with proper hierarchy, but fallback)
-		line.width = 1.0
-		line.default_color = COLOR_EDGE
+		# Curved edge using quadratic bezier approximation
+		var points = _calculate_curved_edge(source_node.position, target_node.position)
+		for p in points:
+			line.add_point(p)
+
+	line.antialiased = true
+	line.width = _get_edge_width(source_node, target_node)
+	line.default_color = _get_edge_color(source_node, target_node)
 
 	edges_container.add_child(line)
 
 
+func _calculate_curved_edge(from: Vector2, to: Vector2) -> Array[Vector2]:
+	"""Calculate curved edge points for radial layout."""
+	var points: Array[Vector2] = []
+
+	var from_radius = from.length()
+	var to_radius = to.length()
+
+	# Control point: at parent's radius, midpoint angle
+	var from_angle = from.angle()
+	var to_angle = to.angle()
+
+	# Handle angle wrapping
+	var angle_diff = to_angle - from_angle
+	if angle_diff > PI:
+		angle_diff -= TAU
+	elif angle_diff < -PI:
+		angle_diff += TAU
+
+	var mid_angle = from_angle + angle_diff * 0.5
+	var control_radius = from_radius
+	var control = Vector2(cos(mid_angle), sin(mid_angle)) * control_radius
+
+	# Quadratic bezier curve
+	for i in range(BEZIER_SEGMENTS + 1):
+		var t = float(i) / float(BEZIER_SEGMENTS)
+		var p = _quadratic_bezier(from, control, to, t)
+		points.append(p)
+
+	return points
+
+
+func _quadratic_bezier(p0: Vector2, p1: Vector2, p2: Vector2, t: float) -> Vector2:
+	"""Calculate point on quadratic bezier curve."""
+	var u = 1.0 - t
+	return u * u * p0 + 2.0 * u * t * p1 + t * t * p2
+
+
+func _get_edge_width(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> float:
+	"""Get edge width based on node types."""
+	if source.is_taxonomic() and target.is_taxonomic():
+		return 2.0
+	elif source.is_taxonomic() and target.is_animal():
+		return 1.5
+	return 1.0
+
+
+func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> Color:
+	"""Get edge color based on node types."""
+	if source.is_taxonomic() and target.is_taxonomic():
+		return Color(0.4, 0.4, 0.4, 0.5)
+	return Color(0.4, 0.4, 0.4, 0.6)
+
+
+# =============================================================================
+# Label Rendering
+# =============================================================================
+
 func _render_taxonomy_labels() -> void:
 	"""Render labels for taxonomy nodes and dex animal nodes (zoom-dependent)."""
-	# Clear existing labels
 	for label in taxonomy_labels.values():
 		label.queue_free()
 	taxonomy_labels.clear()
 
-	if not camera or not labels_container:
+	if not labels_container:
 		return
 
 	# Only show labels when zoomed in enough
-	var current_zoom = camera.zoom.x
-	if current_zoom < MIN_ZOOM_FOR_LABELS:
+	if _current_scale < MIN_ZOOM_FOR_LABELS:
 		return
 
-	# Add labels for visible nodes
 	for render_data in visible_nodes:
 		var label_text = ""
 		var should_show_label = false
 
 		if render_data.node.is_taxonomic():
-			# Show labels for all taxonomy nodes
 			label_text = render_data.node.name
 			should_show_label = true
 		elif render_data.node.is_animal():
-			# Show labels for animal nodes that are in the dex (captured by user or friends)
 			if render_data.node.captured_by_user or render_data.node.captured_by_friends.size() > 0:
-				# Use common name if available, otherwise scientific name
 				label_text = render_data.node.common_name if render_data.node.common_name else render_data.node.scientific_name
 				should_show_label = true
 
@@ -449,8 +462,6 @@ func _render_taxonomy_labels() -> void:
 			label.add_theme_color_override("font_color", Color.WHITE)
 			label.add_theme_color_override("font_outline_color", Color.BLACK)
 			label.add_theme_constant_override("outline_size", 2)
-
-			# Position label slightly below the node
 			label.position = render_data.position + Vector2(-20, 10)
 
 			labels_container.add_child(label)
@@ -463,11 +474,9 @@ func _render_taxonomy_labels() -> void:
 
 func _get_node_color(node: TreeDataModels.TaxonomicNode) -> Color:
 	"""Get color for a node based on type and capture status."""
-	# Taxonomy nodes are gray
 	if node.is_taxonomic():
 		return COLOR_TAXONOMY
 
-	# Animal nodes: color by capture status
 	if node.captured_by_user and node.captured_by_friends.size() > 0:
 		return COLOR_BOTH_CAPTURED
 	elif node.captured_by_user:
@@ -480,13 +489,11 @@ func _get_node_color(node: TreeDataModels.TaxonomicNode) -> Color:
 
 func _get_node_scale(node: TreeDataModels.TaxonomicNode) -> float:
 	"""Get scale for a node based on type, rank, capture status and importance."""
-	# Taxonomy nodes: size based on rank
 	if node.is_taxonomic():
 		var base = TAXONOMY_NODE_SIZE
 		var multiplier = RANK_SIZE_MULTIPLIERS.get(node.rank, 1.0)
 		return (base * multiplier) / NODE_SIZE_BASE
 
-	# Animal nodes: size based on capture status
 	var base_size = NODE_SIZE_BASE
 
 	if node.captured_by_user:
@@ -494,21 +501,57 @@ func _get_node_scale(node: TreeDataModels.TaxonomicNode) -> float:
 	elif node.captured_by_friends.size() > 0:
 		base_size = NODE_SIZE_FRIEND
 
-	# Bonus for discoverer
 	if node.discoverer.get("is_self", false) or node.discoverer.get("is_friend", false):
 		base_size += NODE_SIZE_DISCOVERER_BONUS
 
-	# Return scale relative to base size
 	return base_size / NODE_SIZE_BASE
 
 
 # =============================================================================
-# Interaction Helpers
+# Click Detection (World Space)
 # =============================================================================
+
+func _input(event: InputEvent) -> void:
+	"""Handle input events for node interaction."""
+	if Engine.is_editor_hint():
+		return
+
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_handle_click(event.position)
+	elif event is InputEventMouseMotion:
+		_handle_mouse_motion(event.position)
+	elif event is InputEventScreenTouch and event.pressed:
+		_handle_click(event.position)
+
+
+func _handle_click(screen_pos: Vector2) -> void:
+	"""Handle click/tap for node selection."""
+	var world_pos = _screen_to_world(screen_pos)
+	var node = get_node_at_position(world_pos)
+
+	if node:
+		select_node(node)
+	else:
+		clear_selection()
+
+
+func _handle_mouse_motion(screen_pos: Vector2) -> void:
+	"""Handle mouse motion for hover effects."""
+	var world_pos = _screen_to_world(screen_pos)
+	var node = get_node_at_position(world_pos, 10.0)
+	set_hovered_node(node)
+
+
+func _screen_to_world(screen_pos: Vector2) -> Vector2:
+	"""Convert screen position to world coordinates."""
+	# Account for current transform: position = (screen - center) / scale + scroll / scale
+	return (screen_pos - _viewport_center) / _current_scale + _scroll_offset / _current_scale
+
 
 func _get_grid_key(pos: Vector2) -> Vector2i:
 	"""Get grid key for spatial indexing."""
-	var grid_size = 100.0  # 100 units per cell
+	var grid_size = 100.0
 	return Vector2i(int(pos.x / grid_size), int(pos.y / grid_size))
 
 
@@ -516,20 +559,21 @@ func get_node_at_position(world_pos: Vector2, radius: float = 20.0) -> TreeDataM
 	"""Get node at world position (for click detection)."""
 	var grid_key = _get_grid_key(world_pos)
 
-	# Check the cell and adjacent cells
+	# Search radius scales with zoom
+	var search_radius = radius / _current_scale
+
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
 			var check_key = Vector2i(grid_key.x + dx, grid_key.y + dy)
 			if nodes_by_position.has(check_key):
-				var nodes_in_cell = nodes_by_position[check_key]
-				for render_data in nodes_in_cell:
+				for render_data in nodes_by_position[check_key]:
 					if not render_data.is_visible:
 						continue
 
-					var distance = render_data.position.distance_to(world_pos)
+					var dist = render_data.position.distance_to(world_pos)
 					var node_radius = NODE_SIZE_BASE * render_data.scale
 
-					if distance <= node_radius + radius:
+					if dist <= node_radius + search_radius:
 						return render_data.node
 
 	return null
@@ -545,7 +589,7 @@ func select_node(node: TreeDataModels.TaxonomicNode) -> void:
 
 	if node:
 		node_selected.emit(node)
-		print("[TreeRenderer] Selected node: %s" % node.scientific_name)
+		print("[TreeRenderer] Selected node: %s" % (node.scientific_name if node.scientific_name else node.name))
 
 
 func clear_selection() -> void:
@@ -555,7 +599,6 @@ func clear_selection() -> void:
 
 	selected_node = null
 	_update_multimesh()
-	print("[TreeRenderer] Selection cleared")
 
 
 func set_hovered_node(node: TreeDataModels.TaxonomicNode) -> void:
@@ -567,57 +610,10 @@ func set_hovered_node(node: TreeDataModels.TaxonomicNode) -> void:
 	_update_multimesh()
 
 	if node:
-		# Only emit hover signal for animal nodes
 		if node.is_animal():
 			node_hovered.emit(node)
-		# Taxonomy nodes get visual feedback but no signal
 	else:
 		node_unhovered.emit()
-
-
-# =============================================================================
-# Input Handling
-# =============================================================================
-
-func _input(event: InputEvent) -> void:
-	"""Handle input events for node interaction."""
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			_handle_click(event.position)
-	elif event is InputEventMouseMotion:
-		_handle_mouse_motion(event.position)
-
-
-func _handle_click(screen_pos: Vector2) -> void:
-	"""Handle mouse click."""
-	if not camera:
-		return
-
-	# Convert screen to world coordinates
-	var world_pos = camera.get_global_mouse_position()
-
-	# Find node at position
-	var node = get_node_at_position(world_pos)
-
-	if node:
-		# Select node (both animal and taxonomy nodes)
-		select_node(node)
-	else:
-		clear_selection()
-
-
-func _handle_mouse_motion(screen_pos: Vector2) -> void:
-	"""Handle mouse motion for hover effects."""
-	if not camera:
-		return
-
-	# Convert screen to world coordinates
-	var world_pos = camera.get_global_mouse_position()
-
-	# Find node at position
-	var node = get_node_at_position(world_pos, 10.0)  # Smaller radius for hover
-
-	set_hovered_node(node)
 
 
 # =============================================================================

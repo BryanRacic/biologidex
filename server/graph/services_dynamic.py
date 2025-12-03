@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from animals.models import Animal
 from dex.models import DexEntry
 from social.models import Friendship
-from .layout import ReingoldTilfordLayout, ChunkManager
+from .layout import ReingoldTilfordLayout, RadialReingoldTilfordLayout, ChunkManager
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ class DynamicTaxonomicTreeService:
     """
     Service for generating dynamic, user-specific taxonomic trees.
     Supports multiple view modes: personal, friends, admin global.
+    Supports multiple layout types: vertical (default) and radial.
     """
 
     # View modes
@@ -28,7 +29,11 @@ class DynamicTaxonomicTreeService:
     MODE_SELECTED = 'selected'  # User + specific friends
     MODE_GLOBAL = 'global'      # All users (admin only)
 
-    def __init__(self, user, mode=MODE_FRIENDS, selected_friend_ids=None):
+    # Layout types
+    LAYOUT_VERTICAL = 'vertical'
+    LAYOUT_RADIAL = 'radial'
+
+    def __init__(self, user, mode=MODE_FRIENDS, selected_friend_ids=None, layout_type=LAYOUT_RADIAL):
         """
         Initialize service for dynamic tree generation.
 
@@ -36,16 +41,26 @@ class DynamicTaxonomicTreeService:
             user: Primary user viewing the tree
             mode: View mode (personal, friends, selected, global)
             selected_friend_ids: List of friend IDs for MODE_SELECTED
+            layout_type: Layout algorithm (vertical or radial, default: radial)
         """
         self.user = user
         self.mode = mode
         self.selected_friend_ids = selected_friend_ids or []
+        self.layout_type = layout_type
 
         # Precompute user scope
         self._compute_user_scope()
 
-        # Initialize layout and chunking managers
-        self.layout_engine = ReingoldTilfordLayout()
+        # Initialize appropriate layout engine based on type
+        if layout_type == self.LAYOUT_RADIAL:
+            self.layout_engine = RadialReingoldTilfordLayout(
+                angle_spread=360.0,
+                radius_per_level=150.0,
+                min_radius=100.0
+            )
+        else:
+            self.layout_engine = ReingoldTilfordLayout()
+
         self.chunk_manager = ChunkManager(chunk_size=2048)
 
     def _compute_user_scope(self):
@@ -76,15 +91,15 @@ class DynamicTaxonomicTreeService:
             raise ValueError(f"Invalid mode: {self.mode}")
 
     def get_cache_key(self, suffix=''):
-        """Generate cache key based on user scope."""
+        """Generate cache key based on user scope and layout type."""
         if self.mode == self.MODE_GLOBAL:
-            base_key = 'taxonomic_tree_global'
+            base_key = f'taxonomic_tree_global_{self.layout_type}'
         elif self.mode == self.MODE_SELECTED:
             # Sort IDs for consistent cache keys
             id_hash = '_'.join(sorted(map(str, self.scoped_user_ids)))
-            base_key = f'taxonomic_tree_selected_{id_hash}'
+            base_key = f'taxonomic_tree_selected_{id_hash}_{self.layout_type}'
         else:
-            base_key = f'taxonomic_tree_{self.mode}_{self.user.id}'
+            base_key = f'taxonomic_tree_{self.mode}_{self.user.id}_{self.layout_type}'
 
         return f'{base_key}{suffix}' if suffix else base_key
 
@@ -126,6 +141,11 @@ class DynamicTaxonomicTreeService:
         # Calculate statistics
         stats = self._calculate_stats(animals, nodes, edges)
 
+        # Get layout metadata if available (radial layout provides extra info)
+        layout_metadata = {}
+        if hasattr(self.layout_engine, 'get_layout_metadata'):
+            layout_metadata = self.layout_engine.get_layout_metadata(positions)
+
         # Build response
         tree_data = {
             'nodes': nodes,
@@ -134,11 +154,14 @@ class DynamicTaxonomicTreeService:
                 'positions': positions,
                 'world_bounds': self.chunk_manager.get_world_bounds(),
                 'chunk_metadata': chunks,
-                'chunk_size': {'width': 2048, 'height': 2048}
+                'chunk_size': {'width': 2048, 'height': 2048},
+                'type': self.layout_type,
+                'metadata': layout_metadata
             },
             'stats': stats,
             'metadata': {
                 'mode': self.mode,
+                'layout_type': self.layout_type,
                 'user_id': str(self.user.id),
                 'username': self.user.username,
                 'scoped_users': len(self.scoped_user_ids) if self.scoped_user_ids else 'all',

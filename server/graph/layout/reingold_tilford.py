@@ -1,6 +1,7 @@
 """
 Reingold-Tilford tree layout algorithm for taxonomic trees.
 Implements the Walker-Buchheim O(n) algorithm for aesthetically pleasing hierarchical layouts.
+Includes radial variant for circular tree visualization.
 
 Based on:
 - Reingold & Tilford (1981): "Tidier Drawings of Trees"
@@ -8,6 +9,7 @@ Based on:
 - Buchheim, Jünger & Leipert (2002): "Improving Walker's Algorithm to Run in Linear Time"
 """
 import logging
+import math
 from typing import Dict, List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -402,3 +404,174 @@ class ReingoldTilfordLayout:
 
         traverse(root)
         return positions
+
+
+class RadialReingoldTilfordLayout(ReingoldTilfordLayout):
+    """
+    Radial variant of Walker-Buchheim layout algorithm.
+    Positions nodes in concentric circles radiating from center.
+
+    The algorithm works in two phases:
+    1. Standard Walker-Buchheim layout to get (x, y) coordinates
+    2. Polar transformation where:
+       - x (horizontal position) -> angle (0° to 360°)
+       - y (depth/level) -> radius (distance from center)
+    """
+
+    def __init__(self,
+                 angle_spread: float = 360.0,
+                 radius_per_level: float = 150.0,
+                 min_radius: float = 100.0,
+                 sibling_separation: float = 1.0):
+        """
+        Initialize radial layout engine.
+
+        Args:
+            angle_spread: Total angular spread (360 = full circle, 180 = semicircle)
+            radius_per_level: Distance between depth levels in pixels
+            min_radius: Minimum radius for first level (root at center)
+            sibling_separation: Base separation between siblings (scaled by depth)
+        """
+        # Initialize parent with horizontal spacing that maps to angular space
+        super().__init__(h_spacing=100.0, v_spacing=radius_per_level, min_distance=100.0)
+
+        self.angle_spread = angle_spread
+        self.radius_per_level = radius_per_level
+        self.min_radius = min_radius
+        self.sibling_separation = sibling_separation
+
+    def calculate_layout(self, hierarchy: Dict) -> Dict[str, Tuple[float, float]]:
+        """
+        Calculate radial positions for all nodes.
+
+        1. Run standard Walker-Buchheim to get (x, y) in tree space
+        2. Transform to polar coordinates (angle, radius)
+        3. Convert back to Cartesian for rendering
+
+        Returns:
+            Dict mapping node IDs to (x, y) position tuples in Cartesian coordinates
+        """
+        logger.info("Calculating radial Walker-Buchheim layout")
+
+        # Phase 1: Standard layout (x = horizontal, y = depth)
+        root = self._build_tree_nodes(hierarchy)
+
+        if not root:
+            logger.warning("Empty tree hierarchy provided")
+            return {}
+
+        self._first_walk(root)
+        self._second_walk(root, -root.prelim)
+
+        # Get bounds for normalization
+        min_x, max_x = self._get_x_bounds(root)
+        max_depth = self._get_max_depth(root)
+
+        # Phase 2: Transform to radial coordinates
+        positions = self._transform_to_radial(root, min_x, max_x, max_depth)
+
+        logger.info(f"Radial layout calculated for {len(positions)} nodes")
+        return positions
+
+    def _get_x_bounds(self, root: TreeNode) -> Tuple[float, float]:
+        """Get min/max x values for angular normalization."""
+        min_x = float('inf')
+        max_x = float('-inf')
+
+        def traverse(node: TreeNode):
+            nonlocal min_x, max_x
+            min_x = min(min_x, node.x)
+            max_x = max(max_x, node.x)
+            for child in node.children:
+                traverse(child)
+
+        traverse(root)
+        return (min_x, max_x)
+
+    def _get_max_depth(self, root: TreeNode) -> int:
+        """Get maximum depth of tree."""
+        max_depth = 0
+
+        def traverse(node: TreeNode, depth: int):
+            nonlocal max_depth
+            max_depth = max(max_depth, depth)
+            for child in node.children:
+                traverse(child, depth + 1)
+
+        traverse(root, 0)
+        return max_depth
+
+    def _transform_to_radial(self, root: TreeNode, min_x: float, max_x: float,
+                             max_depth: int) -> Dict[str, Tuple[float, float]]:
+        """
+        Transform tree coordinates to radial positions.
+
+        Args:
+            root: Root tree node
+            min_x: Minimum x value from layout
+            max_x: Maximum x value from layout
+            max_depth: Maximum tree depth
+
+        Returns:
+            Dict mapping node IDs to (px, py) Cartesian coordinates
+        """
+        positions = {}
+        x_range = max_x - min_x if max_x != min_x else 1.0
+
+        def transform_node(node: TreeNode, depth: int):
+            if depth == 0:
+                # Root at center
+                positions[node.id] = (0.0, 0.0)
+            else:
+                # Normalize x to angle (0 to angle_spread degrees)
+                normalized_x = (node.x - min_x) / x_range
+                angle_deg = normalized_x * self.angle_spread
+
+                # Offset by -90 degrees so tree grows upward from center
+                angle_rad = math.radians(angle_deg - 90)
+
+                # Calculate radius based on depth
+                radius = self.min_radius + (depth - 1) * self.radius_per_level
+
+                # Convert to Cartesian
+                px = radius * math.cos(angle_rad)
+                py = radius * math.sin(angle_rad)
+
+                positions[node.id] = (px, py)
+
+            for child in node.children:
+                transform_node(child, depth + 1)
+
+        transform_node(root, 0)
+        return positions
+
+    def get_layout_metadata(self, positions: Dict[str, Tuple[float, float]]) -> Dict:
+        """
+        Return metadata about the radial layout for client rendering hints.
+
+        Args:
+            positions: Computed node positions
+
+        Returns:
+            Dict with layout type and parameters
+        """
+        if not positions:
+            return {}
+
+        # Calculate bounds
+        all_x = [p[0] for p in positions.values()]
+        all_y = [p[1] for p in positions.values()]
+
+        return {
+            "layout_type": "radial",
+            "angle_spread": self.angle_spread,
+            "radius_per_level": self.radius_per_level,
+            "min_radius": self.min_radius,
+            "bounds": {
+                "min_x": min(all_x) if all_x else 0,
+                "max_x": max(all_x) if all_x else 0,
+                "min_y": min(all_y) if all_y else 0,
+                "max_y": max(all_y) if all_y else 0,
+            },
+            "center": (0, 0)  # Root always at center
+        }
