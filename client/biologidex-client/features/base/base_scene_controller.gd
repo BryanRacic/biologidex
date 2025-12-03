@@ -1,7 +1,7 @@
 ### NOTE THIS IS DEPRECATED!!! ###
 ### See base_scene_node.gd     ###
 
-class_name BaseSceneNode extends Control
+class_name BaseSceneController extends Control
 
 # Base class for all scene controllers
 # Provides common manager initialization, UI helpers, and error handling patterns

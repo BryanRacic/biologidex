@@ -175,7 +175,7 @@ func check_version(force: bool = false, silent: bool = false) -> void:
 	# Prepare headers
 	var headers = {
 		"X-Client-Version": current_version,
-		"X-Client-Build": str(Time.get_unix_time())
+		"X-Client-Build": str(Time.get_unix_time_from_system())
 	}
 
 	# Make version check request using APIManager's raw request method

@@ -24,7 +24,8 @@ var is_syncing: bool = false
 @onready var filter_dropdown: OptionButton = get_node("%FriendsDropdown")
 @onready var scroll_container: ScrollContainer = get_node("%ScrollContainer")
 @onready var feed_container: VBoxContainer = get_node("%FeedContainer")
-@onready var status_label: Label = get_node("%StatusLabel")
+# Note: status_label is inherited from BaseSceneNode, wired via @onready below
+@onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
 
 # Signals
@@ -446,17 +447,17 @@ func _show_loading(visible: bool) -> void:
 
 func _show_status(message: String, is_success: bool) -> void:
 	"""Show status message with appropriate color"""
-	if not status_label:
+	if not _feed_status_label:
 		return
 
-	status_label.text = message
+	_feed_status_label.text = message
 
 	if message.is_empty():
-		status_label.modulate = Color.WHITE
-		status_label.visible = false
+		_feed_status_label.modulate = Color.WHITE
+		_feed_status_label.visible = false
 	else:
-		status_label.visible = true
+		_feed_status_label.visible = true
 		if is_success:
-			status_label.modulate = Color.GREEN
+			_feed_status_label.modulate = Color.GREEN
 		else:
-			status_label.modulate = Color.RED
+			_feed_status_label.modulate = Color.RED
