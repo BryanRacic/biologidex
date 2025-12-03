@@ -224,6 +224,7 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 
 func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 	"""Update view parameters (called when transform changes)."""
+	var old_scale = _current_scale
 	_scroll_offset = scroll
 	_current_scale = scale
 	_viewport_center = center
@@ -232,6 +233,9 @@ func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 	if tree_data:
 		_update_visible_nodes()
 		_update_multimesh()
+		# Re-render edges when scale changes (width depends on scale)
+		if scale != old_scale:
+			_render_radial_edges()
 		_render_taxonomy_labels()
 
 
@@ -414,19 +418,25 @@ func _quadratic_bezier(p0: Vector2, p1: Vector2, p2: Vector2, t: float) -> Vecto
 
 
 func _get_edge_width(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> float:
-	"""Get edge width based on node types."""
+	"""Get edge width based on node types. Scaled inversely with zoom for consistent screen width."""
+	var base_width: float
 	if source.is_taxonomic() and target.is_taxonomic():
-		return 2.0
+		base_width = 6.0
 	elif source.is_taxonomic() and target.is_animal():
-		return 1.5
-	return 1.0
+		base_width = 5.0
+	else:
+		base_width = 4.0
+	# Scale inversely so lines maintain consistent screen-space thickness
+	# Clamp to minimum width so lines don't disappear at high zoom
+	var scaled_width = base_width / _current_scale
+	return maxf(scaled_width, 0.5)
 
 
 func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> Color:
 	"""Get edge color based on node types."""
 	if source.is_taxonomic() and target.is_taxonomic():
-		return Color(0.4, 0.4, 0.4, 0.5)
-	return Color(0.4, 0.4, 0.4, 0.6)
+		return Color(0.15, 0.15, 0.15, 0.85)
+	return Color(0.2, 0.2, 0.2, 0.8)
 
 
 # =============================================================================
@@ -434,7 +444,8 @@ func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModel
 # =============================================================================
 
 func _render_taxonomy_labels() -> void:
-	"""Render labels for taxonomy nodes and dex animal nodes (zoom-dependent)."""
+	"""Render labels for taxonomy nodes and dex animal nodes (zoom-dependent).
+	Labels are counter-scaled to maintain crisp screen-space rendering."""
 	for label in taxonomy_labels.values():
 		label.queue_free()
 	taxonomy_labels.clear()
@@ -445,6 +456,9 @@ func _render_taxonomy_labels() -> void:
 	# Only show labels when zoomed in enough
 	if _current_scale < MIN_ZOOM_FOR_LABELS:
 		return
+
+	# Counter-scale factor: labels render at screen resolution, not world resolution
+	var inverse_scale = 1.0 / _current_scale
 
 	for render_data in visible_nodes:
 		var label_text = ""
@@ -462,11 +476,20 @@ func _render_taxonomy_labels() -> void:
 			var label = Label.new()
 			label.text = label_text
 			label.theme = _theme
-			# Position label below and slightly right of node
-			var node_size = NODE_SIZE_BASE * render_data.scale
-			label.position = render_data.position + Vector2(-node_size, node_size + 10)
+			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+			# Counter-scale to render at screen resolution (prevents pixelation)
+			label.scale = Vector2(inverse_scale, inverse_scale)
 
 			labels_container.add_child(label)
+
+			# Position label below and centered on node
+			# Use get_minimum_size() to get label dimensions before layout
+			var label_size = label.get_minimum_size()
+			var node_size = NODE_SIZE_BASE * render_data.scale
+			var offset = Vector2(-label_size.x * inverse_scale / 2.0, node_size + 5 * inverse_scale)
+			label.position = render_data.position + offset
+
 			taxonomy_labels[render_data.node.id] = label
 
 
