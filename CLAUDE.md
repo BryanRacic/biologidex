@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-11-20)
+## Status (2025-12-02)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -17,6 +17,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Two-step image upload workflow (convert → download → analyze)
 - ✅ Multiple animal detection support with selection API
 - ✅ Client-side image rotation with post-conversion transformations
+- ✅ Touch-interactive paper background with pan/zoom (home screen, expanding to all scenes)
 
 ---
 
@@ -82,6 +83,19 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `canvas_resize_policy=1` (Project) prevents double-scaling
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
+
+**Touch-Interactive Background**:
+- **BackgroundTouchController** (`features/home/background_touch_controller.gd`): Reusable pan/zoom gesture handler
+- **paper.gdshader**: Accepts `scroll` (Vector2) and `scale` (float) uniforms for pan/zoom
+- **Gesture support**: Single-finger/mouse drag (pan), two-finger pinch (zoom), scroll wheel (zoom)
+- **Inertia**: Momentum-based scrolling with exponential decay after release
+- **Web compatibility**: Uses position-based touch tracking (not index) to work around iOS web bugs
+  - GitHub issues: #95941 (iOS index overflow), #94346 (multitouch relative), #3772 (cross-platform)
+- **Project settings** (`project.godot`):
+  - `pointing/emulate_touch_from_mouse = true` (desktop testing)
+  - `pointing/emulate_mouse_from_touch = false` (prevent double-handling)
+- **Scene integration**: TouchController between Background and UI Control layers
+- **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through to TouchController; buttons keep default STOP
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)
