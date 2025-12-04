@@ -24,6 +24,10 @@ z_index = -1
 [node name="NodesLayer" type="Node2D" parent="TreeGraph"]
 unique_name_in_owner = true
 
+[node name="DexImagesLayer" type="Node2D" parent="TreeGraph"]
+unique_name_in_owner = true
+z_index = 1
+
 [node name="LabelsLayer" type="Node2D" parent="TreeGraph"]
 unique_name_in_owner = true
 z_index = 2

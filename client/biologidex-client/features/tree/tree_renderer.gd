@@ -8,6 +8,7 @@ extends Node2D
 class_name TreeRenderer
 
 const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
+const TreeDexImage = preload("res://features/tree/tree_dex_image.gd")
 
 # Theme for labels
 var _theme: Theme = preload("res://theme.tres")
@@ -34,6 +35,10 @@ const NODE_SIZE_DISCOVERER_BONUS: float = 4.0
 const TAXONOMY_NODE_SIZE: float = 12.0
 const COLOR_TAXONOMY: Color = Color(0, 0, 0, 1)
 const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
+
+# Visual settings - Dex images
+const DEX_IMAGE_SIZE: float = 80.0  # Base size in world units (easily modifiable)
+const DEX_IMAGE_POOL_SIZE: int = 100  # Maximum pooled image nodes
 
 # Rank-specific size multipliers
 const RANK_SIZE_MULTIPLIERS = {
@@ -67,9 +72,15 @@ const CULL_MARGIN_SCREEN: float = 200.0  # Screen-space pixels outside viewport 
 var edges_container: Node2D = null
 var nodes_container: Node2D = null
 var labels_container: Node2D = null
+var dex_images_container: Node2D = null
 
 # MultiMesh for batch rendering
 var nodes_multimesh: MultiMeshInstance2D = null
+
+# Dex image pool
+var dex_image_pool: Array[TreeDexImage] = []
+var active_dex_images: Dictionary = {}  # {creation_index: TreeDexImage}
+var nodes_with_dex_images: Dictionary = {}  # {node_id: true} - tracks which nodes have images
 
 # =============================================================================
 # State
@@ -117,14 +128,19 @@ func _ready() -> void:
 	print("[TreeRenderer] Initializing radial renderer")
 
 
-func setup_containers(edges: Node2D, nodes: Node2D, labels: Node2D) -> void:
+func setup_containers(edges: Node2D, nodes: Node2D, labels: Node2D, dex_images: Node2D = null) -> void:
 	"""Setup rendering containers from controller."""
 	edges_container = edges
 	nodes_container = nodes
 	labels_container = labels
+	dex_images_container = dex_images
 
 	# Create MultiMesh in nodes container
 	_setup_multimesh()
+
+	# Setup dex image pool
+	if dex_images_container:
+		_setup_dex_image_pool()
 
 	print("[TreeRenderer] Containers configured")
 
@@ -147,6 +163,38 @@ func _setup_multimesh() -> void:
 	nodes_multimesh.z_index = 1
 
 	print("[TreeRenderer] MultiMesh setup complete")
+
+
+func _setup_dex_image_pool() -> void:
+	"""Pre-create pool of TreeDexImage nodes for efficient reuse."""
+	if not dex_images_container:
+		return
+
+	for i in range(DEX_IMAGE_POOL_SIZE):
+		var dex_image = TreeDexImage.new()
+		dex_image.name = "DexImage_%d" % i
+		dex_image.visible = false
+		dex_images_container.add_child(dex_image)
+		dex_image_pool.append(dex_image)
+
+	print("[TreeRenderer] Dex image pool created with %d nodes" % DEX_IMAGE_POOL_SIZE)
+
+
+func _get_available_dex_image() -> TreeDexImage:
+	"""Get an inactive dex image from the pool."""
+	for img in dex_image_pool:
+		if not img.is_active():
+			return img
+	return null
+
+
+func _deactivate_all_dex_images() -> void:
+	"""Deactivate all dex images (return to pool)."""
+	for img in dex_image_pool:
+		if img.is_active():
+			img.deactivate()
+	active_dex_images.clear()
+	nodes_with_dex_images.clear()
 
 
 func _create_circle_mesh(radius: float) -> ArrayMesh:
@@ -199,6 +247,7 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	render_nodes.clear()
 	visible_nodes.clear()
 	nodes_by_position.clear()
+	_deactivate_all_dex_images()
 
 	# Build render data for all nodes
 	for node in data.nodes:
@@ -216,6 +265,7 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	print("[TreeRenderer] Built render data for %d nodes" % render_nodes.size())
 
 	_update_visible_nodes()
+	_update_dex_images()
 	_update_multimesh()
 	_render_radial_edges()
 	_render_taxonomy_labels()
@@ -235,6 +285,7 @@ func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 	if tree_data:
 		var view_changed = (scale != old_scale) or (scroll != old_scroll)
 		_update_visible_nodes()
+		_update_dex_images()
 		_update_multimesh()
 		# Re-render edges when view changes (scroll or scale)
 		# Edge visibility depends on view rect intersection, so must update when panning
@@ -260,6 +311,9 @@ func clear() -> void:
 	for label in taxonomy_labels.values():
 		label.queue_free()
 	taxonomy_labels.clear()
+
+	# Clear dex images
+	_deactivate_all_dex_images()
 
 	print("[TreeRenderer] Cleared all render data")
 
@@ -301,16 +355,111 @@ func _get_view_rect() -> Rect2:
 	return Rect2(center - half_size, half_size * 2)
 
 
+func _update_dex_images() -> void:
+	"""Update dex images for visible animal nodes that user has captured.
+	Loads images from DexDatabase and positions them in world space.
+	Handles cache/download automatically via TreeDexImage."""
+	if not dex_images_container:
+		print("[TreeRenderer] No dex_images_container!")
+		return
+
+	# Track which creation indices are currently visible
+	var visible_indices: Dictionary = {}
+	var user_captured_count: int = 0
+
+	for render_data in visible_nodes:
+		var node = render_data.node
+		# Only show dex images for animal nodes captured by user
+		if node.is_animal() and node.captured_by_user:
+			user_captured_count += 1
+			if node.creation_index > 0:
+				visible_indices[node.creation_index] = render_data
+
+	# Deactivate images that are no longer visible
+	var to_deactivate: Array[int] = []
+	for creation_index in active_dex_images:
+		if not visible_indices.has(creation_index):
+			to_deactivate.append(creation_index)
+
+	for index in to_deactivate:
+		var img: TreeDexImage = active_dex_images[index]
+		img.deactivate()
+		# Remove from tracking
+		for node_id in nodes_with_dex_images.keys():
+			if active_dex_images.get(index) == img:
+				nodes_with_dex_images.erase(node_id)
+		active_dex_images.erase(index)
+
+	# Activate/update images for visible nodes
+	for creation_index in visible_indices:
+		var render_data = visible_indices[creation_index]
+		var node = render_data.node
+
+		if active_dex_images.has(creation_index):
+			# Already active, just update position
+			var img: TreeDexImage = active_dex_images[creation_index]
+			img.position = render_data.position
+		else:
+			# Need to activate a new image
+			var entry_data = _get_dex_entry_data(creation_index, node)
+
+			var img = _get_available_dex_image()
+			if not img:
+				# Pool exhausted
+				continue
+
+			# Activate handles cache check and download internally
+			img.activate(render_data.position, creation_index, "self", entry_data, DEX_IMAGE_SIZE)
+			active_dex_images[creation_index] = img
+			nodes_with_dex_images[node.id] = true
+
+
+func _get_dex_entry_data(creation_index: int, node: TreeDataModels.TaxonomicNode) -> Dictionary:
+	"""Get entry data from DexDatabase, with fallback to tree node data."""
+	var dex_db = get_node_or_null("/root/DexDatabase")
+	var entry_data: Dictionary = {}
+
+	if dex_db and dex_db.has_method("get_record_for_user"):
+		entry_data = dex_db.get_record_for_user(creation_index, "self")
+
+	# Ensure we have basic data even if not in local database
+	# (will be used for label, image will show placeholder until downloaded)
+	if entry_data.is_empty():
+		entry_data = {
+			"creation_index": creation_index,
+			"scientific_name": node.scientific_name,
+			"common_name": node.common_name,
+			"cached_image_path": "",
+			"dex_compatible_url": ""  # Will need sync to get this
+		}
+	else:
+		# Ensure scientific/common name are present (from tree node if missing)
+		if entry_data.get("scientific_name", "").is_empty():
+			entry_data["scientific_name"] = node.scientific_name
+		if entry_data.get("common_name", "").is_empty():
+			entry_data["common_name"] = node.common_name
+
+	return entry_data
+
+
 func _update_multimesh() -> void:
-	"""Update MultiMesh with visible nodes."""
+	"""Update MultiMesh with visible nodes.
+	Skips animal nodes that have dex images (they're rendered separately)."""
 	if not nodes_multimesh or not nodes_multimesh.multimesh:
 		return
 
 	var multimesh = nodes_multimesh.multimesh
-	multimesh.instance_count = visible_nodes.size()
 
-	for i in range(visible_nodes.size()):
-		var render_data = visible_nodes[i]
+	# Filter out nodes that have dex images
+	var nodes_for_multimesh: Array[NodeRenderData] = []
+	for render_data in visible_nodes:
+		if not nodes_with_dex_images.has(render_data.node.id):
+			nodes_for_multimesh.append(render_data)
+
+	multimesh.instance_count = nodes_for_multimesh.size()
+
+	for i in range(nodes_for_multimesh.size()):
+		var render_data = nodes_for_multimesh[i]
 		render_data.instance_index = i
 
 		var transform = Transform2D()
@@ -654,7 +803,12 @@ func get_node_at_position(world_pos: Vector2, radius: float = 20.0) -> TreeDataM
 						continue
 
 					var dist = render_data.position.distance_to(world_pos)
-					var node_radius = NODE_SIZE_BASE * render_data.scale
+					# Use larger click area for nodes with dex images
+					var node_radius: float
+					if nodes_with_dex_images.has(render_data.node.id):
+						node_radius = DEX_IMAGE_SIZE / 2.0  # Half the dex image size
+					else:
+						node_radius = NODE_SIZE_BASE * render_data.scale
 
 					if dist <= node_radius + search_radius:
 						return render_data.node
@@ -709,5 +863,7 @@ func get_stats() -> Dictionary:
 		"total_nodes": render_nodes.size(),
 		"visible_nodes": visible_nodes.size(),
 		"total_edges": tree_data.edges.size() if tree_data else 0,
-		"rendered_edges": edges_container.get_child_count() if edges_container else 0
+		"rendered_edges": edges_container.get_child_count() if edges_container else 0,
+		"active_dex_images": active_dex_images.size(),
+		"dex_image_pool_size": dex_image_pool.size()
 	}

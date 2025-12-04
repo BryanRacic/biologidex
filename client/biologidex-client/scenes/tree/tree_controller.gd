@@ -102,7 +102,7 @@ func _setup_renderer_for_editor() -> void:
 	tree_renderer = TreeRenderer.new()
 	tree_renderer.name = "EditorTreeRenderer"
 	tree_graph.add_child(tree_renderer)
-	tree_renderer.setup_containers(%EdgesLayer, %NodesLayer, %LabelsLayer)
+	tree_renderer.setup_containers(%EdgesLayer, %NodesLayer, %LabelsLayer, %DexImagesLayer)
 	print("[TreeController] Editor TreeRenderer initialized")
 
 
@@ -205,8 +205,8 @@ func _setup_renderer() -> void:
 	tree_renderer.name = "TreeRenderer"
 	tree_graph.add_child(tree_renderer)
 
-	# Pass node containers to renderer
-	tree_renderer.setup_containers(%EdgesLayer, %NodesLayer, %LabelsLayer)
+	# Pass node containers to renderer (including DexImagesLayer for dex record images)
+	tree_renderer.setup_containers(%EdgesLayer, %NodesLayer, %LabelsLayer, %DexImagesLayer)
 
 	# Connect renderer signals
 	tree_renderer.node_selected.connect(_on_node_selected)

@@ -23,9 +23,12 @@ mouse_filter = 2
 theme = ExtResource("3_4phfc")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
-layout_mode = 0
-offset_right = 324.0
-offset_bottom = 85.0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 20
 
 [node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
@@ -38,10 +41,11 @@ custom_minimum_size = Vector2(60, 44)
 layout_mode = 2
 text = "<<"
 
-[node name="Spacer2" type="Control" parent="UI/Control/VBoxContainer/Header"]
-custom_minimum_size = Vector2(400, 0)
+[node name="StatusLabel" type="Label" parent="UI/Control/VBoxContainer/Header"]
+unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
+size_flags_horizontal = 3
+horizontal_alignment = 1
 
 [node name="RefreshButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
@@ -69,26 +73,12 @@ theme = ExtResource("3_4phfc")
 item_count = 1
 popup/item_0/id = 0
 
-[node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="StatusLabel" type="Label" parent="UI/Control/CenterContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-horizontal_alignment = 1
-
-[node name="ScrollContainer" type="ScrollContainer" parent="UI/Control/CenterContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="UI/Control/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="FeedContainer" type="VBoxContainer" parent="UI/Control/CenterContainer/ScrollContainer"]
+[node name="FeedContainer" type="VBoxContainer" parent="UI/Control/VBoxContainer/ScrollContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
