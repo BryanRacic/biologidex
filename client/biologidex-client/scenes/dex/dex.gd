@@ -153,14 +153,9 @@ func _display_record(creation_index: int) -> void:
 	current_index = creation_index
 	dex_number_label.text = "Dex #%d" % creation_index
 
-	var image_path: String = record.get("cached_image_path", "")
-	if image_path.length() > 0 and FileAccess.file_exists(image_path):
-		_load_and_display_image(image_path)
-	else:
-		record_image.visible = false
-
 	_update_record_label(record)
 	_update_navigation_buttons()
+	_load_image(record)
 
 
 func _update_record_label(record: Dictionary) -> void:
@@ -196,33 +191,50 @@ func _update_record_label(record: Dictionary) -> void:
 	record_label.text = species_line + "\n" + username_line + "\n" + date_line
 
 
-func _load_and_display_image(path: String) -> void:
-	var file := FileAccess.open(path, FileAccess.READ)
-	if not file:
-		show_error("Failed to load image", "Could not open: %s" % path)
+func _load_image(entry_data: Dictionary) -> void:
+	"""Load image using DexImageLoader service for consistent cache/download handling."""
+	DexImageLoader.load_image(entry_data, current_user_id, _on_image_loaded, self)
+
+
+func _on_image_loaded(result) -> void:
+	"""Handle image load result from DexImageLoader."""
+	if not is_instance_valid(self):
 		return
 
-	var data := file.get_buffer(file.get_length())
-	file.close()
+	if result.success:
+		current_image_width = float(result.image.get_width())
+		current_image_height = float(result.image.get_height())
 
-	var image := Image.new()
-	if image.load_png_from_buffer(data) != OK:
-		show_error("Failed to load image", "PNG load error")
-		return
+		if current_image_height > 0.0:
+			bordered_container.ratio = current_image_width / current_image_height
 
-	current_image_width = float(image.get_width())
-	current_image_height = float(image.get_height())
+		bordered_image.texture = result.texture
+		simple_image.visible = false
+		bordered_container.visible = true
+		record_image.visible = true
 
-	if current_image_height > 0.0:
-		bordered_container.ratio = current_image_width / current_image_height
+		# Update cached path if it was downloaded
+		if not result.cached_path.is_empty() and current_index >= 0:
+			var record: Dictionary = DexDatabase.get_record_for_user(current_index, current_user_id)
+			if not record.is_empty() and record.get("cached_image_path", "") != result.cached_path:
+				record["cached_image_path"] = result.cached_path
+				DexDatabase.add_record_from_dict(record, current_user_id)
 
-	bordered_image.texture = ImageTexture.create_from_image(image)
+		await get_tree().process_frame
+		_update_record_image_size()
+	else:
+		_set_placeholder_image()
+
+
+func _set_placeholder_image() -> void:
+	"""Set a placeholder image when real image is unavailable."""
+	current_image_width = 256.0
+	current_image_height = 256.0
+	bordered_container.ratio = 1.0
+	bordered_image.texture = DexImageLoader.create_placeholder(256, Color(0.3, 0.3, 0.3))
 	simple_image.visible = false
 	bordered_container.visible = true
 	record_image.visible = true
-
-	await get_tree().process_frame
-	_update_record_image_size()
 
 
 func _update_record_image_size() -> void:
