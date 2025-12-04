@@ -242,12 +242,6 @@ TREE_CACHE_TTL_SELECTED = int(os.getenv('TREE_CACHE_TTL_SELECTED', '60'))   # 1 
 TREE_CACHE_TTL_GLOBAL = int(os.getenv('TREE_CACHE_TTL_GLOBAL', '300'))      # 5 minutes
 TREE_MAX_CHUNK_SIZE = int(os.getenv('TREE_MAX_CHUNK_SIZE', '2048'))         # 2048 world units
 
-# Feature Flags
-FEATURE_FLAGS = {
-    # Set to False to rollback to old RadialReingoldTilfordLayout algorithm
-    "USE_EADES_RADIAL_LAYOUT": os.getenv('USE_EADES_RADIAL_LAYOUT', 'True') == 'True',
-}
-
 # Tree Layout Configuration
 TREE_LAYOUT_CONFIG = {
     "radial": {

@@ -13,7 +13,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
-- ✅ Taxonomic tree visualization with Walker-Buchheim O(n) layout algorithm
+- ✅ Taxonomic tree visualization with Eades radial layout (angular wedge allocation)
 - ✅ Two-step image upload workflow (convert → download → analyze)
 - ✅ Multiple animal detection support with selection API
 - ✅ Client-side image rotation with post-conversion transformations
@@ -278,14 +278,14 @@ docker-compose -f docker-compose.production.yml logs -f
 
 ## Planned Features
 
-**Taxonomic Tree** (✅ implemented 2025-11-18):
-- Walker-Buchheim O(n) layout algorithm for aesthetically pleasing, compact tree layouts
-- No node overlaps, proper spacing for multiple animals per species
+**Taxonomic Tree** (✅ implemented 2025-11-18, radial overhaul 2025-12-03):
+- **Radial layout**: Eades algorithm with angular wedge allocation (guaranteed no overlaps)
+- **Vertical layout**: Walker-Buchheim O(n) for rectangular trees
 - Spatial chunking (2048x2048) for progressive loading
 - Dynamic tree generation with modes: personal, friends, selected, global
 - 5-minute server cache, dual-layer client cache (memory + disk)
 - Endpoints: `/api/v1/graph/tree/`, `/tree/chunk/{x}/{y}/`, `/tree/search/`
-- See `/server/graph/README.md` for algorithm details and performance characteristics
+- Layout files: `eades_radial.py` (radial), `reingold_tilford.py` (vertical)
 
 **Future** (post-MVP):
 - Phase 6: Multiple images per entry, image history

@@ -13,7 +13,6 @@ from dex.models import DexEntry
 from social.models import Friendship
 from .layout import (
     ReingoldTilfordLayout,
-    RadialReingoldTilfordLayout,
     EadesRadialLayout,
     ChunkManager
 )
@@ -57,55 +56,33 @@ class DynamicTaxonomicTreeService:
         # Precompute user scope
         self._compute_user_scope()
 
-        # Initialize appropriate layout engine based on type and feature flags
+        # Initialize appropriate layout engine based on type
         self.layout_engine = self._create_layout_engine(layout_type)
         self.chunk_manager = ChunkManager(chunk_size=2048)
 
     def _create_layout_engine(self, layout_type: str):
         """
-        Create the appropriate layout engine based on layout type and feature flags.
+        Create the appropriate layout engine based on layout type.
 
         Args:
             layout_type: 'radial' or 'vertical'
 
         Returns:
-            Layout engine instance (EadesRadialLayout, RadialReingoldTilfordLayout,
-            or ReingoldTilfordLayout)
+            Layout engine instance (EadesRadialLayout or ReingoldTilfordLayout)
         """
-        # Get layout config from settings
         layout_config = getattr(settings, 'TREE_LAYOUT_CONFIG', {})
-        feature_flags = getattr(settings, 'FEATURE_FLAGS', {})
 
         if layout_type == self.LAYOUT_RADIAL:
-            # Check feature flag for new Eades algorithm
-            use_eades = feature_flags.get('USE_EADES_RADIAL_LAYOUT', True)
-
-            if use_eades:
-                # Use new Eades radial layout (guaranteed no overlaps)
-                radial_config = layout_config.get('radial', {})
-                angle_spread_deg = radial_config.get('angle_spread_degrees', 360.0)
-                min_radius = radial_config.get('min_radius', 300.0)
-                radius_per_level = radial_config.get('radius_per_level', 400.0)
-                start_angle_deg = radial_config.get('start_angle_degrees', -90.0)
-
-                logger.info("Using EadesRadialLayout (angular wedge allocation)")
-                return EadesRadialLayout(
-                    angle_spread=math.radians(angle_spread_deg),
-                    min_radius=min_radius,
-                    radius_per_level=radius_per_level,
-                    start_angle=math.radians(start_angle_deg)
-                )
-            else:
-                # Fall back to old Walker-Buchheim-based radial layout
-                radial_config = layout_config.get('radial', {})
-                logger.info("Using RadialReingoldTilfordLayout (legacy)")
-                return RadialReingoldTilfordLayout(
-                    angle_spread=radial_config.get('angle_spread_degrees', 360.0),
-                    radius_per_level=radial_config.get('radius_per_level', 400.0),
-                    min_radius=radial_config.get('min_radius', 300.0)
-                )
+            # Eades radial layout with angular wedge allocation (guaranteed no overlaps)
+            radial_config = layout_config.get('radial', {})
+            return EadesRadialLayout(
+                angle_spread=math.radians(radial_config.get('angle_spread_degrees', 360.0)),
+                min_radius=radial_config.get('min_radius', 300.0),
+                radius_per_level=radial_config.get('radius_per_level', 400.0),
+                start_angle=math.radians(radial_config.get('start_angle_degrees', -90.0))
+            )
         else:
-            # Vertical/rectangular layout
+            # Walker-Buchheim for vertical/rectangular layout
             rect_config = layout_config.get('rectangular', {})
             return ReingoldTilfordLayout(
                 h_spacing=rect_config.get('h_spacing', 100.0),
