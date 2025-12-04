@@ -1,5 +1,6 @@
-[gd_scene load_steps=5 format=3 uid="uid://cbieexmnrqvew"]
+[gd_scene load_steps=6 format=3 uid="uid://cbieexmnrqvew"]
 
+[ext_resource type="Script" path="res://features/ui/components/dex_record_image/dex_record_image.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://de58e6gkmcrfw" path="res://resources/test_img.jpeg" id="1_yeq50"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yeq50"]
@@ -18,6 +19,7 @@ font_size = 18
 font_color = Color(0, 0, 0, 1)
 
 [node name="DexRecordImage" type="AspectRatioContainer"]
+script = ExtResource("1_script")
 size_flags_horizontal = 3
 size_flags_vertical = 3
 ratio = 1.5

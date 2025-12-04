@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-03)
+## Status (2025-12-04)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -18,6 +18,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Multiple animal detection support with selection API
 - ✅ Client-side image rotation with post-conversion transformations
 - ✅ Touch-interactive paper background with pan/zoom (all scenes via InteractiveBackground component)
+- ✅ DexRecordImage reusable component with unified API for image display/loading
 
 ---
 
@@ -54,15 +55,40 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - AspectRatioContainer: `layout_mode = 1` with anchors
 - Touch targets: min 44×44px for mobile
 
-**Images & Camera Workflow (Updated 2025-11-20)**:
+**Images & Camera Workflow (Updated 2025-12-04)**:
 - **Two-step upload workflow**:
   1. Client uploads → `/images/convert/` → Server converts to PNG → Returns conversion_id
   2. Client downloads converted PNG, can rotate/preview → Submits to `/vision/jobs/` with conversion_id
 - **State machine** (camera.gd): IDLE → IMAGE_SELECTED → IMAGE_CONVERTING → IMAGE_READY → ANALYZING → ANALYSIS_COMPLETE → (ANIMAL_SELECTION) → COMPLETED
 - Image rotation: Client-side using `Image.rotate_90(CLOCKWISE)`, sent as `post_conversion_transformations`
 - Multiple animal detection: Backend returns `detected_animals` array, client auto-selects if 1, shows selection UI if >1
-- Never call `_update_record_image_size()` during rotation of simple preview
-- RecordImage: Dual display (simple TextureRect + bordered AspectRatioContainer)
+
+**DexRecordImage Component (Updated 2025-12-04)**:
+- **Location**: `features/ui/components/dex_record_image/`
+- **Files**: `dex_record_image.tscn` (scene), `dex_record_image.gd` (script with `class_name DexRecordImage`)
+- **Structure**: AspectRatioContainer root with SubViewport for proportional scaling
+  - Bordered mode: `ImageBorder` (PanelContainer) + `BorderedImage` (TextureRect) + `RecordLabel` (Label)
+  - Simple mode: `SimpleImage` (TextureRect) for preview/rotation
+- **Usage pattern** (type as `DexRecordImage`, not `AspectRatioContainer`):
+  ```gdscript
+  @onready var record_image: DexRecordImage = get_node("%RecordImage")
+
+  # For displaying existing entries (dex.gd, feed_list_item.gd, tree_dex_image.gd):
+  record_image.set_entry_data(entry_dict, user_id)  # Sets data + updates label
+  record_image.load_image_from_entry()               # Loads via DexImageLoader
+  record_image.image_loaded.connect(_on_image_loaded)  # Signal: (success: bool)
+
+  # For camera preview/capture workflow:
+  record_image.show_simple()                         # Preview mode
+  record_image.set_simple_texture(texture)           # Set preview
+  record_image.get_simple_texture()                  # Get for rotation
+  record_image.copy_simple_to_bordered()             # Transfer to card
+  record_image.show_bordered()                       # Show final card
+  record_image.update_label_from_data(sci, common, user, date)  # Manual label
+  ```
+- **Key methods**: `set_entry_data()`, `load_image_from_entry()`, `set_texture()`, `set_simple_texture()`, `get_simple_texture()`, `show_bordered()`, `show_simple()`, `copy_simple_to_bordered()`, `update_label_from_data()`, `clear_texture()`, `set_placeholder()`
+- **Signals**: `image_loaded(success: bool)`, `image_load_failed`
+- **Used by**: dex.gd, feed_list_item.gd, tree_dex_image.gd, camera.gd
 
 **Multi-User Dex (v2.0)**:
 - DexDatabase: User-partitioned storage, auto-migrates v1→v2, image deduplication across users

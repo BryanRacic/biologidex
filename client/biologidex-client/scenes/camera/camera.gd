@@ -20,15 +20,10 @@ extends BaseSceneNode
 @onready var instruction_label: Label = get_node("%InstructionLabel")
 @onready var result_label: Label = get_node("%ResultLabel")
 
-# Image display - dex_record_image component with two modes:
-# 1. simple_image: Used for preview during photo selection/rotation
-# 2. bordered_display: Used to show final dex record card with label
-# Note: Root is AspectRatioContainer with SubViewport for proportional scaling
-@onready var record_image: AspectRatioContainer = get_node("%RecordImage")
-var simple_image: TextureRect
-var bordered_display: PanelContainer
-var bordered_image: TextureRect
-var record_label: Label
+# Image display - DexRecordImage component with two modes:
+# 1. simple mode: Used for preview during photo selection/rotation
+# 2. bordered mode: Used to show final dex record card with label
+@onready var record_image: DexRecordImage = get_node("%RecordImage")
 
 # Components (programmatically instantiated)
 var file_selector: FileSelector
@@ -48,13 +43,7 @@ var current_dex_entry_id: String = ""
 func _on_scene_ready() -> void:
 	"""Called by BaseSceneNode after managers are initialized"""
 	scene_name = "Camera"
-	print("[Camera] Scene ready (refactored v2)")
-
-	# Get record image child nodes (use find_child for resilience to scene structure changes)
-	simple_image = record_image.find_child("SimpleImage", true, false)
-	bordered_display = record_image.find_child("ImageBorder", true, false)
-	bordered_image = record_image.find_child("BorderedImage", true, false)
-	record_label = record_image.find_child("RecordLabel", true, false)
+	print("[Camera] Scene ready (refactored v3)")
 
 	# Create and initialize file selector
 	file_selector = FileSelector.new()
@@ -123,11 +112,10 @@ func _reset_ui() -> void:
 	status_label.add_theme_color_override("font_color", Color.WHITE)
 	result_label.text = ""
 
-	# Image display - hide bordered dex card, prepare for new photo selection
+	# Image display - prepare for new photo selection (show simple mode)
 	record_image.visible = false
-	simple_image.texture = null
-	bordered_display.visible = false
-	simple_image.visible = true
+	record_image.clear_texture()
+	record_image.show_simple()
 
 	# Loading indicator
 	if loading_spinner:
@@ -164,9 +152,8 @@ func _on_file_selected(file_name: String, file_type: String, file_data: PackedBy
 
 	selected_file_data = file_data
 
-	# Hide bordered display, show simple preview
-	bordered_display.visible = false
-	simple_image.visible = true
+	# Show simple preview mode
+	record_image.show_simple()
 
 	# Try to load for preview
 	var preview_success = _load_image_preview(file_data, file_type)
@@ -201,7 +188,7 @@ func _load_image_preview(data: PackedByteArray, file_type: String) -> bool:
 
 	if load_error == OK:
 		var texture := ImageTexture.create_from_image(image)
-		simple_image.texture = texture
+		record_image.set_simple_texture(texture)
 		record_image.visible = true
 		print("[Camera] Preview loaded: ", image.get_width(), "x", image.get_height())
 		return true
@@ -227,12 +214,13 @@ func _on_file_load_cancelled() -> void:
 
 func _on_rotate_pressed() -> void:
 	"""Rotate image preview 90 degrees clockwise"""
-	if simple_image.texture == null:
+	var simple_texture := record_image.get_simple_texture()
+	if simple_texture == null:
 		return
 
 	rotation_angle = (rotation_angle + 90) % 360
 
-	var current_texture := simple_image.texture as ImageTexture
+	var current_texture := simple_texture as ImageTexture
 	if not current_texture:
 		return
 
@@ -245,7 +233,7 @@ func _on_rotate_pressed() -> void:
 
 	# Update texture
 	var new_texture := ImageTexture.create_from_image(image)
-	simple_image.texture = new_texture
+	record_image.set_simple_texture(new_texture)
 
 	print("[Camera] Rotated to %d degrees" % rotation_angle)
 
@@ -300,7 +288,7 @@ func _on_image_downloaded(image_data: PackedByteArray) -> void:
 
 	# Update preview with converted image
 	var texture := ImageTexture.create_from_image(converted_image)
-	simple_image.texture = texture
+	record_image.set_simple_texture(texture)
 
 	print("[Camera] Converted image: ", converted_image.get_width(), "x", converted_image.get_height())
 
@@ -489,47 +477,20 @@ func _cache_image(creation_index: int) -> String:
 
 func _show_dex_record_card() -> void:
 	"""Display the dex record card with border and label"""
-	# Hide simple preview, show bordered card
-	simple_image.visible = false
-	bordered_display.visible = true
+	# Copy simple preview to bordered display and switch mode
+	record_image.copy_simple_to_bordered()
+	record_image.show_bordered()
 	record_image.visible = true
 
-	# Copy image to bordered display
-	if simple_image.texture:
-		bordered_image.texture = simple_image.texture
-
-	# Set label text
+	# Set label text using component API
 	var scientific_name: String = str(pending_animal_details.get("scientific_name", ""))
 	var common_name: String = str(pending_animal_details.get("common_name", ""))
+	var username: String = TokenManager.get_username() if TokenManager.get_username() else "Unknown User"
+	var catch_date: String = Time.get_datetime_string_from_system(false, false)
 
-	# Format species name
-	var species_line = ""
-	if scientific_name:
-		species_line = scientific_name
-	if common_name:
-		if species_line:
-			species_line += " - " + common_name
-		else:
-			species_line = common_name
+	record_image.update_label_from_data(scientific_name, common_name, username, catch_date)
 
-	if not species_line:
-		species_line = "Unknown Species"
-
-	# Format catch info (username and date on separate lines)
-	var username = TokenManager.get_username()
-	var catch_date = Time.get_datetime_string_from_system(false, false)  # ISO 8601 format with T separator
-	var username_line = username if username else "Unknown User"
-
-	# Format date nicely (take just the date part)
-	var date_line = ""
-	var date_parts = catch_date.split("T")
-	if date_parts.size() > 0:
-		date_line = date_parts[0]
-
-	# Combine lines: species, username, date
-	record_label.text = species_line + "\n" + username_line + "\n" + date_line
-
-	print("[Camera] Showing dex record card: ", species_line)
+	print("[Camera] Showing dex record card: ", scientific_name if scientific_name else common_name)
 
 
 func _on_dex_created(response: Dictionary, code: int) -> void:

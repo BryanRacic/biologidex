@@ -11,12 +11,8 @@ extends BaseSceneNode
 @onready var edit_button: Button = get_node("%EditButton")
 @onready var dex_number_label: Label = get_node("%Dex Number")
 
-# RecordImage component (dex_record_image.tscn) - root is AspectRatioContainer with SubViewport
-@onready var record_image: AspectRatioContainer = get_node("%RecordImage")
-var bordered_container: PanelContainer
-var bordered_image: TextureRect
-var record_label: Label
-var simple_image: TextureRect
+# RecordImage component (dex_record_image.tscn) - uses DexRecordImage script
+@onready var record_image: DexRecordImage = get_node("%RecordImage")
 
 # ============================================================================
 # State
@@ -27,8 +23,6 @@ var current_user_id: String = "self"
 var is_syncing: bool = false
 var available_users: Dictionary = {}
 var pending_edit_dex_entry_id: String = ""
-var current_image_width: float = 0.0
-var current_image_height: float = 0.0
 
 # ============================================================================
 # Initialization
@@ -36,13 +30,10 @@ var current_image_height: float = 0.0
 
 func _on_scene_ready() -> void:
 	scene_name = "Dex"
-	print("[Dex] Scene ready (refactored v2)")
+	print("[Dex] Scene ready (refactored v3)")
 
-	# Get record image child nodes (use find_child for resilience to scene structure changes)
-	bordered_container = record_image.find_child("ImageBorder", true, false)
-	bordered_image = record_image.find_child("BorderedImage", true, false)
-	record_label = record_image.find_child("RecordLabel", true, false)
-	simple_image = record_image.find_child("SimpleImage", true, false)
+	# Connect record image signals
+	record_image.image_loaded.connect(_on_record_image_loaded)
 
 	# Connect UI
 	previous_button.pressed.connect(_on_previous_pressed)
@@ -159,86 +150,28 @@ func _display_record(creation_index: int) -> void:
 	current_index = creation_index
 	dex_number_label.text = "Dex #%d" % creation_index
 
-	_update_record_label(record)
+	# Use DexRecordImage component for display
+	record_image.set_entry_data(record, current_user_id)
+	record_image.load_image_from_entry()
 	_update_navigation_buttons()
-	_load_image(record)
 
 
-func _update_record_label(record: Dictionary) -> void:
-	var sci: String = record.get("scientific_name", "")
-	var common: String = record.get("common_name", "")
-	var username: String = record.get("owner_username", "")
-	var catch_date: String = record.get("catch_date", "")
-
-	# Format species name
-	var species_line := ""
-	if sci.length() > 0:
-		species_line = sci + (" - " + common if common.length() > 0 else "")
-	elif common.length() > 0:
-		species_line = common
-	else:
-		species_line = "Unknown"
-
-	# Format catch info (username and date on separate lines)
-	var username_line := ""
-	if username.length() > 0:
-		username_line = username
-	else:
-		username_line = "Unknown User"
-
-	var date_line := ""
-	if catch_date.length() > 0:
-		# Format date nicely (take just the date part, not time)
-		var date_parts := catch_date.split("T")
-		if date_parts.size() > 0:
-			date_line = date_parts[0]
-
-	# Combine lines: species, username, date
-	record_label.text = species_line + "\n" + username_line + "\n" + date_line
-
-
-func _load_image(entry_data: Dictionary) -> void:
-	"""Load image using DexImageLoader service for consistent cache/download handling."""
-	DexImageLoader.load_image(entry_data, current_user_id, _on_image_loaded, self)
-
-
-func _on_image_loaded(result) -> void:
-	"""Handle image load result from DexImageLoader."""
+func _on_record_image_loaded(success: bool) -> void:
+	"""Handle image load completion from DexRecordImage component."""
 	if not is_instance_valid(self):
 		return
 
-	if result.success:
-		current_image_width = float(result.image.get_width())
-		current_image_height = float(result.image.get_height())
-
-		if current_image_height > 0.0:
-			record_image.ratio = current_image_width / current_image_height
-
-		bordered_image.texture = result.texture
-		simple_image.visible = false
-		bordered_container.visible = true
-		record_image.visible = true
-
-		# Update cached path if it was downloaded
-		if not result.cached_path.is_empty() and current_index >= 0:
-			var record: Dictionary = DexDatabase.get_record_for_user(current_index, current_user_id)
-			if not record.is_empty() and record.get("cached_image_path", "") != result.cached_path:
-				record["cached_image_path"] = result.cached_path
-				DexDatabase.add_record_from_dict(record, current_user_id)
-
-	else:
-		_set_placeholder_image()
-
-
-func _set_placeholder_image() -> void:
-	"""Set a placeholder image when real image is unavailable."""
-	current_image_width = 256.0
-	current_image_height = 256.0
-	record_image.ratio = 1.0
-	bordered_image.texture = DexImageLoader.create_placeholder(256, Color(0.3, 0.3, 0.3))
-	simple_image.visible = false
-	bordered_container.visible = true
 	record_image.visible = true
+
+	if success and current_index >= 0:
+		# Update cached path in database if it changed
+		var entry_data: Dictionary = record_image.get_entry_data()
+		var cached_path: String = entry_data.get("cached_image_path", "")
+		if not cached_path.is_empty():
+			var record: Dictionary = DexDatabase.get_record_for_user(current_index, current_user_id)
+			if not record.is_empty() and record.get("cached_image_path", "") != cached_path:
+				record["cached_image_path"] = cached_path
+				DexDatabase.add_record_from_dict(record, current_user_id)
 
 
 func _update_navigation_buttons() -> void:
