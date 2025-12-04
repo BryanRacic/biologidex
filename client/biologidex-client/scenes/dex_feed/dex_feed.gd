@@ -259,7 +259,7 @@ func _on_refresh_pressed() -> void:
 	"""Refresh the feed by re-syncing all friends"""
 	print("[DexFeed] Refresh button pressed")
 	_show_status("Refreshing...", true)
-	_sync_all_friends()
+	FriendDexSyncService.sync_friends()
 
 
 func _on_filter_all_pressed() -> void:

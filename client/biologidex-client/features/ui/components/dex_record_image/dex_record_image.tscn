@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://cbieexmnrqvew"]
+[gd_scene load_steps=7 format=3 uid="uid://cbieexmnrqvew"]
 
-[ext_resource type="Script" path="res://features/ui/components/dex_record_image/dex_record_image.gd" id="1_script"]
+[ext_resource type="Theme" uid="uid://8lrsu56gnbsa" path="res://features/ui/components/dex_record_image/dex_record_image_theme.tres" id="1_aj2ni"]
+[ext_resource type="Script" uid="uid://bhg2ubwf3rviw" path="res://features/ui/components/dex_record_image/dex_record_image.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://de58e6gkmcrfw" path="res://resources/test_img.jpeg" id="1_yeq50"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yeq50"]
-bg_color = Color(0.9, 0.88, 0.85, 1.0)
+bg_color = Color(0.9, 0.88, 0.85, 1)
 border_width_left = 12
 border_width_top = 12
 border_width_right = 12
@@ -19,67 +20,43 @@ font_size = 18
 font_color = Color(0, 0, 0, 1)
 
 [node name="DexRecordImage" type="AspectRatioContainer"]
-script = ExtResource("1_script")
 size_flags_horizontal = 3
 size_flags_vertical = 3
+theme = ExtResource("1_aj2ni")
 ratio = 1.5
-stretch_mode = 2
-alignment_horizontal = 1
-alignment_vertical = 1
+script = ExtResource("1_script")
 
-[node name="ScaledContent" type="SubViewportContainer" parent="."]
+[node name="ImageBorder" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-stretch = true
-
-[node name="ScaledViewport" type="SubViewport" parent="ScaledContent"]
-transparent_bg = true
-handle_input_locally = false
-size = Vector2i(400, 400)
-render_target_update_mode = 4
-
-[node name="ViewportRoot" type="Control" parent="ScaledContent/ScaledViewport"]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="ImageBorder" type="PanelContainer" parent="ScaledContent/ScaledViewport/ViewportRoot"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_yeq50")
 
-[node name="BorderedImage" type="TextureRect" parent="ScaledContent/ScaledViewport/ViewportRoot/ImageBorder"]
+[node name="BorderedImage" type="TextureRect" parent="ImageBorder"]
 unique_name_in_owner = true
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 6
 
-[node name="RecordMargin" type="MarginContainer" parent="ScaledContent/ScaledViewport/ViewportRoot/ImageBorder"]
+[node name="RecordMargin" type="MarginContainer" parent="ImageBorder"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/margin_bottom = 15
 
-[node name="RecordBackground" type="PanelContainer" parent="ScaledContent/ScaledViewport/ViewportRoot/ImageBorder/RecordMargin"]
+[node name="RecordBackground" type="PanelContainer" parent="ImageBorder/RecordMargin"]
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 8
 theme_override_styles/panel = SubResource("StyleBoxFlat_eheay")
 
-[node name="RecordTextMargin" type="MarginContainer" parent="ScaledContent/ScaledViewport/ViewportRoot/ImageBorder/RecordMargin/RecordBackground"]
+[node name="RecordTextMargin" type="MarginContainer" parent="ImageBorder/RecordMargin/RecordBackground"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/margin_left = 6
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 6
 theme_override_constants/margin_bottom = 6
 
-[node name="RecordLabel" type="Label" parent="ScaledContent/ScaledViewport/ViewportRoot/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
+[node name="RecordLabel" type="Label" parent="ImageBorder/RecordMargin/RecordBackground/RecordTextMargin"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Genus species - common name

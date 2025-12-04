@@ -9,7 +9,7 @@ class_name TreeDexImage
 const DexRecordImageScene = preload("res://features/ui/components/dex_record_image/dex_record_image.tscn")
 
 # Configurable size (in world units - same space as node positions)
-const DEFAULT_IMAGE_SIZE: float = 80.0  # Base size in world units
+const DEFAULT_IMAGE_SIZE: float = 2000.0  # Base size in world units (200 avoids MIN_FONT clamp)
 
 # DexRecordImage component instance
 var record_image: DexRecordImage = null
@@ -38,6 +38,9 @@ func _setup_record_image() -> void:
 	# Show bordered mode (we don't use simple preview in tree)
 	record_image.show_bordered()
 
+	# Enable mouse passthrough so pan/zoom works over images in tree view
+	record_image.set_mouse_passthrough(true)
+
 	# Apply initial scale (will set size based on current ratio)
 	_apply_scale()
 
@@ -62,7 +65,7 @@ func _apply_scale() -> void:
 		container_width = _target_size * _current_ratio
 
 	# Set container size directly to target world size
-	# SubViewportContainer handles proportional scaling of content internally
+	# DexRecordImage applies proportional sizing based on this size
 	record_image.size = Vector2(container_width, container_height)
 	record_image.ratio = _current_ratio
 	record_image.scale = Vector2.ONE  # No additional scaling needed

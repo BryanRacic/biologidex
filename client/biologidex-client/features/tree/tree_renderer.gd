@@ -25,20 +25,26 @@ signal node_unhovered()
 # Configuration
 # =============================================================================
 
-# Visual settings - Animal nodes
+# Visual settings - Animal nodes (world units - scale with zoom like dex images)
 const NODE_SIZE_BASE: float = 20.0
-const NODE_SIZE_USER: float = 32.0
-const NODE_SIZE_FRIEND: float = 28.0
+const NODE_SIZE_USER: float = 20.0
+const NODE_SIZE_FRIEND: float = 20.0
 const NODE_SIZE_DISCOVERER_BONUS: float = 4.0
 
-# Visual settings - Taxonomy nodes
-const TAXONOMY_NODE_SIZE: float = 12.0
+# Visual settings - Taxonomy nodes (world units)
+const TAXONOMY_NODE_SIZE: float = 20.0
 const COLOR_TAXONOMY: Color = Color(0, 0, 0, 1)
 const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
 
 # Visual settings - Dex images
 const DEX_IMAGE_SIZE: float = 1000.0  # Base size in world units (easily modifiable)
 const DEX_IMAGE_POOL_SIZE: int = 100  # Maximum pooled image nodes
+
+# Branch extension settings (reduces image overlap by extending branches beyond taxonomy nodes)
+# All extension values are RATIOS of DEX_IMAGE_SIZE for consistent proportions at any scale
+const BRANCH_EXTENSION_ENABLED: bool = true
+const BRANCH_EXTENSION_BASE_RATIO: float = 0.4  # Base extension (0.6 = 60% of image size)
+const BRANCH_EXTENSION_ALT_RATIO: float = 0.25   # Additional extension for alternating siblings
 
 # Rank-specific size multipliers
 const RANK_SIZE_MULTIPLIERS = {
@@ -81,6 +87,7 @@ var nodes_multimesh: MultiMeshInstance2D = null
 var dex_image_pool: Array[TreeDexImage] = []
 var active_dex_images: Dictionary = {}  # {image_key: TreeDexImage} - key is "user_id:creation_index"
 var nodes_with_dex_images: Dictionary = {}  # {node_id: true} - tracks which nodes have images
+var extended_positions: Dictionary = {}  # {node_id: Vector2} - extended positions for dex images
 
 # =============================================================================
 # State
@@ -119,6 +126,11 @@ var taxonomy_labels: Dictionary = {}
 const MIN_ZOOM_FOR_LABELS: float = 0.3  # Show labels at most zoom levels
 const MAX_LABELS: int = 100  # Maximum labels to render at once
 const MIN_LABEL_SPACING_SCREEN: float = 60.0  # Minimum screen pixels between label centers
+const LABEL_FONT_SIZE_WORLD: int = 90  # Large font size for crisp rendering at all zoom levels
+const LABEL_OFFSET_WORLD: float = 1.0  # Offset from node in world units
+
+# Label position alternation (reduces overlap on same branch)
+var label_above_nodes: Dictionary = {}  # {node_id: bool} - true = label above, false = label below
 
 # =============================================================================
 # Initialization
@@ -264,6 +276,12 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 
 	print("[TreeRenderer] Built render data for %d nodes" % render_nodes.size())
 
+	# Pre-calculate extended positions for dex images (reduces overlap with alternation)
+	_calculate_extended_positions()
+
+	# Pre-calculate label positions (alternating above/below for siblings)
+	_calculate_label_positions()
+
 	_update_visible_nodes()
 	_update_dex_images()
 	_update_multimesh()
@@ -299,6 +317,8 @@ func clear() -> void:
 	render_nodes.clear()
 	visible_nodes.clear()
 	nodes_by_position.clear()
+	extended_positions.clear()
+	label_above_nodes.clear()
 	tree_data = null
 
 	if nodes_multimesh and nodes_multimesh.multimesh:
@@ -353,6 +373,127 @@ func _get_view_rect() -> Rect2:
 	var center = _scroll_offset
 
 	return Rect2(center - half_size, half_size * 2)
+
+
+# =============================================================================
+# Branch Extension (reduces dex image overlap)
+# =============================================================================
+
+func _calculate_extended_positions() -> void:
+	"""Pre-calculate extended positions for all animal nodes that will show dex images.
+	Uses alternating extension lengths based on sibling index to reduce overlap."""
+	extended_positions.clear()
+
+	if not BRANCH_EXTENSION_ENABLED or not tree_data:
+		return
+
+	# Calculate extension distances based on DEX_IMAGE_SIZE
+	var base_extension: float = DEX_IMAGE_SIZE * BRANCH_EXTENSION_BASE_RATIO
+	var alt_extension: float = DEX_IMAGE_SIZE * BRANCH_EXTENSION_ALT_RATIO
+
+	# Group animal nodes by their parent for sibling index calculation
+	var siblings_by_parent: Dictionary = {}  # {parent_id: [node_ids]}
+
+	for render_data in render_nodes:
+		var node = render_data.node
+		if not node.is_animal():
+			continue
+		# Only calculate for nodes that will show dex images
+		if not (node.captured_by_user or node.captured_by_friends.size() > 0):
+			continue
+
+		var parent = tree_data.get_parent(node.id)
+		if parent:
+			if not siblings_by_parent.has(parent.id):
+				siblings_by_parent[parent.id] = []
+			siblings_by_parent[parent.id].append(node.id)
+
+	# Now calculate extended positions with alternation
+	for parent_id in siblings_by_parent:
+		var sibling_ids: Array = siblings_by_parent[parent_id]
+		var parent_node = tree_data.get_node_by_id(parent_id)
+		if not parent_node:
+			continue
+
+		for i in range(sibling_ids.size()):
+			var node_id: String = sibling_ids[i]
+			var node = tree_data.get_node_by_id(node_id)
+			if not node:
+				continue
+
+			# Calculate direction from parent to child (outward from tree center)
+			var direction: Vector2
+			if parent_node.position.distance_to(node.position) > 0.01:
+				direction = (node.position - parent_node.position).normalized()
+			else:
+				# Fallback: radial direction from origin
+				direction = node.position.normalized() if node.position.length() > 0.01 else Vector2.RIGHT
+
+			# Calculate extension with alternation (odd siblings get extra extension)
+			var extension_distance: float = base_extension
+			if i % 2 == 1:
+				extension_distance += alt_extension
+
+			# Store extended position
+			extended_positions[node_id] = node.position + direction * extension_distance
+
+
+func _get_extended_position(node: TreeDataModels.TaxonomicNode) -> Vector2:
+	"""Get the extended position for a node, or its original position if not extended."""
+	if extended_positions.has(node.id):
+		return extended_positions[node.id]
+	return node.position
+
+
+func _calculate_label_positions() -> void:
+	"""Pre-calculate which nodes should have labels above vs below.
+	Alternates based on parent's label position only (not sibling index),
+	so each level of the tree alternates above/below."""
+	label_above_nodes.clear()
+
+	if not tree_data:
+		return
+
+	# Group all nodes by their parent
+	var children_by_parent: Dictionary = {}  # {parent_id: [node_ids]}
+
+	for render_data in render_nodes:
+		var node = render_data.node
+		var parent = tree_data.get_parent(node.id)
+		if parent:
+			if not children_by_parent.has(parent.id):
+				children_by_parent[parent.id] = []
+			children_by_parent[parent.id].append(node.id)
+
+	# Process nodes in breadth-first order so parents are processed before children
+	# Root nodes default to label below (false)
+	var queue: Array[String] = []
+
+	# Find root nodes (nodes without parents in our data)
+	for render_data in render_nodes:
+		var node = render_data.node
+		var parent = tree_data.get_parent(node.id)
+		if not parent:
+			label_above_nodes[node.id] = false  # Root nodes: label below
+			queue.append(node.id)
+
+	# BFS to propagate label positions down the tree
+	while queue.size() > 0:
+		var current_id: String = queue.pop_front()
+		var parent_above: bool = label_above_nodes.get(current_id, false)
+
+		# Process children of this node - all children get opposite of parent
+		if children_by_parent.has(current_id):
+			var children: Array = children_by_parent[current_id]
+			for child_id in children:
+				# All children get the opposite position of their parent
+				label_above_nodes[child_id] = not parent_above
+				queue.append(child_id)
+
+
+func _should_label_be_above(node: TreeDataModels.TaxonomicNode) -> bool:
+	"""Check if a node's label should be positioned above it."""
+	return label_above_nodes.get(node.id, false)
 
 
 func _update_dex_images() -> void:
@@ -419,10 +560,13 @@ func _update_dex_images() -> void:
 
 		nodes_with_dex_images[node.id] = true
 
+		# Use extended position if available (reduces overlap with alternating extensions)
+		var image_position: Vector2 = _get_extended_position(node)
+
 		if active_dex_images.has(image_key):
 			# Already active, just update position
 			var img: TreeDexImage = active_dex_images[image_key]
-			img.position = render_data.position
+			img.position = image_position
 		else:
 			# Need to activate a new image
 			var entry_data = _get_dex_entry_data(creation_index, user_id, node, capture_data.capture_info)
@@ -433,7 +577,7 @@ func _update_dex_images() -> void:
 				continue
 
 			# Activate handles cache check and download via DexImageLoader
-			img.activate(render_data.position, creation_index, user_id, entry_data, DEX_IMAGE_SIZE)
+			img.activate(image_position, creation_index, user_id, entry_data, DEX_IMAGE_SIZE)
 			active_dex_images[image_key] = img
 
 
@@ -545,9 +689,14 @@ func _render_radial_edges() -> void:
 		if not source_node or not target_node:
 			continue
 
+		# Determine target position - use extended position for visibility check too
+		var target_position: Vector2 = target_node.position
+		if extended_positions.has(target_node.id):
+			target_position = extended_positions[target_node.id]
+
 		# Check if edge's bounding box intersects the view rect
 		# This catches edges where one or both endpoints are outside but the edge crosses through
-		var edge_rect = Rect2(source_node.position, Vector2.ZERO).expand(target_node.position)
+		var edge_rect = Rect2(source_node.position, Vector2.ZERO).expand(target_position)
 		if view_rect.intersects(edge_rect):
 			_draw_radial_edge(edge)
 			rendered += 1
@@ -556,16 +705,22 @@ func _render_radial_edges() -> void:
 
 
 func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
-	"""Draw a straight edge between nodes."""
+	"""Draw a straight edge between nodes.
+	For animal nodes with dex images, extends the edge to their extended position."""
 	var source_node = tree_data.get_node_by_id(edge.source)
 	var target_node = tree_data.get_node_by_id(edge.target)
 
 	if not source_node or not target_node:
 		return
 
+	# Determine target position - use extended position if target has a dex image
+	var target_position: Vector2 = target_node.position
+	if extended_positions.has(target_node.id):
+		target_position = extended_positions[target_node.id]
+
 	var line = Line2D.new()
 	line.add_point(source_node.position)
-	line.add_point(target_node.position)
+	line.add_point(target_position)
 
 	line.antialiased = true
 	line.width = _get_edge_width(source_node, target_node)
@@ -575,18 +730,14 @@ func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
 
 
 func _get_edge_width(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> float:
-	"""Get edge width based on node types. Scaled inversely with zoom for consistent screen width."""
-	var base_width: float
+	"""Get edge width based on node types. Fixed world-space width scales naturally with zoom."""
+	# World-space widths (scales realistically with zoom like dex images)
 	if source.is_taxonomic() and target.is_taxonomic():
-		base_width = 6.0
+		return 5.0  # Thick lines for taxonomy-to-taxonomy
 	elif source.is_taxonomic() and target.is_animal():
-		base_width = 5.0
+		return 5.0  # Medium lines for taxonomy-to-animal
 	else:
-		base_width = 4.0
-	# Scale inversely so lines maintain consistent screen-space thickness
-	# Clamp to minimum width so lines don't disappear at high zoom
-	var scaled_width = base_width / _current_scale
-	return maxf(scaled_width, 0.5)
+		return 5.0  # Thinner lines for other connections
 
 
 func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> Color:
@@ -602,7 +753,7 @@ func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModel
 
 func _render_taxonomy_labels() -> void:
 	"""Render labels for taxonomy nodes and dex animal nodes (zoom-dependent).
-	Labels are counter-scaled to maintain crisp screen-space rendering.
+	Labels use fixed world-space sizes and scale naturally with zoom like dex images.
 	Uses priority-based culling and overlap detection to ensure readability."""
 	for label in taxonomy_labels.values():
 		label.queue_free()
@@ -644,7 +795,6 @@ func _render_taxonomy_labels() -> void:
 	# Place labels with overlap detection
 	var placed_positions: Array[Vector2] = []  # Screen-space positions of placed labels
 	var labels_created = 0
-	var inverse_scale = 1.0 / _current_scale
 
 	for candidate in candidates:
 		if labels_created >= MAX_LABELS:
@@ -652,9 +802,13 @@ func _render_taxonomy_labels() -> void:
 
 		var render_data = candidate.render_data
 
-		# Calculate screen position of label center
+		# Determine if label should be above or below the node (alternates for siblings)
+		var label_above: bool = _should_label_be_above(render_data.node)
+
+		# Calculate screen position of label center for overlap detection
 		var node_size = NODE_SIZE_BASE * render_data.scale
-		var label_screen_pos = _world_to_screen(render_data.position + Vector2(0, node_size + 10))
+		var label_offset_y: float = node_size + LABEL_OFFSET_WORLD if not label_above else -(node_size + LABEL_OFFSET_WORLD)
+		var label_screen_pos = _world_to_screen(render_data.position + Vector2(0, label_offset_y))
 
 		# Check for overlap with already placed labels
 		var overlaps = false
@@ -666,20 +820,24 @@ func _render_taxonomy_labels() -> void:
 		if overlaps:
 			continue
 
-		# Create the label
+		# Create the label with world-space font size (scales naturally with zoom)
 		var label = Label.new()
 		label.text = candidate.label_text
 		label.theme = _theme
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-		# Counter-scale to render at screen resolution (prevents pixelation)
-		label.scale = Vector2(inverse_scale, inverse_scale)
+		label.add_theme_font_size_override("font_size", LABEL_FONT_SIZE_WORLD)
 
 		labels_container.add_child(label)
 
-		# Position label below and centered on node
+		# Position label above or below the node, centered horizontally (all in world space)
 		var label_size = label.get_minimum_size()
-		var offset = Vector2(-label_size.x * inverse_scale / 2.0, node_size + 5 * inverse_scale)
+		var offset: Vector2
+		if label_above:
+			# Position above: negative Y offset, accounting for label height
+			offset = Vector2(-label_size.x / 2.0, -(node_size + LABEL_OFFSET_WORLD + label_size.y))
+		else:
+			# Position below: positive Y offset
+			offset = Vector2(-label_size.x / 2.0, node_size + LABEL_OFFSET_WORLD)
 		label.position = render_data.position + offset
 
 		taxonomy_labels[render_data.node.id] = label

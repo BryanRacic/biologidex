@@ -1,0 +1,6 @@
+[gd_resource type="Theme" load_steps=2 format=3 uid="uid://8lrsu56gnbsa"]
+
+[sub_resource type="SystemFont" id="SystemFont_3hd18"]
+
+[resource]
+Label/fonts/font = SubResource("SystemFont_3hd18")

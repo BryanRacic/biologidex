@@ -49,6 +49,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - Reserved: `class_name` - use `animal_class` for variables
 - `await get_tree().process_frame` before reading dynamic sizes
 
+**Godot Architecture Best Practices**:
+- ✅ **Use built-in nodes/functions** for UI, 2D, scaling - don't write custom viewport math or scaling logic in scripts
+- ✅ **Prefer "proper Godot" architecture** even if it requires restructuring - cleaner long-term maintainability
+- ✅ **Proportional sizing**: Calculate UI element sizes (borders, fonts, margins) as percentages of content dimensions for consistent proportions at any display size
+- ❌ **Don't** write custom scaling math across multiple scripts - consolidate in proper node architecture
+
 **UI Layout**:
 - `layout_mode`: 0=uncontrolled, 1=anchors, 2=container, 3=anchors preset
 - Container children: `layout_mode = 2`
@@ -66,9 +72,10 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **DexRecordImage Component (Updated 2025-12-04)**:
 - **Location**: `features/ui/components/dex_record_image/`
 - **Files**: `dex_record_image.tscn` (scene), `dex_record_image.gd` (script with `class_name DexRecordImage`)
-- **Structure**: AspectRatioContainer root with SubViewport for proportional scaling
+- **Structure**: AspectRatioContainer root
   - Bordered mode: `ImageBorder` (PanelContainer) + `BorderedImage` (TextureRect) + `RecordLabel` (Label)
   - Simple mode: `SimpleImage` (TextureRect) for preview/rotation
+- **Scaling requirement**: Border widths, font sizes, and margins should be proportional to content size so the component looks identical at any display size (tree 80px, dex 400px, etc.)
 - **Usage pattern** (type as `DexRecordImage`, not `AspectRatioContainer`):
   ```gdscript
   @onready var record_image: DexRecordImage = get_node("%RecordImage")
@@ -132,7 +139,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
 - **Scenes using component**: home, login, create_acct, camera, dex, dex_feed (NOT social, tree)
 
-**Taxonomic Tree Visualization (Updated 2025-12-03)**:
+**Taxonomic Tree Visualization (Updated 2025-12-04)**:
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
   - `scroll_offset`: World-space position that appears at viewport center
   - When `scroll_offset = (0,0)`, world origin is at viewport center
@@ -146,6 +153,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Edge visibility**: Use bounding box intersection (`Rect2.expand().intersects()`), not endpoint visibility
 - **Culling margin**: Define in screen-space pixels, convert to world-space (`margin / scale`)
 - **Label overlap**: Priority-based culling with screen-space distance checks; zoom-based filtering by taxonomic rank
+- **Branch extension** (reduces dex image overlap):
+  - `BRANCH_EXTENSION_ENABLED`: Toggle feature on/off (default: true)
+  - `BRANCH_EXTENSION_BASE_RATIO`: Base extension as ratio of DEX_IMAGE_SIZE (default: 0.6 = 600 world units)
+  - `BRANCH_EXTENSION_ALT_RATIO`: Additional extension for alternating siblings (default: 0.5 = 500 world units)
+  - Alternation pattern: Even siblings get base extension, odd siblings get base + alt extension
+  - Extended positions stored in `extended_positions` dictionary, edges draw to extended endpoints
 - **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data)
 
 **Touch Controller Velocity (Updated 2025-12-03)**:

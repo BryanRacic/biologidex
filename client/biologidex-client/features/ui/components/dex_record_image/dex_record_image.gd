@@ -2,27 +2,152 @@ class_name DexRecordImage
 extends AspectRatioContainer
 ## DexRecordImage - Reusable component for displaying dex entry images with labels.
 ## Provides unified API for image loading, label formatting, and display modes.
+## Uses proportional sizing so the component looks identical at any display size.
 
-# Internal node references (resolved in _ready)
+# =============================================================================
+# Proportional Sizing Constants
+# =============================================================================
+# All sizes are calculated as percentages of the smaller dimension (width or height)
+# These ratios create a consistent "card" look at any size.
+# Derived to look good at both 80px (tree) and 400px (dex) displays.
+
+const BORDER_RATIO: float = 0.04       # 4% - gives 3px at 80px, 16px at 400px
+const FONT_RATIO: float = 0.02       
+const LABEL_MARGIN_RATIO: float = 0.05 # 5% - bottom margin for label
+const TEXT_PADDING_RATIO: float = 0.02 # 2% - padding inside label background
+const LABEL_BG_EXPAND_RATIO: float = 0.04 # 4% - label extends past border
+
+# Minimum and maximum values to prevent extreme sizes
+const MIN_BORDER: int = 2
+const MIN_FONT: int = 8
+const MIN_MARGIN: int = 2
+const MAX_BORDER: int = 24
+const MAX_FONT: int = 64
+const MAX_MARGIN: int = 20
+
+# =============================================================================
+# Internal Node References
+# =============================================================================
+
 var _bordered_container: PanelContainer
 var _bordered_image: TextureRect
 var _record_label: Label
+var _record_margin: MarginContainer
+var _text_margin: MarginContainer
+var _label_background: PanelContainer
 var _simple_image: TextureRect
 
-# Entry data storage
+# Style resources (created once, updated dynamically)
+var _border_style: StyleBoxFlat
+var _label_bg_style: StyleBoxFlat
+var _label_settings: LabelSettings
+
+# =============================================================================
+# Entry Data Storage
+# =============================================================================
+
 var _entry_data: Dictionary = {}
 var _user_id: String = ""
 
+# =============================================================================
 # Signals
+# =============================================================================
+
 signal image_loaded(success: bool)
 signal image_load_failed
 
 
 func _ready() -> void:
-	_bordered_container = find_child("ImageBorder", true, false)
-	_bordered_image = find_child("BorderedImage", true, false)
-	_record_label = find_child("RecordLabel", true, false)
-	_simple_image = find_child("SimpleImage", true, false)
+	# Get node references
+	_bordered_container = get_node_or_null("ImageBorder")
+	_bordered_image = get_node_or_null("ImageBorder/BorderedImage")
+	_record_margin = get_node_or_null("ImageBorder/RecordMargin")
+	_label_background = get_node_or_null("ImageBorder/RecordMargin/RecordBackground")
+	_text_margin = get_node_or_null("ImageBorder/RecordMargin/RecordBackground/RecordTextMargin")
+	_record_label = get_node_or_null("ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel")
+	_simple_image = get_node_or_null("SimpleImage")
+
+	# Create dynamic style resources
+	_setup_dynamic_styles()
+
+	# Connect to resize signal for proportional updates
+	resized.connect(_on_resized)
+
+	# Apply initial proportional sizes after a frame (to get accurate size)
+	await get_tree().process_frame
+	_apply_proportional_sizes()
+
+
+func _setup_dynamic_styles() -> void:
+	"""Create style resources that will be updated dynamically."""
+	print("[DexRecordImage] _setup_dynamic_styles: _bordered_container=%s, _record_label=%s" % [_bordered_container, _record_label])
+	# Border style - cream colored frame around the image
+	_border_style = StyleBoxFlat.new()
+	_border_style.bg_color = Color(0.9, 0.88, 0.85, 1.0)
+	_border_style.border_color = Color(0.9, 0.88, 0.85, 1.0)  # Match bg for seamless border
+	if _bordered_container:
+		_bordered_container.add_theme_stylebox_override("panel", _border_style)
+		print("[DexRecordImage] Applied border style override")
+
+	# Label background style
+	_label_bg_style = StyleBoxFlat.new()
+	_label_bg_style.bg_color = Color(0.9605384, 1.007952, 0.9881963, 0.88235295)
+	if _label_background:
+		_label_background.add_theme_stylebox_override("panel", _label_bg_style)
+
+	# Label settings
+	_label_settings = LabelSettings.new()
+	_label_settings.font_color = Color(0, 0, 0, 1)
+	if _record_label:
+		_record_label.label_settings = _label_settings
+		print("[DexRecordImage] Applied label settings")
+
+
+func _on_resized() -> void:
+	"""Handle component resize - update proportional sizes."""
+	_apply_proportional_sizes()
+
+
+func _apply_proportional_sizes() -> void:
+	"""Calculate and apply sizes based on current component dimensions."""
+	# Use max dimension so aspect ratio doesn't affect font/border sizes
+	var base_dim := maxf(size.x, size.y)
+	print("[DexRecordImage] _apply_proportional_sizes called, size=%s, base_dim=%s" % [size, base_dim])
+	if base_dim < 20.0:
+		return  # Too small to render meaningfully
+
+	# Border width and content margin (content margin pushes image inward to show border)
+	var border_width := clampi(int(base_dim * BORDER_RATIO), MIN_BORDER, MAX_BORDER)
+	print("[DexRecordImage] Calculated: border=%d, font=%d" % [border_width, clampi(int(base_dim * FONT_RATIO), MIN_FONT, MAX_FONT)])
+	_border_style.border_width_left = border_width
+	_border_style.border_width_top = border_width
+	_border_style.border_width_right = border_width
+	_border_style.border_width_bottom = border_width
+	_border_style.content_margin_left = float(border_width)
+	_border_style.content_margin_top = float(border_width)
+	_border_style.content_margin_right = float(border_width)
+	_border_style.content_margin_bottom = float(border_width)
+
+	# Font size
+	var font_size := clampi(int(base_dim * FONT_RATIO), MIN_FONT, MAX_FONT)
+	_label_settings.font_size = font_size
+
+	# Label margin (bottom margin that positions label above border)
+	var label_margin := clampi(int(base_dim * LABEL_MARGIN_RATIO), MIN_MARGIN, MAX_MARGIN)
+	if _record_margin:
+		_record_margin.add_theme_constant_override("margin_bottom", label_margin)
+
+	# Text padding inside label background
+	var text_padding := clampi(int(base_dim * TEXT_PADDING_RATIO), MIN_MARGIN, MAX_MARGIN)
+	if _text_margin:
+		_text_margin.add_theme_constant_override("margin_left", text_padding)
+		_text_margin.add_theme_constant_override("margin_top", text_padding)
+		_text_margin.add_theme_constant_override("margin_right", text_padding)
+		_text_margin.add_theme_constant_override("margin_bottom", text_padding)
+
+	# Label background expand margin (extends past the border edge)
+	var expand_margin := clampi(int(base_dim * LABEL_BG_EXPAND_RATIO), MIN_MARGIN, MAX_MARGIN)
+	_label_bg_style.expand_margin_right = float(expand_margin)
 
 
 # =============================================================================
@@ -169,12 +294,31 @@ func get_bordered_container() -> PanelContainer:
 
 
 # =============================================================================
+# Public API - Mouse Filter
+# =============================================================================
+
+func set_mouse_passthrough(enabled: bool) -> void:
+	"""Set mouse filter to IGNORE on this control and all children.
+	Use this for contexts like tree view where pan/zoom should work over images."""
+	var filter := Control.MOUSE_FILTER_IGNORE if enabled else Control.MOUSE_FILTER_STOP
+	_set_mouse_filter_recursive(self, filter)
+
+
+func _set_mouse_filter_recursive(node: Node, filter: Control.MouseFilter) -> void:
+	"""Recursively set mouse filter on all Control descendants."""
+	if node is Control:
+		node.mouse_filter = filter
+	for child in node.get_children():
+		_set_mouse_filter_recursive(child, filter)
+
+
+# =============================================================================
 # Public API - Placeholder
 # =============================================================================
 
-func set_placeholder(size: int = 256, color: Color = Color(0.3, 0.3, 0.3)) -> void:
+func set_placeholder(size_val: int = 256, color: Color = Color(0.3, 0.3, 0.3)) -> void:
 	"""Set a placeholder image."""
-	_set_placeholder(size, color)
+	_set_placeholder(size_val, color)
 
 
 # =============================================================================
@@ -238,6 +382,9 @@ func _on_image_loaded(result) -> void:
 		update_aspect_ratio(float(result.image.get_width()), float(result.image.get_height()))
 		show_bordered()
 
+		# Re-apply proportional sizes after aspect ratio change
+		_apply_proportional_sizes()
+
 		# Update entry data with cached path
 		if not result.cached_path.is_empty():
 			_entry_data["cached_image_path"] = result.cached_path
@@ -249,14 +396,14 @@ func _on_image_loaded(result) -> void:
 		image_loaded.emit(false)
 
 
-func _set_placeholder(size: int = 256, color: Color = Color(0.3, 0.3, 0.3)) -> void:
+func _set_placeholder(size_val: int = 256, color: Color = Color(0.3, 0.3, 0.3)) -> void:
 	"""Set a placeholder image when real image is unavailable."""
 	var loader = _get_image_loader()
 	if loader:
-		set_texture(loader.create_placeholder(size, color))
+		set_texture(loader.create_placeholder(size_val, color))
 	else:
 		# Fallback if loader unavailable
-		var placeholder := Image.create(size, size, false, Image.FORMAT_RGB8)
+		var placeholder := Image.create(size_val, size_val, false, Image.FORMAT_RGB8)
 		placeholder.fill(color)
 		var texture := ImageTexture.create_from_image(placeholder)
 		set_texture(texture)
