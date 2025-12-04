@@ -37,7 +37,7 @@ const COLOR_TAXONOMY: Color = Color(0, 0, 0, 1)
 const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
 
 # Visual settings - Dex images
-const DEX_IMAGE_SIZE: float = 80.0  # Base size in world units (easily modifiable)
+const DEX_IMAGE_SIZE: float = 1000.0  # Base size in world units (easily modifiable)
 const DEX_IMAGE_POOL_SIZE: int = 100  # Maximum pooled image nodes
 
 # Rank-specific size multipliers
