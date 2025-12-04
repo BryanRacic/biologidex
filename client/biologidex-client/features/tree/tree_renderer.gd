@@ -1,7 +1,7 @@
 @tool
 """
 TreeRenderer - High-performance rendering engine for radial taxonomic tree visualization.
-Handles batch rendering of nodes, curved edges, and interactions using MultiMeshInstance2D.
+Handles batch rendering of nodes, straight edges, and interactions using MultiMeshInstance2D.
 Updated to work with external transform control (no internal camera).
 """
 extends Node2D
@@ -59,7 +59,6 @@ const COLOR_EDGE: Color = Color(0, 0, 0, 1)
 # Performance settings
 const MAX_VISIBLE_NODES: int = 50000
 const CULL_MARGIN_SCREEN: float = 200.0  # Screen-space pixels outside viewport for culling buffer
-const BEZIER_SEGMENTS: int = 8
 
 # =============================================================================
 # Rendering containers (injected from controller)
@@ -372,7 +371,7 @@ func _render_radial_edges() -> void:
 
 
 func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
-	"""Draw a radial edge (curved for aesthetic)."""
+	"""Draw a straight edge between nodes."""
 	var source_node = tree_data.get_node_by_id(edge.source)
 	var target_node = tree_data.get_node_by_id(edge.target)
 
@@ -380,61 +379,14 @@ func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
 		return
 
 	var line = Line2D.new()
-
-	var source_radius = source_node.position.length()
-
-	if source_radius < 1.0:
-		# Source is root (center) - straight line
-		line.add_point(source_node.position)
-		line.add_point(target_node.position)
-	else:
-		# Curved edge using quadratic bezier approximation
-		var points = _calculate_curved_edge(source_node.position, target_node.position)
-		for p in points:
-			line.add_point(p)
+	line.add_point(source_node.position)
+	line.add_point(target_node.position)
 
 	line.antialiased = true
 	line.width = _get_edge_width(source_node, target_node)
 	line.default_color = _get_edge_color(source_node, target_node)
 
 	edges_container.add_child(line)
-
-
-func _calculate_curved_edge(from: Vector2, to: Vector2) -> Array[Vector2]:
-	"""Calculate curved edge points for radial layout."""
-	var points: Array[Vector2] = []
-
-	var from_radius = from.length()
-	var to_radius = to.length()
-
-	# Control point: at parent's radius, midpoint angle
-	var from_angle = from.angle()
-	var to_angle = to.angle()
-
-	# Handle angle wrapping
-	var angle_diff = to_angle - from_angle
-	if angle_diff > PI:
-		angle_diff -= TAU
-	elif angle_diff < -PI:
-		angle_diff += TAU
-
-	var mid_angle = from_angle + angle_diff * 0.5
-	var control_radius = from_radius
-	var control = Vector2(cos(mid_angle), sin(mid_angle)) * control_radius
-
-	# Quadratic bezier curve
-	for i in range(BEZIER_SEGMENTS + 1):
-		var t = float(i) / float(BEZIER_SEGMENTS)
-		var p = _quadratic_bezier(from, control, to, t)
-		points.append(p)
-
-	return points
-
-
-func _quadratic_bezier(p0: Vector2, p1: Vector2, p2: Vector2, t: float) -> Vector2:
-	"""Calculate point on quadratic bezier curve."""
-	var u = 1.0 - t
-	return u * u * p0 + 2.0 * u * t * p1 + t * t * p2
 
 
 func _get_edge_width(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> float:
