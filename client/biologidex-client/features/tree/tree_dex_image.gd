@@ -13,9 +13,9 @@ const DexRecordImageScene = preload("res://features/ui/components/dex_record_ima
 const DEFAULT_IMAGE_SIZE: float = 80.0  # Base size in world units
 const CONTROL_BASE_SIZE: float = 200.0  # Base pixel size for the Control before scaling
 
-# Nodes
-var record_image: Control = null
-var bordered_container: AspectRatioContainer = null
+# Nodes - record_image root is now AspectRatioContainer
+var record_image: AspectRatioContainer = null
+var bordered_container: PanelContainer = null
 var bordered_image: TextureRect = null
 var record_label: Label = null
 var simple_image: TextureRect = null
@@ -25,6 +25,7 @@ var _creation_index: int = -1
 var _user_id: String = "self"
 var _is_active: bool = false
 var _target_size: float = DEFAULT_IMAGE_SIZE
+var _current_ratio: float = 1.0  # Current aspect ratio (width/height), updated when image loads
 var _entry_data: Dictionary = {}
 
 
@@ -38,8 +39,8 @@ func _setup_record_image() -> void:
 	record_image.name = "RecordImage"
 	add_child(record_image)
 
-	# Use find_child for robust node finding (handles scene structure changes)
-	bordered_container = record_image.find_child("ImageBorderAspectRatio", true, false)
+	# Root is now AspectRatioContainer, so bordered_container is ImageBorder PanelContainer
+	bordered_container = record_image.find_child("ImageBorder", true, false)
 	bordered_image = record_image.find_child("BorderedImage", true, false)
 	record_label = record_image.find_child("RecordLabel", true, false)
 	simple_image = record_image.find_child("SimpleImage", true, false)
@@ -48,13 +49,7 @@ func _setup_record_image() -> void:
 	if simple_image:
 		simple_image.visible = false
 
-	# Set fixed size for Control (since we're in Node2D, anchors don't work)
-	record_image.size = Vector2(CONTROL_BASE_SIZE, CONTROL_BASE_SIZE)
-
-	# Center the control on this node's position
-	record_image.position = -record_image.size / 2.0
-
-	# Apply initial scale
+	# Apply initial scale (will set size based on current ratio)
 	_apply_scale()
 
 
@@ -63,12 +58,28 @@ func _apply_scale() -> void:
 	if not record_image:
 		return
 
-	# Scale the control to match target world units
-	var scale_factor = _target_size / CONTROL_BASE_SIZE
-	record_image.scale = Vector2(scale_factor, scale_factor)
+	# Calculate container size based on aspect ratio
+	# target_size is the largest dimension (width for landscape, height for portrait)
+	var container_width: float
+	var container_height: float
 
-	# Re-center after scaling
-	record_image.position = -record_image.size * scale_factor / 2.0
+	if _current_ratio >= 1.0:
+		# Landscape or square: width is the largest dimension
+		container_width = _target_size
+		container_height = _target_size / _current_ratio
+	else:
+		# Portrait: height is the largest dimension
+		container_height = _target_size
+		container_width = _target_size * _current_ratio
+
+	# Set container size directly to target world size
+	# SubViewportContainer handles proportional scaling of content internally
+	record_image.size = Vector2(container_width, container_height)
+	record_image.ratio = _current_ratio
+	record_image.scale = Vector2.ONE  # No additional scaling needed
+
+	# Center the control on this node's position
+	record_image.position = -record_image.size / 2.0
 
 
 func set_image_size(size: float) -> void:
@@ -153,8 +164,9 @@ func _set_texture(texture: Texture2D, width: float, height: float) -> void:
 	if bordered_image:
 		bordered_image.texture = texture
 
-	if bordered_container and height > 0:
-		bordered_container.ratio = width / height
+	if height > 0:
+		_current_ratio = width / height
+		_apply_scale()  # Re-apply scale with new aspect ratio
 
 
 func _set_placeholder_image() -> void:
@@ -180,6 +192,7 @@ func deactivate() -> void:
 	_is_active = false
 	_creation_index = -1
 	_user_id = "self"
+	_current_ratio = 1.0  # Reset to default square ratio
 	_entry_data.clear()
 	visible = false
 

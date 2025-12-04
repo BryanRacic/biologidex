@@ -7,7 +7,7 @@
 
 [node name="Dex" type="Node2D" node_paths=PackedStringArray("back_button")]
 script = ExtResource("1_dex_script")
-back_button = NodePath("UI/Control/VBoxContainer/Header/BackButton")
+back_button = NodePath("UI/Control/MainVBox/Header/BackButton")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -23,23 +23,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("4_ugod7")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
-layout_mode = 0
-offset_right = 324.0
-offset_bottom = 85.0
-
-[node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
-custom_minimum_size = Vector2(0, 60)
-layout_mode = 2
-
-[node name="BackButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-theme_override_font_sizes/font_size = 124
-text = "<<"
-
-[node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
+[node name="MainVBox" type="VBoxContainer" parent="UI/Control"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -48,66 +32,80 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control/CenterContainer"]
+[node name="Header" type="HBoxContainer" parent="UI/Control/MainVBox"]
+custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 30
-alignment = 1
 
-[node name="Dex Number" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="BackButton" type="Button" parent="UI/Control/MainVBox/Header"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 124
+text = "<<"
+
+[node name="Spacer" type="Control" parent="UI/Control/MainVBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="ContentMargin" type="MarginContainer" parent="UI/Control/MainVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 20
+
+[node name="ContentVBox" type="VBoxContainer" parent="UI/Control/MainVBox/ContentMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="Dex Number" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
 text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="RecordImage" parent="UI/Control/CenterContainer/VBoxContainer" instance=ExtResource("3_6jk22")]
+[node name="RecordImage" parent="UI/Control/MainVBox/ContentMargin/ContentVBox" instance=ExtResource("3_6jk22")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
-[node name="Spacer4" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 100)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="HBoxContainer" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="NavControls" type="HBoxContainer" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
 layout_mode = 2
 mouse_filter = 2
 alignment = 1
 
-[node name="PreviousButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer/HBoxContainer"]
+[node name="PreviousButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
-size_flags_horizontal = 4
 text = "Prev"
 
-[node name="Spacer4" type="Control" parent="UI/Control/CenterContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(200, 200)
+[node name="Spacer" type="Control" parent="UI/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="NextButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer/HBoxContainer"]
+[node name="NextButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
-size_flags_horizontal = 4
 text = "Next"
 
-[node name="Spacer3" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 100)
+[node name="Spacer2" type="Control" parent="UI/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="EditButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="EditButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
-size_flags_horizontal = 4
 text = "Edit Entry"
-
-[node name="MarginContainer" type="MarginContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
-layout_mode = 2
-mouse_filter = 2

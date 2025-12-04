@@ -5,18 +5,24 @@ extends Button
 # Entry data
 var entry_data: Dictionary = {}
 
-# UI References
-@onready var dex_record_image: Control = $DexRecordImage
-@onready var dex_image_container: AspectRatioContainer = $DexRecordImage/ImageBorderAspectRatio
-@onready var bordered_image: TextureRect = $DexRecordImage/ImageBorderAspectRatio/ImageBorder/BorderedImage
-@onready var simple_image: TextureRect = $DexRecordImage/SimpleImage
-@onready var record_label: Label = $DexRecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel
+# UI References - root is AspectRatioContainer with SubViewport for proportional scaling
+@onready var dex_record_image: AspectRatioContainer = $DexRecordImage
+var dex_image_container: PanelContainer
+var bordered_image: TextureRect
+var simple_image: TextureRect
+var record_label: Label
 
 # Signals
 signal item_pressed(entry: Dictionary)
 
 
 func _ready() -> void:
+	# Get record image child nodes (use find_child for resilience to scene structure changes)
+	dex_image_container = dex_record_image.find_child("ImageBorder", true, false)
+	bordered_image = dex_record_image.find_child("BorderedImage", true, false)
+	simple_image = dex_record_image.find_child("SimpleImage", true, false)
+	record_label = dex_record_image.find_child("RecordLabel", true, false)
+
 	# Hide the simple image overlay (we only want the bordered version)
 	if simple_image:
 		simple_image.visible = false

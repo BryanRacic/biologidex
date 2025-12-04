@@ -111,7 +111,7 @@ services:
     command: /bin/bash -c "/app/.venv/bin/celery -A biologidex beat -l info --schedule=/app/celerybeat-schedule"
     volumes:
       - ./logs:/app/logs
-      - ${DATA_DIR}/celerybeat:/app
+      - celerybeat_schedule:/app/celerybeat-schedule
     environment:
       DJANGO_SETTINGS_MODULE: biologidex.settings.production_local
       PYTHONUNBUFFERED: "1"  # Ensure logs appear immediately in docker logs

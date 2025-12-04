@@ -11,12 +11,12 @@ extends BaseSceneNode
 @onready var edit_button: Button = get_node("%EditButton")
 @onready var dex_number_label: Label = get_node("%Dex Number")
 
-# RecordImage component (dex_record_image.tscn)
-@onready var record_image: Control = get_node("%RecordImage")
-@onready var bordered_container: AspectRatioContainer = get_node("%RecordImage/ImageBorderAspectRatio")
-@onready var bordered_image: TextureRect = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/BorderedImage")
-@onready var record_label: Label = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel")
-@onready var simple_image: TextureRect = get_node("%RecordImage/SimpleImage")
+# RecordImage component (dex_record_image.tscn) - root is AspectRatioContainer with SubViewport
+@onready var record_image: AspectRatioContainer = get_node("%RecordImage")
+var bordered_container: PanelContainer
+var bordered_image: TextureRect
+var record_label: Label
+var simple_image: TextureRect
 
 # ============================================================================
 # State
@@ -37,6 +37,12 @@ var current_image_height: float = 0.0
 func _on_scene_ready() -> void:
 	scene_name = "Dex"
 	print("[Dex] Scene ready (refactored v2)")
+
+	# Get record image child nodes (use find_child for resilience to scene structure changes)
+	bordered_container = record_image.find_child("ImageBorder", true, false)
+	bordered_image = record_image.find_child("BorderedImage", true, false)
+	record_label = record_image.find_child("RecordLabel", true, false)
+	simple_image = record_image.find_child("SimpleImage", true, false)
 
 	# Connect UI
 	previous_button.pressed.connect(_on_previous_pressed)
@@ -206,7 +212,7 @@ func _on_image_loaded(result) -> void:
 		current_image_height = float(result.image.get_height())
 
 		if current_image_height > 0.0:
-			bordered_container.ratio = current_image_width / current_image_height
+			record_image.ratio = current_image_width / current_image_height
 
 		bordered_image.texture = result.texture
 		simple_image.visible = false
@@ -220,8 +226,6 @@ func _on_image_loaded(result) -> void:
 				record["cached_image_path"] = result.cached_path
 				DexDatabase.add_record_from_dict(record, current_user_id)
 
-		await get_tree().process_frame
-		_update_record_image_size()
 	else:
 		_set_placeholder_image()
 
@@ -230,22 +234,11 @@ func _set_placeholder_image() -> void:
 	"""Set a placeholder image when real image is unavailable."""
 	current_image_width = 256.0
 	current_image_height = 256.0
-	bordered_container.ratio = 1.0
+	record_image.ratio = 1.0
 	bordered_image.texture = DexImageLoader.create_placeholder(256, Color(0.3, 0.3, 0.3))
 	simple_image.visible = false
 	bordered_container.visible = true
 	record_image.visible = true
-
-
-func _update_record_image_size() -> void:
-	var available_width: float = float(record_image.get_parent_control().size.x)
-	var max_width: float = min(current_image_width, available_width * 0.67)
-	var display_width: float = min(available_width, max_width)
-
-	if bordered_container.ratio > 0.0:
-		var height: float = display_width / bordered_container.ratio
-		record_image.custom_minimum_size = Vector2(display_width, height)
-		record_image.size_flags_horizontal = Control.SIZE_SHRINK_CENTER if display_width < available_width else Control.SIZE_FILL
 
 
 func _update_navigation_buttons() -> void:

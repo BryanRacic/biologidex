@@ -627,9 +627,9 @@ func _render_taxonomy_labels() -> void:
 				label_text = render_data.node.name
 				should_show_label = true
 		elif render_data.node.is_animal():
-			if render_data.node.captured_by_user or render_data.node.captured_by_friends.size() > 0:
-				label_text = render_data.node.common_name if render_data.node.common_name else render_data.node.scientific_name
-				should_show_label = true
+			# Skip labels for animal nodes that have dex images (the image already shows the name)
+			if nodes_with_dex_images.has(render_data.node.id):
+				continue
 
 		if should_show_label and not label_text.is_empty():
 			candidates.append({

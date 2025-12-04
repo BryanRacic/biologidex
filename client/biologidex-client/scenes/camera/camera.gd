@@ -23,11 +23,12 @@ extends BaseSceneNode
 # Image display - dex_record_image component with two modes:
 # 1. simple_image: Used for preview during photo selection/rotation
 # 2. bordered_display: Used to show final dex record card with label
-@onready var record_image: Control = get_node("%RecordImage")
-@onready var simple_image: TextureRect = get_node("%RecordImage/SimpleImage")
-@onready var bordered_display: AspectRatioContainer = get_node("%RecordImage/ImageBorderAspectRatio")
-@onready var bordered_image: TextureRect = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/BorderedImage")
-@onready var record_label: Label = get_node("%RecordImage/ImageBorderAspectRatio/ImageBorder/RecordMargin/RecordBackground/RecordTextMargin/RecordLabel")
+# Note: Root is AspectRatioContainer with SubViewport for proportional scaling
+@onready var record_image: AspectRatioContainer = get_node("%RecordImage")
+var simple_image: TextureRect
+var bordered_display: PanelContainer
+var bordered_image: TextureRect
+var record_label: Label
 
 # Components (programmatically instantiated)
 var file_selector: FileSelector
@@ -48,6 +49,12 @@ func _on_scene_ready() -> void:
 	"""Called by BaseSceneNode after managers are initialized"""
 	scene_name = "Camera"
 	print("[Camera] Scene ready (refactored v2)")
+
+	# Get record image child nodes (use find_child for resilience to scene structure changes)
+	simple_image = record_image.find_child("SimpleImage", true, false)
+	bordered_display = record_image.find_child("ImageBorder", true, false)
+	bordered_image = record_image.find_child("BorderedImage", true, false)
+	record_label = record_image.find_child("RecordLabel", true, false)
 
 	# Create and initialize file selector
 	file_selector = FileSelector.new()
