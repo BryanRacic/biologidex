@@ -242,6 +242,26 @@ TREE_CACHE_TTL_SELECTED = int(os.getenv('TREE_CACHE_TTL_SELECTED', '60'))   # 1 
 TREE_CACHE_TTL_GLOBAL = int(os.getenv('TREE_CACHE_TTL_GLOBAL', '300'))      # 5 minutes
 TREE_MAX_CHUNK_SIZE = int(os.getenv('TREE_MAX_CHUNK_SIZE', '2048'))         # 2048 world units
 
+# Feature Flags
+FEATURE_FLAGS = {
+    # Set to False to rollback to old RadialReingoldTilfordLayout algorithm
+    "USE_EADES_RADIAL_LAYOUT": os.getenv('USE_EADES_RADIAL_LAYOUT', 'True') == 'True',
+}
+
+# Tree Layout Configuration
+TREE_LAYOUT_CONFIG = {
+    "radial": {
+        "angle_spread_degrees": float(os.getenv('TREE_RADIAL_ANGLE_SPREAD', '360')),
+        "min_radius": float(os.getenv('TREE_RADIAL_MIN_RADIUS', '300')),
+        "radius_per_level": float(os.getenv('TREE_RADIAL_RADIUS_PER_LEVEL', '400')),
+        "start_angle_degrees": float(os.getenv('TREE_RADIAL_START_ANGLE', '-90')),  # Top of circle
+    },
+    "rectangular": {
+        "h_spacing": float(os.getenv('TREE_RECT_H_SPACING', '100')),
+        "v_spacing": float(os.getenv('TREE_RECT_V_SPACING', '150')),
+    }
+}
+
 # Google Cloud Storage Settings
 GCS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
 GCS_PROJECT_ID = os.getenv('GCS_PROJECT_ID')
