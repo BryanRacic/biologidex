@@ -43,6 +43,9 @@ var tree_renderer: TreeRenderer = null
 
 # State
 var is_initialized: bool = false
+var _friends_synced: bool = false
+var _tree_loaded: bool = false
+var _pending_tree_data: TreeDataModels.TreeData = null
 
 # Transform state (synced with touch controller)
 var _scroll_offset: Vector2 = Vector2.ZERO
@@ -158,8 +161,12 @@ func _on_scene_ready() -> void:
 	# Setup renderer
 	_setup_renderer()
 
-	# Initial load
-	load_tree()
+	# Connect friend sync signals
+	FriendDexSyncService.sync_completed.connect(_on_friends_sync_completed)
+	FriendDexSyncService.sync_failed.connect(_on_friends_sync_failed)
+
+	# Start friend sync and tree load in parallel
+	_start_parallel_load()
 
 
 func _setup_touch_controller() -> void:
@@ -313,6 +320,21 @@ func _on_center_on_root() -> void:
 # Tree Loading
 # =============================================================================
 
+func _start_parallel_load() -> void:
+	"""Start friend sync and tree load in parallel."""
+	_friends_synced = false
+	_tree_loaded = false
+	_pending_tree_data = null
+
+	_show_loading(true)
+
+	# Start friend sync (will use cached data if already synced)
+	FriendDexSyncService.sync_friends()
+
+	# Load tree
+	load_tree()
+
+
 func load_tree(use_cache: bool = true) -> void:
 	"""Load tree data from API."""
 	if is_loading:
@@ -321,18 +343,41 @@ func load_tree(use_cache: bool = true) -> void:
 	is_loading = true
 	_show_loading(true)
 
-	print("[TreeController] Loading tree (mode: %s, layout: radial)" % APITypes.get_tree_mode_string(current_mode))
-
 	# Request radial layout from server
 	APIManager.tree.fetch_tree(current_mode, selected_friend_ids, use_cache, "radial")
 
 
 func _on_tree_loaded(tree_data: TreeDataModels.TreeData) -> void:
 	"""Handle successful tree load."""
-	print("[TreeController] Tree loaded: %d nodes, %d edges" % [tree_data.nodes.size(), tree_data.edges.size()])
-
-	current_tree_data = tree_data
+	_tree_loaded = true
+	_pending_tree_data = tree_data
 	is_loading = false
+
+	_try_render_tree()
+
+
+func _on_friends_sync_completed(_friends_data: Dictionary) -> void:
+	"""Handle friend sync completion."""
+	_friends_synced = true
+	_try_render_tree()
+
+
+func _on_friends_sync_failed(_error: String) -> void:
+	"""Handle friend sync failure - still allow rendering with cached data."""
+	_friends_synced = true  # Continue anyway with cached data
+	_try_render_tree()
+
+
+func _try_render_tree() -> void:
+	"""Render tree only when both tree and friends are ready."""
+	if not _tree_loaded or not _friends_synced:
+		return
+
+	if not _pending_tree_data:
+		return
+
+	current_tree_data = _pending_tree_data
+	_pending_tree_data = null
 	is_initialized = true
 
 	_show_loading(false)
@@ -546,3 +591,7 @@ func _exit_tree() -> void:
 		APIManager.tree.tree_loaded.disconnect(_on_tree_loaded)
 	if APIManager.tree.tree_load_failed.is_connected(_on_tree_load_failed):
 		APIManager.tree.tree_load_failed.disconnect(_on_tree_load_failed)
+	if FriendDexSyncService.sync_completed.is_connected(_on_friends_sync_completed):
+		FriendDexSyncService.sync_completed.disconnect(_on_friends_sync_completed)
+	if FriendDexSyncService.sync_failed.is_connected(_on_friends_sync_failed):
+		FriendDexSyncService.sync_failed.disconnect(_on_friends_sync_failed)

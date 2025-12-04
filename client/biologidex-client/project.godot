@@ -23,6 +23,8 @@ APIManager="*res://features/server_interface/api/api_manager.gd"
 DexDatabase="*res://features/database/dex_database.gd"
 TreeCache="*res://features/tree/tree_cache.gd"
 SyncManager="*res://features/database/sync_manager.gd"
+DexImageLoader="*res://features/dex/dex_image_loader.gd"
+FriendDexSyncService="*res://features/dex/friend_dex_sync_service.gd"
 
 [display]
 

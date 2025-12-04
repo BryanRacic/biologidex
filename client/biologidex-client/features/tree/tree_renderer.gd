@@ -79,7 +79,7 @@ var nodes_multimesh: MultiMeshInstance2D = null
 
 # Dex image pool
 var dex_image_pool: Array[TreeDexImage] = []
-var active_dex_images: Dictionary = {}  # {creation_index: TreeDexImage}
+var active_dex_images: Dictionary = {}  # {image_key: TreeDexImage} - key is "user_id:creation_index"
 var nodes_with_dex_images: Dictionary = {}  # {node_id: true} - tracks which nodes have images
 
 # =============================================================================
@@ -356,88 +356,124 @@ func _get_view_rect() -> Rect2:
 
 
 func _update_dex_images() -> void:
-	"""Update dex images for visible animal nodes that user has captured.
+	"""Update dex images for visible animal nodes captured by user or friends.
 	Loads images from DexDatabase and positions them in world space.
-	Handles cache/download automatically via TreeDexImage."""
+	Handles cache/download automatically via TreeDexImage and DexImageLoader."""
 	if not dex_images_container:
-		print("[TreeRenderer] No dex_images_container!")
 		return
 
-	# Track which creation indices are currently visible
-	var visible_indices: Dictionary = {}
-	var user_captured_count: int = 0
+	# Collect all visible captures (user and friends)
+	# Each capture is keyed by "user_id:creation_index" to allow multiple captures per animal
+	var visible_captures: Dictionary = {}  # {image_key: {render_data, user_id, creation_index, capture_info}}
 
 	for render_data in visible_nodes:
 		var node = render_data.node
-		# Only show dex images for animal nodes captured by user
-		if node.is_animal() and node.captured_by_user:
-			user_captured_count += 1
-			if node.creation_index > 0:
-				visible_indices[node.creation_index] = render_data
+		if not node.is_animal():
+			continue
+
+		# User's own capture
+		if node.captured_by_user and node.creation_index > 0:
+			var image_key := "self:%d" % node.creation_index
+			visible_captures[image_key] = {
+				"render_data": render_data,
+				"user_id": "self",
+				"creation_index": node.creation_index,
+				"capture_info": {}
+			}
+
+		# Friend captures - only show first friend's capture per animal to avoid overlap
+		if node.captured_by_friends.size() > 0 and not node.captured_by_user:
+			var friend_capture: Dictionary = node.captured_by_friends[0]
+			var friend_id: String = friend_capture.get("user_id", "")
+			if not friend_id.is_empty():
+				# Use node.id (animal UUID) as part of key since we don't have friend's creation_index
+				var image_key := "%s:%s" % [friend_id, node.id]
+				visible_captures[image_key] = {
+					"render_data": render_data,
+					"user_id": friend_id,
+					"creation_index": -1,  # Will be looked up from synced data
+					"capture_info": friend_capture
+				}
 
 	# Deactivate images that are no longer visible
-	var to_deactivate: Array[int] = []
-	for creation_index in active_dex_images:
-		if not visible_indices.has(creation_index):
-			to_deactivate.append(creation_index)
+	var to_deactivate: Array[String] = []
+	for image_key in active_dex_images:
+		if not visible_captures.has(image_key):
+			to_deactivate.append(image_key)
 
-	for index in to_deactivate:
-		var img: TreeDexImage = active_dex_images[index]
+	for key in to_deactivate:
+		var img: TreeDexImage = active_dex_images[key]
 		img.deactivate()
-		# Remove from tracking
-		for node_id in nodes_with_dex_images.keys():
-			if active_dex_images.get(index) == img:
-				nodes_with_dex_images.erase(node_id)
-		active_dex_images.erase(index)
+		active_dex_images.erase(key)
 
-	# Activate/update images for visible nodes
-	for creation_index in visible_indices:
-		var render_data = visible_indices[creation_index]
+	# Rebuild nodes_with_dex_images
+	nodes_with_dex_images.clear()
+
+	# Activate/update images for visible captures
+	for image_key in visible_captures:
+		var capture_data: Dictionary = visible_captures[image_key]
+		var render_data = capture_data.render_data
+		var user_id: String = capture_data.user_id
+		var creation_index: int = capture_data.creation_index
 		var node = render_data.node
 
-		if active_dex_images.has(creation_index):
+		nodes_with_dex_images[node.id] = true
+
+		if active_dex_images.has(image_key):
 			# Already active, just update position
-			var img: TreeDexImage = active_dex_images[creation_index]
+			var img: TreeDexImage = active_dex_images[image_key]
 			img.position = render_data.position
 		else:
 			# Need to activate a new image
-			var entry_data = _get_dex_entry_data(creation_index, node)
+			var entry_data = _get_dex_entry_data(creation_index, user_id, node, capture_data.capture_info)
 
 			var img = _get_available_dex_image()
 			if not img:
 				# Pool exhausted
 				continue
 
-			# Activate handles cache check and download internally
-			img.activate(render_data.position, creation_index, "self", entry_data, DEX_IMAGE_SIZE)
-			active_dex_images[creation_index] = img
-			nodes_with_dex_images[node.id] = true
+			# Activate handles cache check and download via DexImageLoader
+			img.activate(render_data.position, creation_index, user_id, entry_data, DEX_IMAGE_SIZE)
+			active_dex_images[image_key] = img
 
 
-func _get_dex_entry_data(creation_index: int, node: TreeDataModels.TaxonomicNode) -> Dictionary:
-	"""Get entry data from DexDatabase, with fallback to tree node data."""
-	var dex_db = get_node_or_null("/root/DexDatabase")
+func _get_dex_entry_data(creation_index: int, user_id: String, node: TreeDataModels.TaxonomicNode, capture_info: Dictionary = {}) -> Dictionary:
+	"""Get entry data from DexDatabase or FriendDexSyncService, with fallback to tree node data."""
 	var entry_data: Dictionary = {}
 
-	if dex_db and dex_db.has_method("get_record_for_user"):
-		entry_data = dex_db.get_record_for_user(creation_index, "self")
-
-	# Ensure we have basic data even if not in local database
-	# (will be used for label, image will show placeholder until downloaded)
-	if entry_data.is_empty():
-		entry_data = {
-			"creation_index": creation_index,
-			"scientific_name": node.scientific_name,
-			"common_name": node.common_name,
-			"cached_image_path": "",
-			"dex_compatible_url": ""  # Will need sync to get this
-		}
+	if user_id == "self":
+		# User's own entry - look up by creation_index
+		var dex_db = get_node_or_null("/root/DexDatabase")
+		if dex_db and dex_db.has_method("get_record_for_user"):
+			entry_data = dex_db.get_record_for_user(creation_index, "self")
 	else:
-		# Ensure scientific/common name are present (from tree node if missing)
-		if entry_data.get("scientific_name", "").is_empty():
-			entry_data["scientific_name"] = node.scientific_name
-		if entry_data.get("common_name", "").is_empty():
-			entry_data["common_name"] = node.common_name
+		# Friend's entry - look up by animal_id (since we may not have their creation_index)
+		var sync_service = get_node_or_null("/root/FriendDexSyncService")
+		if sync_service:
+			# Try by animal_id first (node.id is the animal UUID)
+			entry_data = sync_service.find_friend_entry_by_animal(user_id, node.id)
+			# Fallback to scientific name if not found
+			if entry_data.is_empty() and not node.scientific_name.is_empty():
+				entry_data = sync_service.find_friend_entry_by_name(user_id, node.scientific_name)
+
+	# Build fallback/supplement data
+	var fallback := {
+		"creation_index": creation_index if creation_index > 0 else entry_data.get("creation_index", -1),
+		"scientific_name": node.scientific_name,
+		"common_name": node.common_name,
+		"owner_username": capture_info.get("username", ""),
+		"catch_date": capture_info.get("captured_at", ""),
+		"cached_image_path": "",
+		"dex_compatible_url": ""
+	}
+
+	# Merge: DB record takes priority, but fill gaps from fallback
+	if entry_data.is_empty():
+		entry_data = fallback
+	else:
+		for key in fallback:
+			if not entry_data.has(key) or (entry_data[key] is String and entry_data[key].is_empty()):
+				entry_data[key] = fallback[key]
 
 	return entry_data
 

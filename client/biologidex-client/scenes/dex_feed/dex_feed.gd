@@ -1,22 +1,15 @@
 extends BaseSceneNode
 ## Dex Feed - Display friends' dex entries in a chronological feed
-## Refactored: 484 → ~420 lines (13% reduction)
+## Uses FriendDexSyncService for centralized sync logic.
 
 # Constants
 const FEED_ITEM_SCENE = preload("res://scenes/dex_feed/components/feed_list_item.tscn")
-const SYNC_INTERVAL_MS = 60000  # Auto-refresh every minute
-
-# Note: Services (TokenManager, NavigationManager, APIManager, DexDatabase, SyncManager)
-# are automatically initialized by BaseSceneNode
 
 # State Management (is_loading inherited from BaseSceneNode)
 var feed_entries: Array[Dictionary] = []
 var displayed_entries: Array[Dictionary] = []
 var current_filter: String = "all"
 var selected_friend_id: String = ""
-var sync_queue: Array[String] = []
-var friends_data: Dictionary = {}  # user_id -> friend info
-var is_syncing: bool = false
 
 # UI References (back_button inherited from BaseSceneNode, set via @export)
 @onready var refresh_button: Button = get_node("%RefreshButton")
@@ -24,22 +17,19 @@ var is_syncing: bool = false
 @onready var filter_dropdown: OptionButton = get_node("%FriendsDropdown")
 @onready var scroll_container: ScrollContainer = get_node("%ScrollContainer")
 @onready var feed_container: VBoxContainer = get_node("%FeedContainer")
-# Note: status_label is inherited from BaseSceneNode, wired via @onready below
 @onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
 
 # Signals
 signal feed_loaded(entry_count: int)
-signal sync_started()
-signal sync_completed()
 
 
 func _on_scene_ready() -> void:
 	"""Called by BaseSceneNode after managers are initialized and auth is checked"""
 	scene_name = "DexFeed"
-	print("[DexFeed] Scene ready (refactored v2)")
 
 	_setup_ui()
+	_connect_sync_signals()
 	_initialize_feed()
 
 
@@ -49,67 +39,67 @@ func _setup_ui() -> void:
 	filter_all_button.pressed.connect(_on_filter_all_pressed)
 	filter_dropdown.item_selected.connect(_on_filter_dropdown_selected)
 
-	# Set initial state
 	_show_loading(false)
 	_show_status("", true)
 
 
+func _connect_sync_signals() -> void:
+	"""Connect to FriendDexSyncService signals"""
+	FriendDexSyncService.sync_started.connect(_on_sync_started)
+	FriendDexSyncService.sync_completed.connect(_on_sync_completed)
+	FriendDexSyncService.sync_failed.connect(_on_sync_failed)
+	FriendDexSyncService.friends_loaded.connect(_on_friends_data_loaded)
+
+
 func _initialize_feed() -> void:
-	"""Initialize the feed by loading friends and syncing their dex entries"""
-	print("[DexFeed] Initializing feed...")
-	_show_status("Loading friends...", true)
-	_load_friends_list()
+	"""Initialize the feed by syncing friends' dex entries"""
+	_show_status("Syncing friends...", true)
+	_show_loading(true)
+	FriendDexSyncService.sync_friends()
 
 
-func _load_friends_list() -> void:
-	"""Load the friends list from the server"""
-	if is_loading:
-		print("[DexFeed] Already loading, skipping duplicate request")
-		return
+func _on_friends_data_loaded(friends_data: Dictionary) -> void:
+	"""Handle friends data loaded"""
+	_populate_filter_dropdown(friends_data)
 
-	is_loading = true
-	print("[DexFeed] Loading friends list...")
-	APIManager.social.get_friends(_on_friends_loaded)
+	if friends_data.is_empty():
+		_show_status("No friends yet. Add friends to see their catches!", false)
+		_show_loading(false)
+		_display_empty_state()
 
 
-func _on_friends_loaded(response: Dictionary, code: int) -> void:
-	"""Handle friends list response"""
-	is_loading = false
+func _on_sync_started() -> void:
+	"""Handle sync started"""
+	_show_status("Syncing friends' dex entries...", true)
+	_show_loading(true)
 
-	if code != 200:
-		var error_msg: String = response.get("error", "Failed to load friends")
-		print("[DexFeed] ERROR loading friends: ", error_msg)
-		_show_status("Failed to load friends: %s" % error_msg, false)
-		return
 
-	var friends: Array = response.get("friends", [])
-	print("[DexFeed] Loaded %d friends" % friends.size())
-
-	# Clear and populate friends data
-	friends_data.clear()
-	for friend in friends:
-		var friend_id: String = friend.get("id", "")
-		if not friend_id.is_empty():
-			friends_data[friend_id] = {
-				"username": friend.get("username", "Unknown"),
-				"avatar": friend.get("avatar", ""),
-				"friend_code": friend.get("friend_code", ""),
-				"total_catches": friend.get("total_catches", 0),
-				"unique_species": friend.get("unique_species", 0)
-			}
-
-	_populate_filter_dropdown()
+func _on_sync_completed(friends_data: Dictionary) -> void:
+	"""Handle sync completed"""
+	_show_loading(false)
+	_populate_filter_dropdown(friends_data)
 
 	if friends_data.is_empty():
 		_show_status("No friends yet. Add friends to see their catches!", false)
 		_display_empty_state()
 		return
 
-	# Start syncing all friends' dex entries
-	_sync_all_friends()
+	_show_status("Building feed...", true)
+	_load_feed_entries()
+	_display_feed()
 
 
-func _populate_filter_dropdown() -> void:
+func _on_sync_failed(error: String) -> void:
+	"""Handle sync failed"""
+	_show_loading(false)
+	_show_status("Sync failed: %s" % error, false)
+
+	# Still try to display cached data
+	_load_feed_entries()
+	_display_feed()
+
+
+func _populate_filter_dropdown(friends_data: Dictionary) -> void:
 	"""Populate the filter dropdown with friend names"""
 	filter_dropdown.clear()
 	filter_dropdown.add_item("All Friends", 0)
@@ -119,164 +109,25 @@ func _populate_filter_dropdown() -> void:
 		var friend_info: Dictionary = friends_data[friend_id]
 		var username: String = friend_info.get("username", "Unknown")
 		filter_dropdown.add_item(username, index)
-		# Store friend_id in metadata
 		filter_dropdown.set_item_metadata(index, friend_id)
 		index += 1
-
-
-func _sync_all_friends() -> void:
-	"""Start syncing all friends' dex entries using batch sync"""
-	if is_syncing:
-		print("[DexFeed] Already syncing, skipping duplicate request")
-		return
-
-	is_syncing = true
-
-	print("[DexFeed] Starting batch sync for %d friends" % friends_data.size())
-	_show_status("Syncing friends' dex entries...", true)
-	_show_loading(true)
-
-	sync_started.emit()
-
-	# Build batch sync request for friends only (not self)
-	var sync_requests := []
-	for friend_id in friends_data.keys():
-		sync_requests.append({
-			"user_id": friend_id,
-			"last_sync": SyncManager.get_last_sync(friend_id)
-		})
-
-	# Execute batch sync
-	var req_config = APIManager.dex._create_request_config()
-	APIManager.dex.api_client.post(
-		"/dex/entries/batch_sync/",
-		{"sync_requests": sync_requests},
-		_on_batch_sync_success,
-		_on_batch_sync_api_error,
-		req_config
-	)
-
-
-func _on_batch_sync_success(response: Dictionary) -> void:
-	"""Handle successful batch sync API response"""
-	_on_batch_sync_completed(response, 200)
-
-
-func _on_batch_sync_api_error(error) -> void:
-	"""Handle batch sync API error"""
-	var error_msg: String = ""
-	var error_code: int = 500
-
-	if error is Dictionary:
-		error_msg = error.get("message", "Unknown error")
-		error_code = error.get("code", 500)
-	else:
-		error_msg = str(error)
-
-	_on_batch_sync_error({"error": error_msg}, error_code)
-
-
-func _on_batch_sync_completed(response: Dictionary, code: int) -> void:
-	"""Handle completion of batch sync"""
-	if code != 200:
-		print("[DexFeed] ERROR: Batch sync failed with code: ", code)
-		_show_status("Sync failed", false)
-		_show_loading(false)
-		is_syncing = false
-		return
-
-	var results: Dictionary = response.get("results", {})
-	var server_time: String = response.get("server_time", "")
-
-	print("[DexFeed] Batch sync completed: %d users" % results.size())
-
-	# Process each friend's results
-	for user_id in results.keys():
-		var user_result = results[user_id]
-
-		if user_result.has("error"):
-			var error_msg: String = user_result.get("error", "Unknown error")
-			print("[DexFeed] ERROR syncing %s: %s" % [user_id, error_msg])
-			continue
-
-		var entries: Array = user_result.get("entries", [])
-		print("[DexFeed] Processing %d entries for user: %s" % [entries.size(), user_id])
-
-		# Process entries for this user (similar to DexService._process_sync_entries)
-		for entry in entries:
-			var creation_index_val: int = entry.get("creation_index", -1)
-			var existing_record: Dictionary = DexDatabase.get_record_for_user(creation_index_val, user_id)
-			var existing_cached_path: String = existing_record.get("cached_image_path", "")
-
-			var record := {
-				"creation_index": creation_index_val,
-				"scientific_name": entry.get("scientific_name", ""),
-				"common_name": entry.get("common_name", ""),
-				"image_checksum": entry.get("image_checksum", ""),
-				"dex_compatible_url": entry.get("dex_compatible_url", ""),
-				"updated_at": entry.get("updated_at", ""),
-				"cached_image_path": existing_cached_path,
-				"animal_id": entry.get("animal_id", ""),
-				"dex_entry_id": entry.get("id", "")
-			}
-
-			DexDatabase.add_record_from_dict(record, user_id)
-
-		# Update sync timestamp for this user
-		if not server_time.is_empty():
-			SyncManager.update_last_sync(user_id, server_time)
-
-	_on_all_syncs_completed()
-
-
-func _on_batch_sync_error(response: Dictionary, code: int) -> void:
-	"""Handle batch sync error"""
-	var error_msg: String = response.get("error", "Unknown error")
-	print("[DexFeed] ERROR: Batch sync failed: ", error_msg)
-
-	_show_status("Sync failed: %s" % error_msg, false)
-	_show_loading(false)
-	is_syncing = false
-
-	# Still try to display cached data
-	_load_feed_entries()
-	_display_feed()
-
-
-func _on_all_syncs_completed() -> void:
-	"""Called when all friends have been synced"""
-	is_syncing = false
-	_show_loading(false)
-
-	print("[DexFeed] All syncs completed, loading feed entries...")
-	_show_status("Building feed...", true)
-
-	sync_completed.emit()
-
-	# Load and display feed entries
-	_load_feed_entries()
-	_display_feed()
 
 
 func _load_feed_entries() -> void:
 	"""Load feed entries from all friends' cached dex data"""
 	feed_entries.clear()
 
-	# Aggregate entries from all friends
-	for friend_id in friends_data.keys():
-		var friend_entries: Array = DexDatabase.get_all_records_for_user(friend_id)
-		var friend_info: Dictionary = friends_data.get(friend_id, {})
+	# Aggregate entries from all friends using FriendDexSyncService
+	for friend_id in FriendDexSyncService.get_friend_ids():
+		var friend_entries: Array = FriendDexSyncService.get_friend_entries(friend_id)
+		var friend_info: Dictionary = FriendDexSyncService.get_friend_info(friend_id)
 
-		print("[DexFeed] Loading %d entries for friend: %s" % [friend_entries.size(), friend_info.get("username", "Unknown")])
 		for entry in friend_entries:
-			print("[DexFeed] Entry #%d cached_path: '%s'" % [entry.get("creation_index", -1), entry.get("cached_image_path", "")])
 			var feed_entry := _create_feed_entry(entry, friend_id, friend_info)
 			feed_entries.append(feed_entry)
 
 	# Sort by date (newest first)
 	feed_entries.sort_custom(_sort_by_date_desc)
-
-	print("[DexFeed] Loaded %d feed entries from %d friends" % [feed_entries.size(), friends_data.size()])
 
 
 func _create_feed_entry(dex_record: Dictionary, owner_id: String, friend_info: Dictionary) -> Dictionary:
@@ -362,7 +213,7 @@ func _display_empty_state() -> void:
 	"""Display empty state message"""
 	var empty_label := Label.new()
 
-	if friends_data.is_empty():
+	if not FriendDexSyncService.has_friends():
 		empty_label.text = "No friends yet!\n\nAdd friends to see their catches in the feed."
 	else:
 		empty_label.text = "No entries to display.\n\nYour friends haven't caught any animals yet!"
@@ -430,10 +281,7 @@ func _on_filter_dropdown_selected(index: int) -> void:
 	# Get friend_id from metadata
 	var friend_id = filter_dropdown.get_item_metadata(index)
 	if friend_id is String and not friend_id.is_empty():
-		var friend_info: Dictionary = friends_data.get(friend_id, {})
-		var username: String = friend_info.get("username", "Unknown")
-
-		print("[DexFeed] Filter: %s" % username)
+		var username: String = FriendDexSyncService.get_friend_username(friend_id)
 		current_filter = "friend"
 		selected_friend_id = friend_id
 		_display_feed()
