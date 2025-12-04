@@ -477,17 +477,24 @@ Options:
 
 `link_col_parents` - Link synonym records to their accepted names
 ```bash
-poetry run python manage.py link_col_parents [--dry-run] [--batch-size N]
+poetry run python manage.py link_col_parents [--dry-run] [--tsv-path PATH] [--chunk-size N]
 ```
 Options:
 - --dry-run: Preview what would be linked without making changes
-- --batch-size: Batch size for bulk updates (default: 5000)
+- --tsv-path: Path to NameUsage.tsv (auto-detects latest COL download if not specified)
+- --chunk-size: Batch size for bulk updates (default: 10000)
 
 **Purpose:** Per the [ColDP specification](https://github.com/CatalogueOfLife/coldp), the `parentID` field in COL data has dual meaning:
 - For `status='synonym'`: `parentID` points to the **accepted taxon**
 - For `status='accepted'`: `parentID` points to the taxonomic parent
 
 This command links the `parentID` to the appropriate FK field (`accepted_name` for synonyms, `parent` for accepted taxa). This is essential for proper synonym resolution during CV identification - without it, synonyms like "Bison bison" won't resolve to their accepted name "Bos bison" and will have missing taxonomy hierarchy.
+
+**Implementation:** Uses memory-efficient approach:
+- Reads NameUsage.tsv directly from `MEDIA_ROOT/taxonomy_imports/col_*_extracted/`
+- Stores only ID tuples in lookup dict (~300MB for 5.3M records, vs 2-3GB for ORM objects)
+- Uses PostgreSQL temp tables with chunked UPDATEs for fast bulk operations
+- Disables statement timeout for long-running updates
 
 **When to run:**
 - After `import_col` completes (new imports run this automatically)

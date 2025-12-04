@@ -3,20 +3,28 @@
 One-time migration command to link COL parent IDs on existing data.
 
 This fixes the missing accepted_name FK on synonym records by reading
-the parent_id from RawCatalogueOfLife and linking it properly.
+the parent_id from the original NameUsage.tsv file.
 
 Per ColDP spec (https://github.com/CatalogueOfLife/coldp):
 - For synonyms: parentID points to the accepted taxon
 - For accepted taxa: parentID points to the taxonomic parent
+
+Uses streaming TSV reading + database-side UPDATE for memory efficiency.
 """
+import csv
+import os
+import sys
+from glob import glob
+
+from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import transaction
-from taxonomy.models import Taxonomy, DataSource
-from taxonomy.raw_models import RawCatalogueOfLife
+from django.db import connection
+
+from taxonomy.models import DataSource
 
 
 class Command(BaseCommand):
-    help = 'Link COL parent IDs (synonyms → accepted names) on existing data'
+    help = 'Link COL parent IDs (synonyms → accepted names) from NameUsage.tsv'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -25,15 +33,21 @@ class Command(BaseCommand):
             help='Show what would be linked without making changes'
         )
         parser.add_argument(
-            '--batch-size',
+            '--tsv-path',
+            type=str,
+            help='Path to NameUsage.tsv (auto-detects latest COL download if not specified)'
+        )
+        parser.add_argument(
+            '--chunk-size',
             type=int,
-            default=5000,
-            help='Batch size for bulk updates (default: 5000)'
+            default=10000,
+            help='Process updates in chunks of this size (default: 10000)'
         )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
-        batch_size = options['batch_size']
+        tsv_path = options['tsv_path']
+        chunk_size = options['chunk_size']
 
         self.stdout.write(self.style.SUCCESS('=== COL Parent ID Linking ==='))
 
@@ -47,110 +61,201 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('COL data source not found. Run import_col first.'))
             return
 
-        # Build lookup of COL ID → Taxonomy object
-        self.stdout.write('Building COL ID → Taxonomy lookup...')
-        taxonomy_by_col_id = {}
-        for tax in Taxonomy.objects.filter(source=source).only('id', 'source_taxon_id', 'status', 'accepted_name_id', 'parent_id'):
-            taxonomy_by_col_id[tax.source_taxon_id] = tax
-        self.stdout.write(f'Loaded {len(taxonomy_by_col_id):,} taxonomy records')
+        # Find NameUsage.tsv
+        if not tsv_path:
+            tsv_path = self._find_latest_nameusage_tsv()
+            if not tsv_path:
+                self.stdout.write(self.style.ERROR(
+                    'No COL download found. Either:\n'
+                    '  1. Run import_col to download COL data first, or\n'
+                    '  2. Specify --tsv-path=/path/to/NameUsage.tsv'
+                ))
+                return
 
-        # Find raw records with parent_id
-        self.stdout.write('Finding records with parent_id to link...')
-        raw_records = RawCatalogueOfLife.objects.exclude(parent_id='').values('col_id', 'parent_id', 'status')
-        total_count = raw_records.count()
-        self.stdout.write(f'Found {total_count:,} records with parent_id')
+        if not os.path.exists(tsv_path):
+            self.stdout.write(self.style.ERROR(f'File not found: {tsv_path}'))
+            return
 
-        # Track statistics
-        synonyms_linked = 0
+        self.stdout.write(f'Using: {tsv_path}')
+        file_size_mb = os.path.getsize(tsv_path) / (1024 * 1024)
+        self.stdout.write(f'File size: {file_size_mb:.1f} MB')
+
+        # Build the lookup of source_taxon_id → taxonomy.id
+        # Uses chunked fetching to avoid loading all 5M+ rows at once
+        self.stdout.write('\nBuilding COL ID → Taxonomy ID lookup...')
+        source_id = source.id
+
+        taxonomy_lookup = {}
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT source_taxon_id, id, accepted_name_id, parent_id
+                FROM taxonomy_taxonomy
+                WHERE source_id = %s
+            """, [source_id])
+
+            # Fetch in chunks to reduce peak memory
+            loaded = 0
+            while True:
+                rows = cursor.fetchmany(50000)
+                if not rows:
+                    break
+                for row in rows:
+                    taxonomy_lookup[row[0]] = (row[1], row[2] is not None, row[3] is not None)
+                loaded += len(rows)
+                if loaded % 1000000 == 0:
+                    self.stdout.write(f'  Loaded {loaded:,} records...')
+
+        self.stdout.write(f'Loaded {len(taxonomy_lookup):,} taxonomy records')
+
+        # Process the TSV file
+        self.stdout.write('\nProcessing NameUsage.tsv...')
+
+        # Increase CSV field size limit
+        csv.field_size_limit(sys.maxsize)
+
+        # Collect updates
+        synonym_updates = []  # [(tax_id, accepted_tax_id), ...]
+        parent_updates = []   # [(tax_id, parent_tax_id), ...]
+
+        synonyms_to_link = 0
         synonyms_already_linked = 0
-        parents_linked = 0
+        parents_to_link = 0
         parents_already_linked = 0
-        not_found_count = 0
-        error_count = 0
-
-        batch_updates_accepted_name = []
-        batch_updates_parent = []
+        not_found = 0
+        parent_not_found = 0
         processed = 0
 
-        for raw in raw_records.iterator(chunk_size=batch_size):
-            try:
-                col_id = raw['col_id']
-                parent_id = raw['parent_id']
-                status = raw['status']
+        with open(tsv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f, delimiter='\t')
 
-                # Get the taxonomy record
-                taxonomy = taxonomy_by_col_id.get(col_id)
-                if not taxonomy:
-                    not_found_count += 1
-                    continue
-
-                # Get the parent/accepted taxonomy
-                parent_taxonomy = taxonomy_by_col_id.get(parent_id)
-                if not parent_taxonomy:
-                    not_found_count += 1
-                    continue
-
-                # Link based on status
-                if status.lower() == 'synonym':
-                    if taxonomy.accepted_name_id:
-                        synonyms_already_linked += 1
-                    else:
-                        batch_updates_accepted_name.append(
-                            Taxonomy(id=taxonomy.id, accepted_name_id=parent_taxonomy.id)
-                        )
-                        synonyms_linked += 1
-                else:
-                    if taxonomy.parent_id:
-                        parents_already_linked += 1
-                    else:
-                        batch_updates_parent.append(
-                            Taxonomy(id=taxonomy.id, parent_id=parent_taxonomy.id)
-                        )
-                        parents_linked += 1
-
+            for row in reader:
                 processed += 1
 
-                # Bulk update in batches
-                if not dry_run:
-                    if len(batch_updates_accepted_name) >= batch_size:
-                        Taxonomy.objects.bulk_update(batch_updates_accepted_name, ['accepted_name_id'])
-                        batch_updates_accepted_name = []
+                if processed % 500000 == 0:
+                    self.stdout.write(f'  Scanned {processed:,} rows...')
 
-                    if len(batch_updates_parent) >= batch_size:
-                        Taxonomy.objects.bulk_update(batch_updates_parent, ['parent_id'])
-                        batch_updates_parent = []
+                col_id = row.get('col:ID', '')
+                parent_id = row.get('col:parentID', '')
+                status = row.get('col:status', '').lower()
 
-                # Log progress
-                if processed % 100000 == 0:
-                    self.stdout.write(
-                        f'Progress: {processed:,}/{total_count:,} - '
-                        f'synonyms: {synonyms_linked:,} new, {synonyms_already_linked:,} existing'
-                    )
+                if not col_id or not parent_id:
+                    continue
 
-            except Exception as e:
-                error_count += 1
-                if error_count <= 10:
-                    self.stdout.write(self.style.ERROR(f'Error: {e}'))
+                # Look up this record
+                tax_info = taxonomy_lookup.get(col_id)
+                if not tax_info:
+                    not_found += 1
+                    continue
 
-        # Process remaining batches
-        if not dry_run:
-            if batch_updates_accepted_name:
-                Taxonomy.objects.bulk_update(batch_updates_accepted_name, ['accepted_name_id'])
-            if batch_updates_parent:
-                Taxonomy.objects.bulk_update(batch_updates_parent, ['parent_id'])
+                tax_id, has_accepted, has_parent = tax_info
 
-        # Final statistics
-        self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS('=== Results ==='))
-        self.stdout.write(f'Total processed:           {processed:,}')
-        self.stdout.write(f'Synonyms newly linked:     {synonyms_linked:,}')
-        self.stdout.write(f'Synonyms already linked:   {synonyms_already_linked:,}')
-        self.stdout.write(f'Parents newly linked:      {parents_linked:,}')
-        self.stdout.write(f'Parents already linked:    {parents_already_linked:,}')
-        self.stdout.write(f'Not found (skipped):       {not_found_count:,}')
-        self.stdout.write(f'Errors:                    {error_count}')
+                # Look up parent record
+                parent_info = taxonomy_lookup.get(parent_id)
+                if not parent_info:
+                    parent_not_found += 1
+                    continue
+
+                parent_tax_id = parent_info[0]
+
+                # Determine link type based on status
+                if status == 'synonym':
+                    if has_accepted:
+                        synonyms_already_linked += 1
+                    else:
+                        synonym_updates.append((tax_id, parent_tax_id))
+                        synonyms_to_link += 1
+                else:
+                    if has_parent:
+                        parents_already_linked += 1
+                    else:
+                        parent_updates.append((tax_id, parent_tax_id))
+                        parents_to_link += 1
+
+        self.stdout.write(f'\nScan complete: {processed:,} rows processed')
+        self.stdout.write(f'Synonyms to link:        {synonyms_to_link:,}')
+        self.stdout.write(f'Synonyms already linked: {synonyms_already_linked:,}')
+        self.stdout.write(f'Parents to link:         {parents_to_link:,}')
+        self.stdout.write(f'Parents already linked:  {parents_already_linked:,}')
+        self.stdout.write(f'Records not in DB:       {not_found:,}')
+        self.stdout.write(f'Parent not in DB:        {parent_not_found:,}')
 
         if dry_run:
-            self.stdout.write(self.style.WARNING('\nDRY RUN - no changes were made'))
-        else:
-            self.stdout.write(self.style.SUCCESS('\n✓ Parent ID linking completed'))
+            self.stdout.write(self.style.WARNING('\nDRY RUN - no changes made'))
+            return
+
+        # Apply updates in chunks using temp table for efficiency
+        if synonym_updates:
+            self.stdout.write(f'\nLinking {len(synonym_updates):,} synonyms...')
+            self._bulk_update_fk(synonym_updates, 'accepted_name_id', chunk_size)
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Linked {len(synonym_updates):,} synonyms'))
+
+        if parent_updates:
+            self.stdout.write(f'\nLinking {len(parent_updates):,} parents...')
+            self._bulk_update_fk(parent_updates, 'parent_id', chunk_size)
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Linked {len(parent_updates):,} parents'))
+
+        self.stdout.write(self.style.SUCCESS('\n✓ Parent ID linking completed'))
+
+    def _find_latest_nameusage_tsv(self):
+        """Find the most recent COL NameUsage.tsv from taxonomy_imports"""
+        import_dir = os.path.join(settings.MEDIA_ROOT, 'taxonomy_imports')
+
+        if not os.path.exists(import_dir):
+            return None
+
+        # Find extracted directories
+        extracted_dirs = glob(os.path.join(import_dir, 'col_*_extracted'))
+        if not extracted_dirs:
+            return None
+
+        # Sort by modification time (newest first)
+        extracted_dirs.sort(key=os.path.getmtime, reverse=True)
+
+        for extract_dir in extracted_dirs:
+            nameusage_path = os.path.join(extract_dir, 'NameUsage.tsv')
+            if os.path.exists(nameusage_path):
+                return nameusage_path
+
+        return None
+
+    def _bulk_update_fk(self, updates, field_name, chunk_size):
+        """Bulk update a foreign key field using a temp table"""
+        with connection.cursor() as cursor:
+            # Disable statement timeout for this long-running operation
+            cursor.execute("SET statement_timeout = 0")
+
+            total = len(updates)
+            updated = 0
+
+            for i in range(0, total, chunk_size):
+                chunk = updates[i:i + chunk_size]
+
+                # Create temp table for this chunk (UUID primary keys)
+                cursor.execute("DROP TABLE IF EXISTS _link_updates")
+                cursor.execute("""
+                    CREATE TEMP TABLE _link_updates (
+                        tax_id UUID PRIMARY KEY,
+                        target_id UUID
+                    )
+                """)
+
+                # Insert chunk data
+                values_sql = ','.join(
+                    cursor.mogrify('(%s,%s)', (tax_id, target_id)).decode()
+                    for tax_id, target_id in chunk
+                )
+                cursor.execute(f'INSERT INTO _link_updates (tax_id, target_id) VALUES {values_sql}')
+
+                # Perform the update
+                cursor.execute(f"""
+                    UPDATE taxonomy_taxonomy AS t
+                    SET {field_name} = u.target_id
+                    FROM _link_updates u
+                    WHERE t.id = u.tax_id
+                """)
+
+                updated += cursor.rowcount
+                self.stdout.write(f'  Progress: {updated:,}/{total:,}')
+
+            # Clean up
+            cursor.execute("DROP TABLE IF EXISTS _link_updates")

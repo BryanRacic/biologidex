@@ -81,7 +81,6 @@ mouse_filter = 2
 [node name="StatusLabel" type="Label" parent="UI/Control/CenterContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 horizontal_alignment = 1
 
 [node name="ScrollContainer" type="ScrollContainer" parent="UI/Control/CenterContainer"]
@@ -93,8 +92,8 @@ size_flags_vertical = 3
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
 mouse_filter = 2
+theme_override_constants/separation = 10
 
 [node name="LoadingOverlay" type="ColorRect" parent="."]
 unique_name_in_owner = true

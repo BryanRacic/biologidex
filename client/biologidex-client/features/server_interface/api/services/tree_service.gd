@@ -7,7 +7,7 @@ const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
 
 ## Debug flag: When enabled, caches tree API responses to res://resources/tree.json
 ## Useful for offline testing. Only works in editor (res:// is read-only in exports).
-const DEBUG_CACHE_TREE_RESPONSE: bool = false
+const DEBUG_CACHE_TREE_RESPONSE: bool = true
 const DEBUG_CACHE_PATH: String = "res://resources/tree.json"
 
 signal tree_loaded(tree_data: TreeDataModels.TreeData)

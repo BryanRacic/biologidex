@@ -135,7 +135,10 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 **Key Models**:
 - **User**: UUID pk, `friend_code` (8-char), `badges` JSONField
 - **Animal**: Taxonomic hierarchy, `creation_index` (sequential), `verified` flag
-- **Taxonomy**: COL data, `source_taxon_id`, hierarchy fields, `accepted_name` FK (often unpopulated)
+- **Taxonomy**: COL data, `source_taxon_id`, hierarchy fields, `accepted_name` FK, `parent` FK
+  - `accepted_name`: For synonyms, points to the accepted taxon (linked via `link_col_parents`)
+  - `parent`: For accepted taxa, points to taxonomic parent (linked via `link_col_parents`)
+  - Without parent linking, synonym lookups won't resolve to accepted names with full hierarchy
 - **NameRelation**: Synonym relationships from COL `NameRelation.tsv` (spelling corrections, basionyms, etc.)
 - **DexEntry**: User↔Animal, `visibility` (private/friends/public), `customizations` JSONField, image fields (original/processed/source_vision_job)
 - **Friendship**: Bidirectional, status (pending/accepted/rejected/blocked), helpers: `are_friends()`, `get_friends()`, `get_friend_ids()`
@@ -232,6 +235,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - Create indexes AFTER Django migrations
 - Migration sync issues: Fake unapply then reapply (`migrate app 0001 --fake` then `migrate app`)
 - Verify schema with `\d table_name` in psql, not just migration status
+- **Bulk operations on large tables** (5M+ rows):
+  - Store IDs only (not ORM objects) in lookup dicts to avoid OOM
+  - Use `SET statement_timeout = 0` for long-running UPDATEs
+  - Use PostgreSQL temp tables + chunked UPDATEs (10k rows/chunk)
+  - Taxonomy table uses UUID primary keys (not INTEGER)
 
 **Godot Web Export**:
 - Single-threaded mode: `variant/thread_support=false`
@@ -249,6 +257,7 @@ python manage.py migrate
 python manage.py runserver
 celery -A biologidex worker -l info
 python manage.py import_col  # Import COL taxonomy + NameRelation data
+python manage.py link_col_parents [--dry-run]  # Link synonym→accepted + parent IDs
 ```
 
 **Prod**:

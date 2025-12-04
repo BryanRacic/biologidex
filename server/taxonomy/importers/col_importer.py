@@ -782,19 +782,39 @@ class CatalogueOfLifeImporter(BaseImporter):
 
         This MUST run after normalize_data() since parent records may not exist
         when child records are processed in the first pass.
+
+        Uses memory-efficient approach:
+        - Stores only IDs in lookup dict (not full ORM objects)
+        - Uses raw SQL with temp tables for bulk updates
         """
-        from taxonomy.models import Taxonomy
+        from django.db import connection
         from taxonomy.raw_models import RawCatalogueOfLife
 
         logger.info("=" * 80)
         logger.info("STEP: LINKING PARENT IDs (synonyms → accepted names)")
         logger.info("=" * 80)
 
-        # Build lookup of COL ID → Taxonomy object
-        logger.info("Building COL ID → Taxonomy lookup...")
+        # Build lookup of COL ID → taxonomy_id (IDs only, not full objects)
+        logger.info("Building COL ID → Taxonomy ID lookup...")
         taxonomy_by_col_id = {}
-        for tax in Taxonomy.objects.filter(source=self.source).only('id', 'source_taxon_id', 'status'):
-            taxonomy_by_col_id[tax.source_taxon_id] = tax
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT source_taxon_id, id
+                FROM taxonomy_taxonomy
+                WHERE source_id = %s
+            """, [self.source.id])
+
+            loaded = 0
+            while True:
+                rows = cursor.fetchmany(50000)
+                if not rows:
+                    break
+                for row in rows:
+                    taxonomy_by_col_id[row[0]] = row[1]
+                loaded += len(rows)
+                if loaded % 1000000 == 0:
+                    logger.info(f"  Loaded {loaded:,} records...")
+
         logger.info(f"Loaded {len(taxonomy_by_col_id):,} taxonomy records for lookup")
 
         # Process raw records that have parent_id set
@@ -807,88 +827,112 @@ class CatalogueOfLifeImporter(BaseImporter):
         total_count = raw_records_with_parent.count()
         logger.info(f"Found {total_count:,} records with parent_id to process")
 
-        # Track statistics
-        synonyms_linked = 0
-        parents_linked = 0
+        # Collect updates as tuples (much more memory efficient than ORM objects)
+        synonym_updates = []  # [(tax_id, accepted_tax_id), ...]
+        parent_updates = []   # [(tax_id, parent_tax_id), ...]
         not_found_count = 0
-        error_count = 0
-
-        batch_size = 5000
-        batch_updates_accepted_name = []
-        batch_updates_parent = []
         processed = 0
         last_log = 0
 
-        for raw in raw_records_with_parent.iterator(chunk_size=batch_size):
-            try:
-                col_id = raw['col_id']
-                parent_id = raw['parent_id']
-                status = raw['status']
+        for raw in raw_records_with_parent.iterator(chunk_size=10000):
+            col_id = raw['col_id']
+            parent_id = raw['parent_id']
+            status = raw['status']
 
-                # Get the taxonomy record for this col_id
-                taxonomy = taxonomy_by_col_id.get(col_id)
-                if not taxonomy:
-                    not_found_count += 1
-                    continue
+            # Get the taxonomy ID for this col_id
+            tax_id = taxonomy_by_col_id.get(col_id)
+            if not tax_id:
+                not_found_count += 1
+                continue
 
-                # Get the parent/accepted taxonomy record
-                parent_taxonomy = taxonomy_by_col_id.get(parent_id)
-                if not parent_taxonomy:
-                    not_found_count += 1
-                    continue
+            # Get the parent/accepted taxonomy ID
+            parent_tax_id = taxonomy_by_col_id.get(parent_id)
+            if not parent_tax_id:
+                not_found_count += 1
+                continue
 
-                # Link based on status
-                if status.lower() == 'synonym':
-                    # For synonyms, parentID = accepted taxon
-                    batch_updates_accepted_name.append(
-                        Taxonomy(id=taxonomy.id, accepted_name_id=parent_taxonomy.id)
-                    )
-                    synonyms_linked += 1
-                else:
-                    # For accepted taxa, parentID = taxonomic parent
-                    batch_updates_parent.append(
-                        Taxonomy(id=taxonomy.id, parent_id=parent_taxonomy.id)
-                    )
-                    parents_linked += 1
+            # Collect update based on status
+            if status.lower() == 'synonym':
+                synonym_updates.append((tax_id, parent_tax_id))
+            else:
+                parent_updates.append((tax_id, parent_tax_id))
 
-                processed += 1
+            processed += 1
 
-                # Bulk update in batches
-                if len(batch_updates_accepted_name) >= batch_size:
-                    Taxonomy.objects.bulk_update(batch_updates_accepted_name, ['accepted_name_id'])
-                    batch_updates_accepted_name = []
+            # Log progress every 500k records
+            if processed - last_log >= 500000:
+                logger.info(
+                    f"Progress: {processed:,}/{total_count:,} scanned, "
+                    f"synonyms: {len(synonym_updates):,}, "
+                    f"parents: {len(parent_updates):,}"
+                )
+                last_log = processed
 
-                if len(batch_updates_parent) >= batch_size:
-                    Taxonomy.objects.bulk_update(batch_updates_parent, ['parent_id'])
-                    batch_updates_parent = []
+        logger.info(f"Scan complete: {processed:,} records processed")
+        logger.info(f"Synonyms to link: {len(synonym_updates):,}")
+        logger.info(f"Parents to link: {len(parent_updates):,}")
 
-                # Log progress every 50k records
-                if processed - last_log >= 50000:
-                    logger.info(
-                        f"Progress: {processed:,}/{total_count:,} processed, "
-                        f"synonyms linked: {synonyms_linked:,}, "
-                        f"parents linked: {parents_linked:,}"
-                    )
-                    last_log = processed
+        # Apply updates using efficient temp table approach
+        chunk_size = 10000
 
-            except Exception as e:
-                error_count += 1
-                if error_count <= 10:
-                    logger.error(f"Error linking {raw.get('col_id', 'unknown')}: {e}")
+        if synonym_updates:
+            logger.info(f"Linking {len(synonym_updates):,} synonyms to accepted names...")
+            self._bulk_update_fk(synonym_updates, 'accepted_name_id', chunk_size)
 
-        # Process remaining batches
-        if batch_updates_accepted_name:
-            Taxonomy.objects.bulk_update(batch_updates_accepted_name, ['accepted_name_id'])
-        if batch_updates_parent:
-            Taxonomy.objects.bulk_update(batch_updates_parent, ['parent_id'])
+        if parent_updates:
+            logger.info(f"Linking {len(parent_updates):,} taxa to parents...")
+            self._bulk_update_fk(parent_updates, 'parent_id', chunk_size)
 
         # Final statistics
         logger.info("=" * 80)
         logger.info("PARENT ID LINKING COMPLETE")
         logger.info("=" * 80)
         logger.info(f"Total processed:       {processed:,}")
-        logger.info(f"Synonyms → accepted:   {synonyms_linked:,}")
-        logger.info(f"Taxa → parent:         {parents_linked:,}")
+        logger.info(f"Synonyms → accepted:   {len(synonym_updates):,}")
+        logger.info(f"Taxa → parent:         {len(parent_updates):,}")
         logger.info(f"Not found (skipped):   {not_found_count:,}")
-        logger.info(f"Errors:                {error_count}")
         logger.info("✓ Parent ID linking completed successfully")
+
+    def _bulk_update_fk(self, updates, field_name, chunk_size):
+        """Bulk update a foreign key field using temp table for efficiency."""
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            # Disable statement timeout for this long-running operation
+            cursor.execute("SET statement_timeout = 0")
+
+            total = len(updates)
+            updated = 0
+
+            for i in range(0, total, chunk_size):
+                chunk = updates[i:i + chunk_size]
+
+                # Create temp table for this chunk (UUID primary keys)
+                cursor.execute("DROP TABLE IF EXISTS _link_updates")
+                cursor.execute("""
+                    CREATE TEMP TABLE _link_updates (
+                        tax_id UUID PRIMARY KEY,
+                        target_id UUID
+                    )
+                """)
+
+                # Insert chunk data
+                values_sql = ','.join(
+                    cursor.mogrify('(%s,%s)', (tax_id, target_id)).decode()
+                    for tax_id, target_id in chunk
+                )
+                cursor.execute(f'INSERT INTO _link_updates (tax_id, target_id) VALUES {values_sql}')
+
+                # Perform the update
+                cursor.execute(f"""
+                    UPDATE taxonomy_taxonomy AS t
+                    SET {field_name} = u.target_id
+                    FROM _link_updates u
+                    WHERE t.id = u.tax_id
+                """)
+
+                updated += cursor.rowcount
+                logger.info(f"  Progress: {updated:,}/{total:,}")
+
+            # Clean up
+            cursor.execute("DROP TABLE IF EXISTS _link_updates")
