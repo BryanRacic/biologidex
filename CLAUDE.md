@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-04)
+## Status (2025-12-05)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -20,6 +20,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Touch-interactive paper background with pan/zoom (all scenes via InteractiveBackground component)
 - ✅ DexRecordImage reusable component with unified API for image display/loading
 - ✅ Dex feed vertical carousel with snap-to-item and pooled DexRecordImage rendering
+- ✅ Social scene with lab book styling, touch scrolling, and copyable friend codes
 
 ---
 
@@ -118,7 +119,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
 
-**Touch-Interactive Background (Updated 2025-12-03)**:
+**Touch-Interactive Background (Updated 2025-12-05)**:
 - **InteractiveBackground** (`features/ui/components/interactive_background/`): Self-contained reusable component
   - `interactive_background.tscn`: Prefab scene - just instance it, no wiring needed
   - `interactive_background.gd`: Auto-connects shader to touch controller signals
@@ -128,6 +129,15 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Inertia**: Momentum-based scrolling with exponential decay after release
 - **Web compatibility**: Uses position-based touch tracking (not index) to work around iOS web bugs
   - GitHub issues: #95941 (iOS index overflow), #94346 (multitouch relative), #3772 (cross-platform)
+- **Optional Scroll Limits** (for bounded scrolling like feeds):
+  - `scroll_limits_enabled`: Enable bounded scrolling with rubber-banding
+  - `scroll_min`/`scroll_max`: Vector2 limits (use INF/-INF for unbounded axes)
+  - `rubber_band_enabled`/`rubber_band_factor`/`rubber_band_max`: Overscroll resistance
+  - `snap_back_lerp`: Speed of snap-back animation when released past limits
+  - `set_scroll_limits(min, max)`: Runtime API to configure limits
+  - `scroll_to(offset, animated)`: Programmatic scrolling
+  - `tap_detected` signal: Emitted when gesture ends without drag (tap on background)
+  - **Zoom behavior**: Bounded mode zooms in-place (no scroll adjustment); infinite canvas keeps cursor point stationary
 - **Project settings** (`project.godot`):
   - `pointing/emulate_touch_from_mouse = true` (desktop testing)
   - `pointing/emulate_mouse_from_touch = true` (mobile buttons work via emulated mouse clicks)
@@ -138,7 +148,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - Buttons receive emulated mouse clicks on mobile, work correctly
 - **Scene integration**: Instance `InteractiveBackground` as first child in UI CanvasLayer
 - **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
-- **Scenes using component**: home, login, create_acct, camera, dex, dex_feed (NOT social, tree)
+- **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social (NOT tree)
 
 **Taxonomic Tree Visualization (Updated 2025-12-04)**:
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
@@ -168,12 +178,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Pinch zoom velocity**: Record pinch center position for velocity calculation to enable inertia after pinch
 - **Reset state completely**: `reset()` must clear `_last_positions` and `_last_times` arrays
 
-**Dex Feed Carousel (Updated 2025-12-04)**:
+**Dex Feed Carousel (Updated 2025-12-05)**:
 - **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization
-- **Location**: `features/dex_feed/` (FeedTouchController, FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
+- **Location**: `features/dex_feed/` (FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
 - **Key Design**: Pool of 5 DexRecordImage instances, recycled as user scrolls for memory efficiency
 - **Components**:
-  - `FeedTouchController`: Free-scroll with inertia, rubber-banding at boundaries, scroll wheel support
+  - `BackgroundTouchController`: Shared with InteractiveBackground, configured with scroll limits for feed
   - `FeedCarouselRenderer`: Pooled DexRecordImage instances with per-entry randomization
   - `dex_feed.gd`: State machine orchestrating sync, filter, and carousel components
 - **State Machine**: IDLE → LOADING → SCROLLING → (back to IDLE or ERROR)
@@ -184,16 +194,43 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `max_rand_offset`: Horizontal offset +/- percentage of width (default: 0.1 = 10%)
   - `max_rand_rotate`: Rotation +/- degrees (default: 8°)
 - **Per-entry Random Caching**: `_entry_randoms` array stores consistent random values per entry
-- **Touch Behavior**:
-  - Free scroll up/down (no snap-to-item)
+- **Touch Behavior** (via BackgroundTouchController with scroll limits):
+  - Free scroll up/down with configurable vertical limits (0 to max_scroll_y)
+  - Horizontal scroll bounded to ±50% of viewport width
   - 10px drag threshold (tap passes through to navigate to dex)
   - Rubber-banding at boundaries with smooth snap-back
   - Scroll wheel support for desktop
 - **Pool Management Pattern** (similar to TreeRenderer):
   - `_active_assignments: Dictionary = {}` tracks {pool_index: data_index}
   - Visibility buffer: scroll_offset ± 0.5-1.5× viewport height
-- **Signals**: `scroll_changed(offset)`, `item_tapped(index)`, `layout_calculated(total_height)`
-- **Deleted files**: `feed_list_item.gd`, `feed_list_item.tscn` (replaced by carousel)
+- **Signals**: FeedCarouselRenderer emits `item_pressed`, `image_ready`, `layout_calculated`
+
+**Social Scene (Updated 2025-12-05)**:
+- **Architecture**: Lab book "table of contents" style with BackgroundTouchController scrolling
+- **Location**: `scenes/social/` (social.gd/tscn), `scenes/social/components/` (friend_list_item, pending_request_item)
+- **Features**:
+  - InteractiveBackground with vertical-only scrolling (zoom disabled)
+  - Copyable friend codes with "Copied!" feedback animation
+  - Friend entries show: username, catches, unique species, copyable friend code, action buttons
+  - Pending requests section (hidden when empty)
+- **Components**:
+  - `friend_list_item.tscn/gd`: Friend entry with stats, copyable code button, View Dex/Tree/Remove buttons
+  - `pending_request_item.tscn/gd`: Pending request with Accept/Reject/Block buttons
+- **State Machine**: IDLE → LOADING → SCROLLING → (back to IDLE)
+
+**ClipboardHelper (Updated 2025-12-05)**:
+- **Location**: `features/ui/components/clipboard/clipboard_helper.gd`
+- **Purpose**: Cross-platform clipboard support (desktop + web)
+- **Usage**:
+  ```gdscript
+  const ClipboardHelper = preload("res://features/ui/components/clipboard/clipboard_helper.gd")
+
+  var success := ClipboardHelper.copy_to_clipboard("text to copy")
+  var text := ClipboardHelper.get_from_clipboard()  # May be empty on web
+  ```
+- **Desktop**: Uses `DisplayServer.clipboard_set()` / `clipboard_get()`
+- **Web**: Uses `JavaScriptBridge.eval()` with `navigator.clipboard.writeText()` + fallback to `execCommand('copy')`
+- **Limitations**: Web clipboard read heavily restricted by browsers; requires user interaction for write
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)

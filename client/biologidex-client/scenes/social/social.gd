@@ -1,57 +1,113 @@
-extends BaseSceneController
-## Social Scene - Manage friends and friend requests
-## Refactored: 443 → ~415 lines (6% reduction)
+extends BaseSceneNode
+## Social Scene - Lab book style friends management with touch scrolling
+## Uses BackgroundTouchController for scroll system similar to DexFeed
 
-# Note: Services (TokenManager, NavigationManager, APIManager)
-# are automatically initialized by BaseSceneController
+const TouchController = preload("res://features/ui/components/interactive_background/background_touch_controller.gd")
+const ClipboardHelper = preload("res://features/ui/components/clipboard/clipboard_helper.gd")
 
-# UI References (back_button, status_label, is_loading inherited from BaseSceneController)
-@onready var refresh_button: Button = $Panel/MarginContainer/VBoxContainer/Header/RefreshButton
-@onready var friend_code_display: LineEdit = $Panel/MarginContainer/VBoxContainer/YourFriendCodeSection/FriendCodeDisplay
-@onready var friend_code_input: LineEdit = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/FriendCodeInput
-@onready var add_button: Button = $Panel/MarginContainer/VBoxContainer/AddFriendSection/InputContainer/AddButton
-@onready var tab_container: TabContainer = $Panel/MarginContainer/VBoxContainer/TabContainer
-@onready var friends_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Friends/FriendsList
-@onready var pending_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/TabContainer/Pending/PendingList
+# State
+enum SocialState { IDLE, LOADING, SCROLLING }
+var _state: SocialState = SocialState.IDLE
+var friends_data: Array = []
+var pending_requests: Array = []
+
+# Touch controller (created dynamically)
+var _touch_controller: TouchController
 
 # Preloaded scenes
 var friend_item_scene = preload("res://scenes/social/components/friend_list_item.tscn")
 var pending_item_scene = preload("res://scenes/social/components/pending_request_item.tscn")
 
-# State (is_loading inherited from BaseSceneController)
-var friends_data: Array = []
-var pending_requests: Array = []
+# UI References
+@onready var refresh_button: Button = get_node("%RefreshButton")
+@onready var friend_code_display: Button = get_node("%FriendCodeDisplay")
+@onready var copy_feedback: Label = get_node("%CopyFeedback")
+@onready var friend_code_input: LineEdit = get_node("%FriendCodeInput")
+@onready var add_button: Button = get_node("%AddButton")
+@onready var content_area: Control = get_node("%ContentArea")
+@onready var scroll_content: VBoxContainer = get_node("%ScrollContent")
+@onready var friends_section: VBoxContainer = get_node("%FriendsSection")
+@onready var friends_list: VBoxContainer = get_node("%FriendsList")
+@onready var pending_section: VBoxContainer = get_node("%PendingSection")
+@onready var pending_header: HBoxContainer = get_node("%PendingHeader")
+@onready var pending_list: VBoxContainer = get_node("%PendingList")
+@onready var loading_overlay: Control = get_node("%LoadingOverlay")
 
 # Confirmation dialog
 var confirmation_dialog: ConfirmationDialog = null
 var pending_removal_friend: Dictionary = {}
 var pending_removal_friendship_id: String = ""
 
+# Copy feedback tween
+var _copy_feedback_tween: Tween = null
+
 
 func _on_scene_ready() -> void:
-	"""Called by BaseSceneController after managers are initialized and auth is checked"""
+	"""Called by BaseSceneNode after managers are initialized and auth is checked"""
 	scene_name = "Social"
-	print("[Social] Scene ready (refactored v2)")
+	print("[Social] Scene ready (lab book style)")
 
-	# Wire up UI elements from scene (BaseSceneController members)
-	back_button = $Panel/MarginContainer/VBoxContainer/Header/BackButton
-	status_label = $Panel/MarginContainer/VBoxContainer/AddFriendSection/StatusLabel
-
-	# Connect UI signals
+	# Wire up back button and status label (inherited from BaseSceneNode)
+	back_button = get_node("%BackButton")
 	back_button.pressed.connect(_on_back_pressed)
+	status_label = get_node("%StatusLabel")
+
+	_setup_ui()
+	await _setup_touch_controller()
+	_setup_confirmation_dialog()
+
+	# Load initial data
+	_load_friend_code()
+	_load_friends()
+	_load_pending_requests()
+
+
+func _setup_ui() -> void:
+	"""Setup UI elements and connect signals"""
 	refresh_button.pressed.connect(_on_refresh_pressed)
 	add_button.pressed.connect(_on_add_button_pressed)
 	friend_code_input.text_submitted.connect(_on_friend_code_submitted)
+	friend_code_display.pressed.connect(_on_own_friend_code_pressed)
 
-	# Create confirmation dialog
-	_setup_confirmation_dialog()
+	# Hide copy feedback initially
+	if copy_feedback:
+		copy_feedback.modulate.a = 0.0
 
-	# Load friend code
-	_load_friend_code()
+	_show_loading(false)
+	_show_status("", true)
 
-	# Load initial data
-	_load_friends()
-	_load_pending_requests()
+
+func _setup_touch_controller() -> void:
+	"""Setup touch controller for scroll system"""
+	# Wait for layout to settle
+	await get_tree().process_frame
+
+	var content_height := content_area.size.y
+	assert(content_height > 0, "Social: ContentArea size must be > 0")
+
+	# Create and configure touch controller
+	_touch_controller = TouchController.new()
+	_touch_controller.name = "TouchController"
+	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
+	_touch_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content_area.add_child(_touch_controller)
+	# Move to back (index 0) so buttons in scroll_content receive events first
+	content_area.move_child(_touch_controller, 0)
+
+	# Configure for vertical-only scrolling
+	_touch_controller.scroll_limits_enabled = true
+	_touch_controller.scroll_min = Vector2(0.0, 0.0)
+	_touch_controller.scroll_max = Vector2(0.0, 0.0)  # Updated when content changes
+	_touch_controller.rubber_band_enabled = true
+	_touch_controller.min_scale = 1.0  # Disable zoom
+	_touch_controller.max_scale = 1.0
+
+	# Connect signals
+	_touch_controller.scroll_changed.connect(_on_scroll_changed)
+	_touch_controller.gesture_started.connect(_on_gesture_started)
+	_touch_controller.gesture_ended.connect(_on_gesture_ended)
+
+	print("[Social] Touch controller setup complete")
 
 
 func _setup_confirmation_dialog() -> void:
@@ -61,6 +117,49 @@ func _setup_confirmation_dialog() -> void:
 	confirmation_dialog.confirmed.connect(_confirm_remove_friend)
 	add_child(confirmation_dialog)
 
+
+# =============================================================================
+# Scroll Handling
+# =============================================================================
+
+func _on_scroll_changed(offset: Vector2) -> void:
+	"""Handle scroll position change"""
+	if scroll_content:
+		scroll_content.position.y = -offset.y
+
+
+func _on_gesture_started() -> void:
+	"""Handle gesture start"""
+	if _state == SocialState.IDLE:
+		_state = SocialState.SCROLLING
+
+
+func _on_gesture_ended() -> void:
+	"""Handle gesture end"""
+	if _state == SocialState.SCROLLING:
+		_state = SocialState.IDLE
+
+
+func _update_scroll_limits() -> void:
+	"""Update max scroll based on content height"""
+	if not _touch_controller or not scroll_content or not content_area:
+		return
+
+	await get_tree().process_frame
+
+	var content_height := scroll_content.size.y
+	var visible_height := content_area.size.y
+	var max_scroll := maxf(0.0, content_height - visible_height)
+
+	_touch_controller.scroll_max.y = max_scroll
+	print("[Social] Scroll limits updated: content=%d, visible=%d, max=%d" % [
+		int(content_height), int(visible_height), int(max_scroll)
+	])
+
+
+# =============================================================================
+# Friend Code
+# =============================================================================
 
 func _load_friend_code() -> void:
 	"""Load the current user's friend code"""
@@ -76,27 +175,43 @@ func _on_friend_code_loaded(response: Dictionary, code: int) -> void:
 			friend_code_display.text = friend_code
 			print("[Social] Friend code loaded: ", friend_code)
 		else:
-			friend_code_display.text = "Error loading code"
+			friend_code_display.text = "Error"
 			print("[Social] ERROR: Friend code empty in response")
 	else:
-		friend_code_display.text = "Error loading code"
+		friend_code_display.text = "Error"
 		var error_msg: String = response.get("error", "Failed to load friend code")
 		print("[Social] ERROR loading friend code: ", error_msg)
 
 
-func _on_back_pressed() -> void:
-	"""Navigate back to previous scene"""
-	print("[Social] Back button pressed")
-	NavigationManager.go_back()
+func _on_own_friend_code_pressed() -> void:
+	"""Copy own friend code to clipboard"""
+	var friend_code: String = friend_code_display.text
+	if friend_code.is_empty() or friend_code == "Error" or friend_code == "Loading...":
+		return
+
+	var success := ClipboardHelper.copy_to_clipboard(friend_code)
+	if success:
+		print("[Social] Copied own friend code: ", friend_code)
+		_show_copy_feedback()
 
 
-func _on_refresh_pressed() -> void:
-	"""Refresh friends and pending requests"""
-	print("[Social] Refresh button pressed")
-	_show_status("Refreshing...", true)
-	_load_friends()
-	_load_pending_requests()
+func _show_copy_feedback() -> void:
+	"""Show 'Copied!' feedback that fades out"""
+	if not copy_feedback:
+		return
 
+	if _copy_feedback_tween and _copy_feedback_tween.is_valid():
+		_copy_feedback_tween.kill()
+
+	copy_feedback.modulate.a = 1.0
+	_copy_feedback_tween = create_tween()
+	_copy_feedback_tween.tween_interval(1.0)
+	_copy_feedback_tween.tween_property(copy_feedback, "modulate:a", 0.0, 0.5)
+
+
+# =============================================================================
+# Add Friend
+# =============================================================================
 
 func _on_add_button_pressed() -> void:
 	"""Handle add friend button press"""
@@ -127,43 +242,46 @@ func _on_friend_request_sent(response: Dictionary, code: int) -> void:
 	add_button.disabled = false
 
 	if code == 200 or code == 201:
-		_show_status("Friend request sent successfully!", true)
+		_show_status("Friend request sent!", true)
 		friend_code_input.text = ""
-		# Refresh lists after short delay
-		await get_tree().create_timer(1.0).timeout
+		await get_tree().create_timer(2.0).timeout
 		_show_status("", true)
 	else:
 		var error_msg: String = response.get("error", "Failed to send friend request")
 		_show_status("Error: %s" % error_msg, false)
 
 
+# =============================================================================
+# Friends List
+# =============================================================================
+
 func _load_friends() -> void:
 	"""Load friends list from API"""
-	if is_loading:
+	if _state == SocialState.LOADING:
 		return
 
-	is_loading = true
+	_state = SocialState.LOADING
+	_show_loading(true)
 	print("[Social] Loading friends list...")
 	APIManager.social.get_friends(_on_friends_loaded)
 
 
 func _on_friends_loaded(response: Dictionary, code: int) -> void:
 	"""Handle friends list response"""
-	is_loading = false
+	_show_loading(false)
 
 	if code != 200:
 		var error_msg: String = response.get("error", "Failed to load friends")
 		print("[Social] ERROR loading friends: ", error_msg)
 		_show_status("Failed to load friends", false)
+		_state = SocialState.IDLE
 		return
 
 	friends_data = response.get("friends", [])
 	print("[Social] Loaded %d friends" % friends_data.size())
 	_populate_friends_list()
-
-	# Clear status if showing refresh message
-	if status_label.text == "Refreshing...":
-		_show_status("", true)
+	_state = SocialState.IDLE
+	_update_scroll_limits()
 
 
 func _populate_friends_list() -> void:
@@ -172,13 +290,13 @@ func _populate_friends_list() -> void:
 	for child in friends_list.get_children():
 		child.queue_free()
 
-	# Show empty state if no friends
+	# Show/hide section based on content
 	if friends_data.size() == 0:
 		var empty_label := Label.new()
-		empty_label.text = "No friends yet. Add your first friend using their friend code!"
+		empty_label.text = "No research partners yet.\nAdd friends using their 8-character code!"
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		empty_label.add_theme_font_size_override("font_size", 48)
 		friends_list.add_child(empty_label)
 		return
 
@@ -193,6 +311,10 @@ func _populate_friends_list() -> void:
 		item.view_tree_requested.connect(_on_view_friend_tree.bind(friend))
 		item.remove_requested.connect(_on_remove_friend.bind(friend))
 
+
+# =============================================================================
+# Pending Requests
+# =============================================================================
 
 func _load_pending_requests() -> void:
 	"""Load pending friend requests from API"""
@@ -210,13 +332,7 @@ func _on_pending_loaded(response: Dictionary, code: int) -> void:
 	pending_requests = response.get("requests", [])
 	print("[Social] Loaded %d pending requests" % pending_requests.size())
 	_populate_pending_list()
-
-	# Update tab badge (if TabContainer supports it)
-	# For now, just update the tab name
-	if pending_requests.size() > 0:
-		tab_container.set_tab_title(1, "Pending (%d)" % pending_requests.size())
-	else:
-		tab_container.set_tab_title(1, "Pending")
+	_update_scroll_limits()
 
 
 func _populate_pending_list() -> void:
@@ -225,14 +341,16 @@ func _populate_pending_list() -> void:
 	for child in pending_list.get_children():
 		child.queue_free()
 
-	# Show empty state if no pending requests
+	# Show/hide section based on content
+	pending_section.visible = pending_requests.size() > 0
+
 	if pending_requests.size() == 0:
-		var empty_label := Label.new()
-		empty_label.text = "No pending friend requests"
-		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		pending_list.add_child(empty_label)
 		return
+
+	# Update header to show count
+	var header_label := pending_header.get_node("Label") as Label
+	if header_label:
+		header_label.text = "Pending Requests (%d)" % pending_requests.size()
 
 	# Add pending request items
 	for request in pending_requests:
@@ -246,6 +364,10 @@ func _populate_pending_list() -> void:
 		item.block_requested.connect(_on_block_request.bind(request))
 
 
+# =============================================================================
+# Friend Actions
+# =============================================================================
+
 func _on_view_friend_dex(friend: Dictionary) -> void:
 	"""Navigate to friend's dex"""
 	var friend_id: String = friend.get("id", "")
@@ -257,7 +379,6 @@ func _on_view_friend_dex(friend: Dictionary) -> void:
 
 	print("[Social] Navigating to dex for friend: ", username)
 
-	# Set navigation context
 	NavigationManager.set_context({
 		"user_id": friend_id,
 		"username": username
@@ -277,8 +398,6 @@ func _on_view_friend_tree(friend: Dictionary) -> void:
 
 	print("[Social] Navigating to tree view for friend: ", username)
 
-	# Set navigation context to use SELECTED mode with just this friend
-	# Note: This shows the current user + this specific friend's entries
 	NavigationManager.set_context({
 		"mode": "selected",
 		"friend_id": friend_id,
@@ -292,9 +411,6 @@ func _on_remove_friend(friend: Dictionary) -> void:
 	"""Show confirmation dialog before removing friend"""
 	pending_removal_friend = friend
 	var username: String = friend.get("username", "this friend")
-
-	# Find friendship ID - need to look through friends_data for the friendship relationship
-	# The API response should include friendship details
 	var friendship_id: String = _get_friendship_id_for_friend(friend)
 
 	if friendship_id.is_empty():
@@ -304,23 +420,13 @@ func _on_remove_friend(friend: Dictionary) -> void:
 
 	pending_removal_friendship_id = friendship_id
 
-	confirmation_dialog.dialog_text = "Remove %s from your friends?\n\nThis action cannot be undone." % username
+	confirmation_dialog.dialog_text = "Remove %s from your research partners?\n\nThis action cannot be undone." % username
 	confirmation_dialog.popup_centered()
 
 
 func _get_friendship_id_for_friend(friend: Dictionary) -> String:
 	"""Extract friendship ID from friend data"""
-	# The friend data structure from the API should include the friendship_id
-	# or we need to derive it from the relationship
-	var friend_id: String = friend.get("id", "")
-
-	# For now, we'll need to store the friendship_id when we load friends
-	# The API returns friends with their details but we need the friendship record ID
-	# This is a limitation - we may need to modify the API response or track it separately
-
-	# Workaround: The friendship ID might be in the response, or we need to query it
-	# For now, return the friend's user ID and we'll handle it in the API call
-	return friend_id
+	return friend.get("id", "")
 
 
 func _confirm_remove_friend() -> void:
@@ -328,11 +434,7 @@ func _confirm_remove_friend() -> void:
 	var username: String = pending_removal_friend.get("username", "friend")
 	print("[Social] Removing friend: ", username)
 
-	_show_status("Removing friend...", true)
-
-	# Note: The unfriend API expects a friendship ID, not user ID
-	# We need to store friendship IDs with friends, or make an additional lookup
-	# For now, we'll pass the user_id and handle the lookup server-side if needed
+	_show_status("Removing...", true)
 	APIManager.social.unfriend(pending_removal_friendship_id, _on_friend_removed)
 
 
@@ -340,9 +442,8 @@ func _on_friend_removed(response: Dictionary, code: int) -> void:
 	"""Handle friend removal response"""
 	if code == 200 or code == 204:
 		var username: String = pending_removal_friend.get("username", "Friend")
-		_show_status("%s has been removed from your friends" % username, true)
+		_show_status("%s removed" % username, true)
 
-		# Refresh the friends list
 		await get_tree().create_timer(1.0).timeout
 		_load_friends()
 		_show_status("", true)
@@ -353,6 +454,10 @@ func _on_friend_removed(response: Dictionary, code: int) -> void:
 	pending_removal_friend = {}
 	pending_removal_friendship_id = ""
 
+
+# =============================================================================
+# Request Actions
+# =============================================================================
 
 func _on_accept_request(request: Dictionary) -> void:
 	"""Accept a friend request"""
@@ -365,7 +470,7 @@ func _on_accept_request(request: Dictionary) -> void:
 		return
 
 	print("[Social] Accepting friend request from: ", username)
-	_show_status("Accepting friend request...", true)
+	_show_status("Accepting...", true)
 
 	APIManager.social.respond_to_request(request_id, "accept", _on_request_responded)
 
@@ -381,7 +486,7 @@ func _on_reject_request(request: Dictionary) -> void:
 		return
 
 	print("[Social] Rejecting friend request from: ", username)
-	_show_status("Rejecting friend request...", true)
+	_show_status("Rejecting...", true)
 
 	APIManager.social.respond_to_request(request_id, "reject", _on_request_responded)
 
@@ -397,7 +502,7 @@ func _on_block_request(request: Dictionary) -> void:
 		return
 
 	print("[Social] Blocking user: ", username)
-	_show_status("Blocking user...", true)
+	_show_status("Blocking...", true)
 
 	APIManager.social.respond_to_request(request_id, "block", _on_request_responded)
 
@@ -405,9 +510,8 @@ func _on_block_request(request: Dictionary) -> void:
 func _on_request_responded(response: Dictionary, code: int) -> void:
 	"""Handle response to friend request"""
 	if code == 200:
-		_show_status("Request processed successfully", true)
+		_show_status("Done", true)
 
-		# Refresh both lists
 		await get_tree().create_timer(1.0).timeout
 		_load_friends()
 		_load_pending_requests()
@@ -417,13 +521,56 @@ func _on_request_responded(response: Dictionary, code: int) -> void:
 		_show_status("Error: %s" % error_msg, false)
 
 
+# =============================================================================
+# Navigation
+# =============================================================================
+
+func _on_back_pressed() -> void:
+	"""Navigate back to previous scene"""
+	print("[Social] Back button pressed")
+	NavigationManager.go_back()
+
+
+func _on_refresh_pressed() -> void:
+	"""Refresh friends and pending requests"""
+	print("[Social] Refresh button pressed")
+	_show_status("Refreshing...", true)
+	_load_friends()
+	_load_pending_requests()
+
+
+# =============================================================================
+# UI Helpers
+# =============================================================================
+
+func _show_loading(should_show: bool) -> void:
+	"""Show or hide loading overlay"""
+	if loading_overlay:
+		loading_overlay.visible = should_show
+
+
 func _show_status(message: String, is_success: bool) -> void:
 	"""Show status message with appropriate color"""
+	if not status_label:
+		return
+
 	status_label.text = message
 
 	if message.is_empty():
 		status_label.modulate = Color.WHITE
-	elif is_success:
-		status_label.modulate = Color.GREEN
+		status_label.visible = false
 	else:
-		status_label.modulate = Color.RED
+		status_label.visible = true
+		if is_success:
+			status_label.modulate = Color(0.2, 0.5, 0.2, 1.0)
+		else:
+			status_label.modulate = Color(0.6, 0.2, 0.2, 1.0)
+
+
+# =============================================================================
+# Cleanup
+# =============================================================================
+
+func _on_scene_exit() -> void:
+	"""Clean up when scene exits"""
+	print("[Social] Scene cleanup")

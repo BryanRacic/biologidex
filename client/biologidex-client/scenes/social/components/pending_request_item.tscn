@@ -1,56 +1,79 @@
-[gd_scene load_steps=2 format=3 uid="uid://cd7u2qv5nxwra"]
+[gd_scene load_steps=3 format=3 uid="uid://cd7u2qv5nxwra"]
 
 [ext_resource type="Script" path="res://scenes/social/components/pending_request_item.gd" id="1_pending_item"]
+[ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="2_theme"]
 
-[node name="PendingRequestItem" type="Panel"]
-custom_minimum_size = Vector2(0, 90)
+[node name="PendingRequestItem" type="Control"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_pending_item")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+mouse_filter = 2
+theme_override_constants/separation = 20
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 15
-
-[node name="InfoContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
+[node name="InfoContainer" type="VBoxContainer" parent="HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 5
+mouse_filter = 2
+theme_override_constants/separation = 4
 
-[node name="UsernameLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+[node name="UsernameLabel" type="Label" parent="HBoxContainer/InfoContainer"]
+unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 56
 text = "Username"
-theme_type_variation = &"HeaderLarge"
 
-[node name="TimeLabel" type="Label" parent="MarginContainer/HBoxContainer/InfoContainer"]
+[node name="TimeLabel" type="Label" parent="HBoxContainer/InfoContainer"]
+unique_name_in_owner = true
 layout_mode = 2
-text = "Requested recently"
+mouse_filter = 2
+theme_override_font_sizes/font_size = 40
+text = "recently"
 
-[node name="ActionsContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer"]
+[node name="ActionsContainer" type="HBoxContainer" parent="HBoxContainer"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="AcceptButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
-custom_minimum_size = Vector2(80, 44)
+[node name="AcceptButton" type="Button" parent="HBoxContainer/ActionsContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 44)
 layout_mode = 2
+theme_override_font_sizes/font_size = 40
 text = "Accept"
 
-[node name="RejectButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
-custom_minimum_size = Vector2(80, 44)
+[node name="RejectButton" type="Button" parent="HBoxContainer/ActionsContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 44)
 layout_mode = 2
+theme_override_font_sizes/font_size = 40
 text = "Reject"
 
-[node name="BlockButton" type="Button" parent="MarginContainer/HBoxContainer/ActionsContainer"]
-custom_minimum_size = Vector2(80, 44)
+[node name="BlockButton" type="Button" parent="HBoxContainer/ActionsContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 44)
 layout_mode = 2
+theme_override_font_sizes/font_size = 40
 text = "Block"
+
+[node name="Separator" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -2.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0, 0, 0, 0.3)

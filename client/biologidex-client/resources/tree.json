@@ -2125,7 +2125,7 @@
 			"verified": true
 		},
 		{
-			"capture_count": 4.0,
+			"capture_count": 5.0,
 			"captured_by_friends": [
 				{
 					"captured_at": "2025-11-21T23:37:22.638726+00:00",
@@ -2447,6 +2447,6 @@
 		"unique_order": 11.0,
 		"unique_phylum": 3.0,
 		"unique_to_user": 1.0,
-		"user_captures": 4.0
+		"user_captures": 5.0
 	}
 }

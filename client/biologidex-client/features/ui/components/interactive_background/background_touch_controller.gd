@@ -7,21 +7,45 @@ extends Control
 ##
 ## IMPORTANT: Uses MOUSE_FILTER_PASS with gesture thresholds to allow taps
 ## to pass through to buttons while capturing drag/pan gestures.
+##
+## Optional scroll limits with rubber-banding for bounded scrolling (e.g., feeds).
 
 signal scroll_changed(offset: Vector2)
 signal scale_changed(new_scale: float)
 signal gesture_started()
 signal gesture_ended()
+signal tap_detected()  # Emitted when gesture ends without drag (tap on background)
 
 # Configuration
+@export_group("Scale")
 @export var min_scale: float = 0.5
 @export var max_scale: float = 4.0
+
+@export_group("Pan")
 @export var pan_sensitivity: float = 1.0
 @export var zoom_sensitivity: float = 0.002
+@export var drag_threshold: float = 10.0  # px movement before considered a drag
+
+@export_group("Inertia")
 @export var inertia_enabled: bool = true
 @export var inertia_decay: float = 5.0  # Higher = faster slowdown
 @export var inertia_stop_threshold: float = 1.0  # px/sec
-@export var drag_threshold: float = 10.0  # px movement before considered a drag
+
+@export_group("Scroll Limits")
+## Enable bounded scrolling with rubber-banding at edges
+@export var scroll_limits_enabled: bool = false
+## Minimum scroll offset (use -INF for unbounded)
+@export var scroll_min: Vector2 = Vector2(-INF, -INF)
+## Maximum scroll offset (use INF for unbounded)
+@export var scroll_max: Vector2 = Vector2(INF, INF)
+## Enable rubber-band effect when scrolling past limits
+@export var rubber_band_enabled: bool = true
+## Resistance factor when past limits (0-1, lower = more resistance)
+@export var rubber_band_factor: float = 0.3
+## Maximum overscroll distance in pixels
+@export var rubber_band_max: float = 100.0
+## Speed of snap-back animation (0-1, higher = faster)
+@export var snap_back_lerp: float = 0.15
 
 # State
 var scroll_offset: Vector2 = Vector2.ZERO
@@ -293,6 +317,9 @@ func _handle_mouse_button(event: InputEventMouseButton) -> bool:
 			var was_drag := _mouse_drag_recognized
 			if _mouse_drag_recognized:
 				_start_inertia()
+			else:
+				# Was a tap, not a drag - emit tap signal
+				tap_detected.emit()
 			_mouse_drag_recognized = false
 			gesture_ended.emit()
 			# Only consume mouse up if we were dragging (not clicking a button)
@@ -327,9 +354,8 @@ func _handle_mouse_motion(event: InputEventMouseMotion) -> bool:
 	# Track for inertia
 	_record_position_sample(event.position)
 
-	# Apply pan
-	scroll_offset -= delta * pan_sensitivity
-	scroll_changed.emit(scroll_offset)
+	# Apply pan (with limits if enabled)
+	_apply_scroll_delta(-delta * pan_sensitivity)
 
 	return true  # Consume motion events once drag is recognized
 
@@ -342,28 +368,39 @@ func _zoom_at_point(point: Vector2, factor: float) -> void:
 	if absf(current_scale - old_scale) < 0.001:
 		return
 
-	# Adjust scroll to keep point stationary
-	var scale_ratio := current_scale / old_scale
-	var point_offset := point - get_viewport_rect().size / 2.0
-	scroll_offset = scroll_offset * scale_ratio + point_offset * (1.0 - scale_ratio)
+	if scroll_limits_enabled:
+		# For bounded scrolling, just clamp to limits - don't adjust scroll position
+		# The "keep point stationary" math causes jumps when scroll_offset is large
+		if is_finite(scroll_min.x) and is_finite(scroll_max.x):
+			scroll_offset.x = clampf(scroll_offset.x, scroll_min.x, scroll_max.x)
+		if is_finite(scroll_min.y) and is_finite(scroll_max.y):
+			scroll_offset.y = clampf(scroll_offset.y, scroll_min.y, scroll_max.y)
+	else:
+		# For infinite canvas, adjust scroll to keep point under cursor stationary
+		var scale_ratio := current_scale / old_scale
+		var point_offset := point - get_viewport_rect().size / 2.0
+		scroll_offset = scroll_offset * scale_ratio + point_offset * (1.0 - scale_ratio)
 
 	scroll_changed.emit(scroll_offset)
 	scale_changed.emit(current_scale)
 
 
 func _process(delta: float) -> void:
-	if not inertia_enabled:
-		return
-
 	# Apply inertia when no active touches
 	if _touch_state.is_empty() and not _mouse_dragging:
-		if _velocity.length() > inertia_stop_threshold:
-			scroll_offset -= _velocity * delta
-			scroll_changed.emit(scroll_offset)
+		if inertia_enabled and _velocity.length() > inertia_stop_threshold:
+			_apply_scroll_delta(-_velocity * delta)
 
 			# Exponential decay
 			_velocity = _velocity.move_toward(Vector2.ZERO, _velocity.length() * inertia_decay * delta)
-		else:
+
+			# If limits enabled and velocity died, check for snap-back
+			if scroll_limits_enabled and _velocity.length() <= inertia_stop_threshold:
+				_snap_back_if_overscrolled()
+		elif scroll_limits_enabled and _is_overscrolled():
+			# No velocity but still overscrolled - continue snap back
+			_snap_back_if_overscrolled()
+		elif _velocity.length() <= inertia_stop_threshold:
 			_velocity = Vector2.ZERO
 
 
@@ -434,3 +471,117 @@ func reset() -> void:
 	_last_times.clear()
 	scroll_changed.emit(scroll_offset)
 	scale_changed.emit(current_scale)
+
+
+# =============================================================================
+# Scroll Limits API
+# =============================================================================
+
+func set_scroll_limits(min_val: Vector2, max_val: Vector2) -> void:
+	"""Set scroll boundaries. Use INF/-INF for unbounded axes."""
+	scroll_min = min_val
+	scroll_max = max_val
+	scroll_limits_enabled = true
+
+
+func scroll_to(offset: Vector2, animated: bool = false) -> void:
+	"""Scroll to a specific offset, optionally animated."""
+	var target := offset
+	if scroll_limits_enabled:
+		target.x = clampf(target.x, scroll_min.x, scroll_max.x)
+		target.y = clampf(target.y, scroll_min.y, scroll_max.y)
+
+	if animated:
+		var tween := create_tween()
+		tween.tween_property(self, "scroll_offset", target, 0.3) \
+			.set_trans(Tween.TRANS_CUBIC) \
+			.set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func(): scroll_changed.emit(scroll_offset))
+	else:
+		scroll_offset = target
+		scroll_changed.emit(scroll_offset)
+
+
+# =============================================================================
+# Scroll Limits Internal
+# =============================================================================
+
+func _apply_scroll_delta(delta: Vector2) -> void:
+	"""Apply scroll delta, with rubber-banding at limits if enabled."""
+	if not scroll_limits_enabled:
+		scroll_offset += delta
+		scroll_changed.emit(scroll_offset)
+		return
+
+	var new_offset := scroll_offset + delta
+
+	# Apply rubber-banding at boundaries
+	if rubber_band_enabled:
+		# X axis
+		if is_finite(scroll_min.x) and new_offset.x < scroll_min.x:
+			new_offset.x = scroll_offset.x + delta.x * rubber_band_factor
+			new_offset.x = maxf(new_offset.x, scroll_min.x - rubber_band_max)
+		elif is_finite(scroll_max.x) and new_offset.x > scroll_max.x:
+			new_offset.x = scroll_offset.x + delta.x * rubber_band_factor
+			new_offset.x = minf(new_offset.x, scroll_max.x + rubber_band_max)
+
+		# Y axis
+		if is_finite(scroll_min.y) and new_offset.y < scroll_min.y:
+			new_offset.y = scroll_offset.y + delta.y * rubber_band_factor
+			new_offset.y = maxf(new_offset.y, scroll_min.y - rubber_band_max)
+		elif is_finite(scroll_max.y) and new_offset.y > scroll_max.y:
+			new_offset.y = scroll_offset.y + delta.y * rubber_band_factor
+			new_offset.y = minf(new_offset.y, scroll_max.y + rubber_band_max)
+	else:
+		# Hard clamp without rubber-banding
+		if is_finite(scroll_min.x):
+			new_offset.x = maxf(new_offset.x, scroll_min.x)
+		if is_finite(scroll_max.x):
+			new_offset.x = minf(new_offset.x, scroll_max.x)
+		if is_finite(scroll_min.y):
+			new_offset.y = maxf(new_offset.y, scroll_min.y)
+		if is_finite(scroll_max.y):
+			new_offset.y = minf(new_offset.y, scroll_max.y)
+
+	scroll_offset = new_offset
+	scroll_changed.emit(scroll_offset)
+
+
+func _is_overscrolled() -> bool:
+	"""Check if currently scrolled past limits."""
+	if not scroll_limits_enabled:
+		return false
+
+	if is_finite(scroll_min.x) and scroll_offset.x < scroll_min.x:
+		return true
+	if is_finite(scroll_max.x) and scroll_offset.x > scroll_max.x:
+		return true
+	if is_finite(scroll_min.y) and scroll_offset.y < scroll_min.y:
+		return true
+	if is_finite(scroll_max.y) and scroll_offset.y > scroll_max.y:
+		return true
+
+	return false
+
+
+func _snap_back_if_overscrolled() -> void:
+	"""Animate back to valid scroll range if overscrolled."""
+	var target := scroll_offset
+
+	# Clamp to valid range
+	if is_finite(scroll_min.x) and scroll_offset.x < scroll_min.x:
+		target.x = scroll_min.x
+	elif is_finite(scroll_max.x) and scroll_offset.x > scroll_max.x:
+		target.x = scroll_max.x
+
+	if is_finite(scroll_min.y) and scroll_offset.y < scroll_min.y:
+		target.y = scroll_min.y
+	elif is_finite(scroll_max.y) and scroll_offset.y > scroll_max.y:
+		target.y = scroll_max.y
+
+	if target != scroll_offset:
+		# Smooth lerp back to valid position
+		scroll_offset = scroll_offset.lerp(target, snap_back_lerp)
+		if scroll_offset.distance_to(target) < 1.0:
+			scroll_offset = target
+		scroll_changed.emit(scroll_offset)

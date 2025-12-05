@@ -1,9 +1,9 @@
 extends BaseSceneNode
 ## Dex Feed - Display friends' dex entries in a touch-driven vertical carousel.
-## Uses FeedTouchController for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
+## Uses BackgroundTouchController for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
 ## Entries are displayed with randomized spacing, size, offset, and rotation for an organic scrapbook feel.
 
-const FeedTouchController = preload("res://features/dex_feed/feed_touch_controller.gd")
+const BackgroundTouchController = preload("res://features/ui/components/interactive_background/background_touch_controller.gd")
 const FeedCarouselRenderer = preload("res://features/dex_feed/feed_carousel_renderer.gd")
 
 # State Management
@@ -15,8 +15,11 @@ var current_filter: String = "all"
 var selected_friend_id: String = ""
 
 # Carousel components (created dynamically)
-var _touch_controller: FeedTouchController
+var _touch_controller: BackgroundTouchController
 var _carousel_renderer: FeedCarouselRenderer
+
+# Feed-specific scroll configuration
+const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizontal scroll
 
 # UI References
 @onready var refresh_button: Button = get_node("%RefreshButton")
@@ -66,16 +69,23 @@ func _setup_carousel_components() -> void:
 	assert(content_width > 0 and content_height > 0, "DexFeed: ContentArea size must be > 0. Ensure layout has settled before setup.")
 
 	# Create and configure touch controller
-	_touch_controller = FeedTouchController.new()
+	_touch_controller = BackgroundTouchController.new()
 	_touch_controller.name = "TouchController"
 	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
 	_touch_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_content_area.add_child(_touch_controller)
 
+	# Configure scroll limits for vertical feed (horizontal has bounded range, vertical set later)
+	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
+	_touch_controller.scroll_limits_enabled = true
+	_touch_controller.scroll_min = Vector2(-horizontal_max, 0.0)
+	_touch_controller.scroll_max = Vector2(horizontal_max, 0.0)  # Y max set in _on_layout_calculated
+	_touch_controller.rubber_band_enabled = true
+
 	# Connect touch controller signals
 	_touch_controller.scroll_changed.connect(_on_scroll_changed)
 	_touch_controller.scale_changed.connect(_on_scale_changed)
-	_touch_controller.item_tapped.connect(_on_item_tapped)
+	_touch_controller.tap_detected.connect(_on_tap_detected)
 	_touch_controller.gesture_started.connect(_on_gesture_started)
 	_touch_controller.gesture_ended.connect(_on_gesture_ended)
 
@@ -247,19 +257,18 @@ func _display_feed() -> void:
 		_show_status("No entries to display", false)
 		_show_empty_state(true, "No entries to display.\n\nYour friends haven't caught any animals yet!")
 		_carousel_renderer.clear()
-		_touch_controller.set_max_scroll(0.0)
+		_touch_controller.scroll_max.y = 0.0  # Reset vertical scroll limit
 		_touch_controller.reset()  # Reset scroll position and scale
 		return
 
 	# Hide empty state
 	_show_empty_state(false)
 
-	# Configure carousel with entries (this triggers layout calculation)
+	# Configure carousel with entries (this triggers layout calculation via layout_calculated signal)
 	_carousel_renderer.set_entries(displayed_entries)
-	_touch_controller.set_total_items(displayed_entries.size())
 
 	# Scroll to top (reset to origin)
-	_touch_controller.scroll_to_offset(Vector2.ZERO, false)
+	_touch_controller.scroll_to(Vector2.ZERO, false)
 
 	_show_status("%d entries" % displayed_entries.size(), true)
 	feed_loaded.emit(displayed_entries.size())
@@ -305,12 +314,14 @@ func _on_layout_calculated(total_height: float) -> void:
 	var visible_height := _content_area.size.y
 	var extra_scroll := visible_height * 0.5
 	var max_scroll := maxf(0.0, total_height - visible_height + extra_scroll)
-	_touch_controller.set_max_scroll(max_scroll)
+
+	# Update vertical scroll limit (keep existing horizontal limits)
+	_touch_controller.scroll_max.y = max_scroll
 	print("[DexFeed] Layout: total_height=%.0f, visible=%.0f, max_scroll=%.0f" % [total_height, visible_height, max_scroll])
 
 
-func _on_item_tapped(index: int) -> void:
-	"""Handle tap on carousel - find which entry was tapped"""
+func _on_tap_detected() -> void:
+	"""Handle tap on carousel background - find which entry was tapped"""
 	# Convert tap to content space and find entry (use Y component of scroll offset)
 	var tap_y := _touch_controller.scroll_offset.y + _content_area.size.y / 2.0
 	var entry_index := _carousel_renderer.get_entry_at_position(tap_y)
