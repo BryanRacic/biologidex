@@ -1,13 +1,13 @@
 extends BaseSceneNode
 ## Dex Feed - Display friends' dex entries in a touch-driven vertical carousel.
 ## Uses FeedTouchController for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
-## Only 3 DexRecordImage instances are ever loaded (previous, current, next).
+## Entries are displayed with randomized spacing, size, offset, and rotation for an organic scrapbook feel.
 
 const FeedTouchController = preload("res://features/dex_feed/feed_touch_controller.gd")
 const FeedCarouselRenderer = preload("res://features/dex_feed/feed_carousel_renderer.gd")
 
 # State Management
-enum FeedState { IDLE, LOADING, SCROLLING, SNAPPING, ERROR }
+enum FeedState { IDLE, LOADING, SCROLLING, ERROR }
 var _state: FeedState = FeedState.IDLE
 var feed_entries: Array[Dictionary] = []
 var displayed_entries: Array[Dictionary] = []
@@ -28,9 +28,7 @@ var _carousel_renderer: FeedCarouselRenderer
 @onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
 
-# Configuration
-const ITEM_HEIGHT_RATIO: float = 0.75  # Item height as percentage of available content area
-const ITEM_MARGIN: float = 20.0        # Vertical margin between items
+# Configuration - item dimensions are now calculated automatically from container width
 
 # Signals
 signal feed_loaded(entry_count: int)
@@ -62,23 +60,20 @@ func _setup_carousel_components() -> void:
 	# Wait for layout to settle
 	await get_tree().process_frame
 
-	# Calculate dimensions
+	# Use actual content area size for proper desktop/wide-screen support
+	var content_width := _content_area.size.x
 	var content_height := _content_area.size.y
-	var item_height := content_height * ITEM_HEIGHT_RATIO
+	assert(content_width > 0 and content_height > 0, "DexFeed: ContentArea size must be > 0. Ensure layout has settled before setup.")
 
 	# Create and configure touch controller
 	_touch_controller = FeedTouchController.new()
 	_touch_controller.name = "TouchController"
-	_touch_controller.item_height = item_height + ITEM_MARGIN
 	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
-	# Make it fill the content area
 	_touch_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_content_area.add_child(_touch_controller)
 
 	# Connect touch controller signals
 	_touch_controller.scroll_changed.connect(_on_scroll_changed)
-	_touch_controller.snap_started.connect(_on_snap_started)
-	_touch_controller.snap_completed.connect(_on_snap_completed)
 	_touch_controller.item_tapped.connect(_on_item_tapped)
 	_touch_controller.gesture_started.connect(_on_gesture_started)
 	_touch_controller.gesture_ended.connect(_on_gesture_ended)
@@ -89,14 +84,15 @@ func _setup_carousel_components() -> void:
 	_carousel_renderer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_carousel_container.add_child(_carousel_renderer)
 
-	# Configure carousel dimensions
-	_carousel_renderer.setup(content_height, item_height, ITEM_MARGIN)
+	# Configure carousel dimensions (item height calculated from width automatically)
+	_carousel_renderer.setup(content_width, content_height)
 
 	# Connect carousel signals
 	_carousel_renderer.item_pressed.connect(_on_view_in_dex)
 	_carousel_renderer.image_ready.connect(_on_image_ready)
+	_carousel_renderer.layout_calculated.connect(_on_layout_calculated)
 
-	print("[DexFeed] Carousel setup complete: content_height=%.0f, item_height=%.0f" % [content_height, item_height])
+	print("[DexFeed] Carousel setup complete: %dx%d" % [int(content_width), int(content_height)])
 
 
 func _connect_sync_signals() -> void:
@@ -250,17 +246,18 @@ func _display_feed() -> void:
 		_show_status("No entries to display", false)
 		_show_empty_state(true, "No entries to display.\n\nYour friends haven't caught any animals yet!")
 		_carousel_renderer.clear()
+		_touch_controller.set_max_scroll(0.0)
 		return
 
 	# Hide empty state
 	_show_empty_state(false)
 
-	# Configure carousel with entries
+	# Configure carousel with entries (this triggers layout calculation)
 	_carousel_renderer.set_entries(displayed_entries)
 	_touch_controller.set_total_items(displayed_entries.size())
 
-	# Scroll to first item
-	_touch_controller.scroll_to_index(0, false)
+	# Scroll to top
+	_touch_controller.scroll_to_offset(0.0, false)
 
 	_show_status("%d entries" % displayed_entries.size(), true)
 	feed_loaded.emit(displayed_entries.size())
@@ -290,45 +287,44 @@ func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
 func _on_scroll_changed(offset: float) -> void:
 	"""Handle scroll position change from touch controller"""
 	if _carousel_renderer:
-		_carousel_renderer.update_scroll(offset, _touch_controller.current_index)
+		_carousel_renderer.update_scroll(offset)
 
 
-func _on_snap_started(target_index: int) -> void:
-	"""Handle snap animation starting"""
-	_set_state(FeedState.SNAPPING)
-
-
-func _on_snap_completed(index: int) -> void:
-	"""Handle snap animation completed"""
-	_set_state(FeedState.IDLE)
-	# Update status with current entry info
-	if index >= 0 and index < displayed_entries.size():
-		var entry: Dictionary = displayed_entries[index]
-		var username: String = entry.get("owner_username", "Unknown")
-		_show_status("%d/%d - %s" % [index + 1, displayed_entries.size(), username], true)
+func _on_layout_calculated(total_height: float) -> void:
+	"""Handle layout calculation complete - set max scroll"""
+	# total_height is now in actual pixels (matching content area)
+	var visible_height := _content_area.size.y
+	var max_scroll := maxf(0.0, total_height - visible_height)
+	_touch_controller.set_max_scroll(max_scroll)
+	print("[DexFeed] Layout: total_height=%.0f, visible=%.0f, max_scroll=%.0f" % [total_height, visible_height, max_scroll])
 
 
 func _on_item_tapped(index: int) -> void:
-	"""Handle tap on carousel item"""
-	if index >= 0 and index < displayed_entries.size():
-		var entry: Dictionary = displayed_entries[index]
+	"""Handle tap on carousel - find which entry was tapped"""
+	# Convert tap to content space and find entry
+	var tap_y := _touch_controller.scroll_offset + _content_area.size.y / 2.0
+	var entry_index := _carousel_renderer.get_entry_at_position(tap_y)
+
+	if entry_index >= 0 and entry_index < displayed_entries.size():
+		var entry: Dictionary = displayed_entries[entry_index]
 		_on_view_in_dex(entry)
 
 
 func _on_gesture_started() -> void:
 	"""Handle gesture start"""
-	if _state == FeedState.IDLE or _state == FeedState.SNAPPING:
+	if _state == FeedState.IDLE:
 		_set_state(FeedState.SCROLLING)
 
 
 func _on_gesture_ended() -> void:
-	"""Handle gesture end - touch controller handles snap automatically"""
-	pass
+	"""Handle gesture end"""
+	if _state == FeedState.SCROLLING:
+		_set_state(FeedState.IDLE)
 
 
 func _on_image_ready(index: int) -> void:
 	"""Handle image loaded for carousel item"""
-	print("[DexFeed] Image ready for entry %d" % index)
+	pass  # Could update status if needed
 
 
 # =============================================================================

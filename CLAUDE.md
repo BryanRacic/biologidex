@@ -169,24 +169,30 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Reset state completely**: `reset()` must clear `_last_positions` and `_last_times` arrays
 
 **Dex Feed Carousel (Updated 2025-12-04)**:
-- **Architecture**: Touch-driven vertical carousel displaying one DexRecordImage at a time
+- **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization
 - **Location**: `features/dex_feed/` (FeedTouchController, FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
-- **Key Design**: Only 3 DexRecordImage instances ever loaded (previous, current, next) for memory efficiency
+- **Key Design**: Pool of 5 DexRecordImage instances, recycled as user scrolls for memory efficiency
 - **Components**:
-  - `FeedTouchController`: Vertical-only scroll with snap-to-item, inertia, rubber-banding at boundaries
-  - `FeedCarouselRenderer`: Pool of 3 DexRecordImage instances, recycled as user scrolls
+  - `FeedTouchController`: Free-scroll with inertia, rubber-banding at boundaries, scroll wheel support
+  - `FeedCarouselRenderer`: Pooled DexRecordImage instances with per-entry randomization
   - `dex_feed.gd`: State machine orchestrating sync, filter, and carousel components
-- **State Machine**: IDLE → LOADING → SCROLLING → SNAPPING → (back to IDLE or ERROR)
+- **State Machine**: IDLE → LOADING → SCROLLING → (back to IDLE or ERROR)
+- **Randomization Export Vars** (configurable in editor):
+  - `min_space`: Minimum vertical spacing between entries (default: 40px)
+  - `max_rand_space`: Additional random spacing 0 to max (default: 80px)
+  - `max_rand_size`: Size variation +/- percentage (default: 0.15 = 15%)
+  - `max_rand_offset`: Horizontal offset +/- percentage of width (default: 0.1 = 10%)
+  - `max_rand_rotate`: Rotation +/- degrees (default: 8°)
+- **Per-entry Random Caching**: `_entry_randoms` array stores consistent random values per entry
 - **Touch Behavior**:
-  - Drag up/down to scroll between entries
+  - Free scroll up/down (no snap-to-item)
   - 10px drag threshold (tap passes through to navigate to dex)
-  - Snap to nearest item after gesture ends or inertia stops
-  - 30% item height threshold determines snap direction
+  - Rubber-banding at boundaries with smooth snap-back
+  - Scroll wheel support for desktop
 - **Pool Management Pattern** (similar to TreeRenderer):
   - `_active_assignments: Dictionary = {}` tracks {pool_index: data_index}
-  - Slots recycled when entries scroll out of view
-  - Visible range: current_index ± 1
-- **Signals**: `scroll_changed(offset)`, `snap_started(index)`, `snap_completed(index)`, `item_tapped(index)`
+  - Visibility buffer: scroll_offset ± 0.5-1.5× viewport height
+- **Signals**: `scroll_changed(offset)`, `item_tapped(index)`, `layout_calculated(total_height)`
 - **Deleted files**: `feed_list_item.gd`, `feed_list_item.tscn` (replaced by carousel)
 
 ### Server (Django)

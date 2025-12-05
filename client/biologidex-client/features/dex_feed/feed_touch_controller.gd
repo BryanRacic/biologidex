@@ -1,37 +1,31 @@
 class_name FeedTouchController
 extends Control
 
-## Handles touch/mouse gestures for vertical carousel scrolling with snap-to-item behavior.
+## Handles touch/mouse gestures for vertical carousel scrolling with free-scroll behavior.
 ## Based on BackgroundTouchController but simplified for 1D vertical navigation.
 ## Designed for web export compatibility across all platforms.
 
 signal scroll_changed(offset: float)      # Vertical scroll offset
-signal snap_started(target_index: int)    # Snap animation beginning
-signal snap_completed(index: int)         # Snap animation finished
 signal item_tapped(index: int)            # Tap on current item
 signal gesture_started()
 signal gesture_ended()
 
 # Configuration
-@export var item_height: float = 600.0    # Height of each carousel item
-@export var snap_threshold: float = 0.3   # % of item height to trigger snap to next
 @export var inertia_enabled: bool = true
 @export var inertia_decay: float = 5.0    # Higher = faster slowdown
-@export var inertia_stop_threshold: float = 50.0  # px/sec before starting snap
-@export var snap_duration: float = 0.25   # Tween duration for snap animation
+@export var inertia_stop_threshold: float = 1.0  # px/sec before stopping
 @export var drag_threshold: float = 10.0  # px movement before considered a drag
 @export var rubber_band_factor: float = 0.3  # Resistance at boundaries
+@export var rubber_band_max: float = 100.0  # Max overscroll in pixels
 
 # State
 var scroll_offset: float = 0.0           # Current scroll position (pixels)
-var current_index: int = 0               # Current centered item index
+var current_index: int = 0               # Approximate current item (for tap detection)
 var total_items: int = 0                 # Total items in feed
+var max_scroll: float = 0.0              # Maximum scroll offset
 
 # Touch tracking
-var _touch_state: Dictionary = {}        # { index: Vector2 position }
-var _touch_start_y: float = 0.0          # Y position where touch began
 var _gesture_recognized: bool = false    # True once movement exceeds threshold
-var _base_scroll: float = 0.0            # Scroll at gesture start
 
 # Inertia
 var _velocity: float = 0.0
@@ -45,10 +39,6 @@ var _mouse_dragging: bool = false
 var _mouse_drag_recognized: bool = false
 var _mouse_start_y: float = 0.0
 var _mouse_last_y: float = 0.0
-
-# Animation state
-var _snap_tween: Tween = null
-var _is_snapping: bool = false
 
 
 func _ready() -> void:
@@ -76,9 +66,7 @@ func _handle_mouse_button(event: InputEventMouseButton) -> bool:
 			_mouse_drag_recognized = false
 			_mouse_start_y = event.position.y
 			_mouse_last_y = event.position.y
-			_base_scroll = scroll_offset
 			_stop_inertia()
-			_cancel_snap()
 			gesture_started.emit()
 			# Don't consume mouse down - let clicks reach items
 			return false
@@ -93,6 +81,14 @@ func _handle_mouse_button(event: InputEventMouseButton) -> bool:
 			_mouse_drag_recognized = false
 			gesture_ended.emit()
 			return was_drag
+
+	# Scroll wheel for scrolling
+	elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+		_apply_scroll_delta(-50.0)
+		return true
+	elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+		_apply_scroll_delta(50.0)
+		return true
 
 	return false
 
@@ -124,44 +120,56 @@ func _handle_mouse_motion(event: InputEventMouseMotion) -> bool:
 func _apply_scroll_delta(delta: float) -> void:
 	"""Apply scroll delta with rubber-banding at boundaries."""
 	var new_offset := scroll_offset + delta
-	var max_offset := float(max(0, total_items - 1)) * item_height
 
 	# Apply rubber band effect at boundaries
 	if new_offset < 0.0:
 		# Past the beginning - apply resistance
 		new_offset = scroll_offset + delta * rubber_band_factor
-		new_offset = maxf(new_offset, -item_height * 0.5)
-	elif new_offset > max_offset:
+		new_offset = maxf(new_offset, -rubber_band_max)
+	elif new_offset > max_scroll:
 		# Past the end - apply resistance
 		new_offset = scroll_offset + delta * rubber_band_factor
-		new_offset = minf(new_offset, max_offset + item_height * 0.5)
+		new_offset = minf(new_offset, max_scroll + rubber_band_max)
 
 	scroll_offset = new_offset
-	_update_current_index()
 	scroll_changed.emit(scroll_offset)
-
-
-func _update_current_index() -> void:
-	"""Update current_index based on scroll position."""
-	if item_height > 0 and total_items > 0:
-		current_index = clampi(roundi(scroll_offset / item_height), 0, total_items - 1)
 
 
 func _process(delta: float) -> void:
 	if not inertia_enabled:
 		return
 
-	# Apply inertia when not dragging and not snapping
-	if not _mouse_dragging and not _is_snapping:
+	# Apply inertia when not dragging
+	if not _mouse_dragging:
 		if absf(_velocity) > inertia_stop_threshold:
 			_apply_scroll_delta(_velocity * delta)
 
 			# Exponential decay
 			_velocity = move_toward(_velocity, 0.0, absf(_velocity) * inertia_decay * delta)
-		elif absf(_velocity) > 0.0:
-			# Velocity dropped below threshold - start snap
-			_velocity = 0.0
-			_start_snap()
+
+			# Rubber band snap-back when velocity dies and we're overscrolled
+			if absf(_velocity) <= inertia_stop_threshold:
+				_snap_back_if_overscrolled()
+		elif scroll_offset < 0.0 or scroll_offset > max_scroll:
+			# Still overscrolled but no velocity - continue snap back
+			_snap_back_if_overscrolled()
+
+
+func _snap_back_if_overscrolled() -> void:
+	"""Animate back to valid scroll range if overscrolled."""
+	var target: float = scroll_offset
+
+	if scroll_offset < 0.0:
+		target = 0.0
+	elif scroll_offset > max_scroll:
+		target = max_scroll
+
+	if target != scroll_offset:
+		# Smooth snap back
+		scroll_offset = lerp(scroll_offset, target, 0.15)
+		if absf(scroll_offset - target) < 1.0:
+			scroll_offset = target
+		scroll_changed.emit(scroll_offset)
 
 
 func _record_position_sample(pos_y: float) -> void:
@@ -207,78 +215,11 @@ func _start_inertia() -> void:
 	_last_positions.clear()
 	_last_times.clear()
 
-	# If velocity is very low, immediately snap
-	if absf(_velocity) <= inertia_stop_threshold:
-		_velocity = 0.0
-		_start_snap()
-
 
 func _stop_inertia() -> void:
 	_velocity = 0.0
 	_last_positions.clear()
 	_last_times.clear()
-
-
-func _start_snap() -> void:
-	"""Snap to nearest item based on current position and velocity."""
-	if total_items == 0:
-		return
-
-	var raw_index := scroll_offset / item_height if item_height > 0 else 0.0
-	var target_index: int
-
-	# Determine snap direction based on position within item
-	var fractional := raw_index - floorf(raw_index)
-
-	if fractional > snap_threshold and fractional < (1.0 - snap_threshold):
-		# In the middle - snap to nearest
-		target_index = roundi(raw_index)
-	elif fractional >= (1.0 - snap_threshold):
-		# Near the next item
-		target_index = ceili(raw_index)
-	else:
-		# Near the current item
-		target_index = floori(raw_index)
-
-	target_index = clampi(target_index, 0, total_items - 1)
-	_animate_to_index(target_index)
-
-
-func _animate_to_index(index: int) -> void:
-	"""Animate scroll to center on specific index."""
-	_cancel_snap()
-	_is_snapping = true
-
-	var target_offset := float(index) * item_height
-	snap_started.emit(index)
-
-	_snap_tween = create_tween()
-	_snap_tween.tween_property(self, "scroll_offset", target_offset, snap_duration) \
-		.set_trans(Tween.TRANS_CUBIC) \
-		.set_ease(Tween.EASE_OUT)
-	_snap_tween.tween_callback(_on_snap_completed.bind(index))
-
-	# Also tween-update scroll_changed signal
-	_snap_tween.parallel().tween_method(_emit_scroll_changed, scroll_offset, target_offset, snap_duration)
-
-
-func _emit_scroll_changed(offset: float) -> void:
-	scroll_offset = offset
-	_update_current_index()
-	scroll_changed.emit(offset)
-
-
-func _on_snap_completed(index: int) -> void:
-	_is_snapping = false
-	current_index = index
-	snap_completed.emit(index)
-
-
-func _cancel_snap() -> void:
-	if _snap_tween and _snap_tween.is_valid():
-		_snap_tween.kill()
-	_snap_tween = null
-	_is_snapping = false
 
 
 # =============================================================================
@@ -288,41 +229,27 @@ func _cancel_snap() -> void:
 func set_total_items(count: int) -> void:
 	"""Set total number of items in the carousel."""
 	total_items = count
-	_update_current_index()
 
 
-func scroll_to_index(index: int, animated: bool = true) -> void:
-	"""Scroll to center on a specific item index."""
-	if total_items == 0:
-		return
+func set_max_scroll(max_val: float) -> void:
+	"""Set the maximum scroll offset (total content height - viewport height)."""
+	max_scroll = maxf(0.0, max_val)
 
-	index = clampi(index, 0, total_items - 1)
+
+func scroll_to_offset(offset: float, animated: bool = false) -> void:
+	"""Scroll to a specific offset."""
+	offset = clampf(offset, 0.0, max_scroll)
 
 	if animated:
-		_animate_to_index(index)
+		# Simple animated scroll
+		var tween := create_tween()
+		tween.tween_property(self, "scroll_offset", offset, 0.3) \
+			.set_trans(Tween.TRANS_CUBIC) \
+			.set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func(): scroll_changed.emit(scroll_offset))
 	else:
-		scroll_offset = float(index) * item_height
-		current_index = index
+		scroll_offset = offset
 		scroll_changed.emit(scroll_offset)
-
-
-func get_visible_range() -> Vector2i:
-	"""Returns (first_visible, last_visible) indices that should be rendered."""
-	if total_items == 0:
-		return Vector2i(-1, -1)
-
-	# Calculate which items are potentially visible
-	# (current - 1) to (current + 1) covers transitions
-	var first := maxi(0, current_index - 1)
-	var last := mini(total_items - 1, current_index + 1)
-
-	return Vector2i(first, last)
-
-
-func get_item_offset(index: int) -> float:
-	"""Get the Y offset for an item at given index relative to scroll position.
-	Returns the position where the item's center should be placed."""
-	return float(index) * item_height - scroll_offset
 
 
 func reset() -> void:
@@ -332,7 +259,6 @@ func reset() -> void:
 	_velocity = 0.0
 	_mouse_dragging = false
 	_mouse_drag_recognized = false
-	_cancel_snap()
 	_last_positions.clear()
 	_last_times.clear()
 	scroll_changed.emit(scroll_offset)
