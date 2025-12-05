@@ -14,8 +14,8 @@ signal gesture_ended()
 
 # Configuration
 @export var inertia_enabled: bool = true
-@export var inertia_decay: float = 5.0      # Higher = faster slowdown
-@export var inertia_stop_threshold: float = 1.0  # px/sec before stopping
+@export var inertia_decay: float = 2.0      # Higher = faster slowdown (lower = more momentum)
+@export var inertia_stop_threshold: float = 0.5  # px/sec before stopping
 @export var drag_threshold: float = 10.0    # px movement before considered a drag
 @export var rubber_band_factor: float = 0.3 # Resistance at boundaries
 @export var rubber_band_max: float = 100.0  # Max overscroll in pixels
@@ -154,27 +154,21 @@ func _handle_pinch_zoom() -> void:
 	var scale_factor := current_distance / _base_pinch_distance
 	var new_scale := clampf(_base_scale * scale_factor, min_scale, max_scale)
 
-	# Calculate pan from pinch center movement
-	var bp1: Vector2 = _base_touch_state[keys[0]]
-	var bp2: Vector2 = _base_touch_state[keys[1]]
-	var base_center := (bp1 + bp2) / 2.0
-	var pan_delta := (current_center - base_center) * pan_sensitivity
-
-	# Apply zoom centered on pinch point
+	# Apply zoom centered on pinch center (no panning during pinch to reduce jitter)
 	var old_scale := current_scale
 	current_scale = new_scale
 
 	# Adjust scroll to zoom toward pinch center
+	var bp1: Vector2 = _base_touch_state[keys[0]]
+	var bp2: Vector2 = _base_touch_state[keys[1]]
+	var base_center := (bp1 + bp2) / 2.0
 	var scale_ratio := current_scale / old_scale
 	var viewport_center := size / 2.0
 	var point_offset := base_center - viewport_center
-	scroll_offset = _base_scroll * scale_ratio + point_offset * (1.0 - scale_ratio) - pan_delta
+	scroll_offset = _base_scroll * scale_ratio + point_offset * (1.0 - scale_ratio)
 
 	# Apply bounds
 	_apply_horizontal_bounds()
-
-	# Record for inertia
-	_record_position_sample(current_center)
 
 	scroll_changed.emit(scroll_offset)
 	scale_changed.emit(current_scale)
@@ -221,6 +215,10 @@ func _handle_mouse_button(event: InputEventMouseButton) -> bool:
 
 func _handle_mouse_motion(event: InputEventMouseMotion) -> bool:
 	if not _mouse_dragging:
+		return false
+
+	# Disable panning when multiple fingers are touching (pinch mode)
+	if _touch_state.size() >= 2:
 		return false
 
 	# Check if drag exceeds threshold (considering both axes)

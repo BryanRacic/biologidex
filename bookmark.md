@@ -1,4 +1,6 @@
 ## TODO
+Fix duplicate touch controllers (tree & dex_feed)
+
 
 ### Essentials
 - dex entries should contain `username` & `catch date`
