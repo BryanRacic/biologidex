@@ -19,6 +19,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Client-side image rotation with post-conversion transformations
 - ✅ Touch-interactive paper background with pan/zoom (all scenes via InteractiveBackground component)
 - ✅ DexRecordImage reusable component with unified API for image display/loading
+- ✅ Dex feed vertical carousel with snap-to-item and pooled DexRecordImage rendering
 
 ---
 
@@ -95,7 +96,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   ```
 - **Key methods**: `set_entry_data()`, `load_image_from_entry()`, `set_texture()`, `set_simple_texture()`, `get_simple_texture()`, `show_bordered()`, `show_simple()`, `copy_simple_to_bordered()`, `update_label_from_data()`, `clear_texture()`, `set_placeholder()`
 - **Signals**: `image_loaded(success: bool)`, `image_load_failed`
-- **Used by**: dex.gd, feed_list_item.gd, tree_dex_image.gd, camera.gd
+- **Used by**: dex.gd, FeedCarouselRenderer, tree_dex_image.gd, camera.gd
 
 **Multi-User Dex (v2.0)**:
 - DexDatabase: User-partitioned storage, auto-migrates v1→v2, image deduplication across users
@@ -166,6 +167,27 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Stop inertia on touch start**: Call `_stop_inertia()` when first finger touches to clear old velocity samples
 - **Pinch zoom velocity**: Record pinch center position for velocity calculation to enable inertia after pinch
 - **Reset state completely**: `reset()` must clear `_last_positions` and `_last_times` arrays
+
+**Dex Feed Carousel (Updated 2025-12-04)**:
+- **Architecture**: Touch-driven vertical carousel displaying one DexRecordImage at a time
+- **Location**: `features/dex_feed/` (FeedTouchController, FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
+- **Key Design**: Only 3 DexRecordImage instances ever loaded (previous, current, next) for memory efficiency
+- **Components**:
+  - `FeedTouchController`: Vertical-only scroll with snap-to-item, inertia, rubber-banding at boundaries
+  - `FeedCarouselRenderer`: Pool of 3 DexRecordImage instances, recycled as user scrolls
+  - `dex_feed.gd`: State machine orchestrating sync, filter, and carousel components
+- **State Machine**: IDLE → LOADING → SCROLLING → SNAPPING → (back to IDLE or ERROR)
+- **Touch Behavior**:
+  - Drag up/down to scroll between entries
+  - 10px drag threshold (tap passes through to navigate to dex)
+  - Snap to nearest item after gesture ends or inertia stops
+  - 30% item height threshold determines snap direction
+- **Pool Management Pattern** (similar to TreeRenderer):
+  - `_active_assignments: Dictionary = {}` tracks {pool_index: data_index}
+  - Slots recycled when entries scroll out of view
+  - Visible range: current_index ± 1
+- **Signals**: `scroll_changed(offset)`, `snap_started(index)`, `snap_completed(index)`, `item_tapped(index)`
+- **Deleted files**: `feed_list_item.gd`, `feed_list_item.tscn` (replaced by carousel)
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)

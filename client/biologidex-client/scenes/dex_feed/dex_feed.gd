@@ -1,24 +1,36 @@
 extends BaseSceneNode
-## Dex Feed - Display friends' dex entries in a chronological feed
-## Uses FriendDexSyncService for centralized sync logic.
+## Dex Feed - Display friends' dex entries in a touch-driven vertical carousel.
+## Uses FeedTouchController for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
+## Only 3 DexRecordImage instances are ever loaded (previous, current, next).
 
-# Constants
-const FEED_ITEM_SCENE = preload("res://scenes/dex_feed/components/feed_list_item.tscn")
+const FeedTouchController = preload("res://features/dex_feed/feed_touch_controller.gd")
+const FeedCarouselRenderer = preload("res://features/dex_feed/feed_carousel_renderer.gd")
 
-# State Management (is_loading inherited from BaseSceneNode)
+# State Management
+enum FeedState { IDLE, LOADING, SCROLLING, SNAPPING, ERROR }
+var _state: FeedState = FeedState.IDLE
 var feed_entries: Array[Dictionary] = []
 var displayed_entries: Array[Dictionary] = []
 var current_filter: String = "all"
 var selected_friend_id: String = ""
 
-# UI References (back_button inherited from BaseSceneNode, set via @export)
+# Carousel components (created dynamically)
+var _touch_controller: FeedTouchController
+var _carousel_renderer: FeedCarouselRenderer
+
+# UI References
 @onready var refresh_button: Button = get_node("%RefreshButton")
 @onready var filter_all_button: Button = get_node("%AllButton")
 @onready var filter_dropdown: OptionButton = get_node("%FriendsDropdown")
-@onready var scroll_container: ScrollContainer = get_node("%ScrollContainer")
-@onready var feed_container: VBoxContainer = get_node("%FeedContainer")
+@onready var _content_area: Control = get_node("%ContentArea")
+@onready var _carousel_container: Control = get_node("%CarouselContainer")
+@onready var _empty_state_label: Label = get_node("%EmptyStateLabel")
 @onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
+
+# Configuration
+const ITEM_HEIGHT_RATIO: float = 0.75  # Item height as percentage of available content area
+const ITEM_MARGIN: float = 20.0        # Vertical margin between items
 
 # Signals
 signal feed_loaded(entry_count: int)
@@ -29,6 +41,7 @@ func _on_scene_ready() -> void:
 	scene_name = "DexFeed"
 
 	_setup_ui()
+	await _setup_carousel_components()
 	_connect_sync_signals()
 	_initialize_feed()
 
@@ -41,6 +54,49 @@ func _setup_ui() -> void:
 
 	_show_loading(false)
 	_show_status("", true)
+	_show_empty_state(false)
+
+
+func _setup_carousel_components() -> void:
+	"""Setup touch controller and carousel renderer"""
+	# Wait for layout to settle
+	await get_tree().process_frame
+
+	# Calculate dimensions
+	var content_height := _content_area.size.y
+	var item_height := content_height * ITEM_HEIGHT_RATIO
+
+	# Create and configure touch controller
+	_touch_controller = FeedTouchController.new()
+	_touch_controller.name = "TouchController"
+	_touch_controller.item_height = item_height + ITEM_MARGIN
+	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
+	# Make it fill the content area
+	_touch_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_content_area.add_child(_touch_controller)
+
+	# Connect touch controller signals
+	_touch_controller.scroll_changed.connect(_on_scroll_changed)
+	_touch_controller.snap_started.connect(_on_snap_started)
+	_touch_controller.snap_completed.connect(_on_snap_completed)
+	_touch_controller.item_tapped.connect(_on_item_tapped)
+	_touch_controller.gesture_started.connect(_on_gesture_started)
+	_touch_controller.gesture_ended.connect(_on_gesture_ended)
+
+	# Create and configure carousel renderer
+	_carousel_renderer = FeedCarouselRenderer.new()
+	_carousel_renderer.name = "CarouselRenderer"
+	_carousel_renderer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_carousel_container.add_child(_carousel_renderer)
+
+	# Configure carousel dimensions
+	_carousel_renderer.setup(content_height, item_height, ITEM_MARGIN)
+
+	# Connect carousel signals
+	_carousel_renderer.item_pressed.connect(_on_view_in_dex)
+	_carousel_renderer.image_ready.connect(_on_image_ready)
+
+	print("[DexFeed] Carousel setup complete: content_height=%.0f, item_height=%.0f" % [content_height, item_height])
 
 
 func _connect_sync_signals() -> void:
@@ -53,10 +109,27 @@ func _connect_sync_signals() -> void:
 
 func _initialize_feed() -> void:
 	"""Initialize the feed by syncing friends' dex entries"""
+	_set_state(FeedState.LOADING)
 	_show_status("Syncing friends...", true)
 	_show_loading(true)
 	FriendDexSyncService.sync_friends()
 
+
+# =============================================================================
+# State Management
+# =============================================================================
+
+func _set_state(new_state: FeedState) -> void:
+	"""Update state machine."""
+	if _state == new_state:
+		return
+	print("[DexFeed] State: %s -> %s" % [FeedState.keys()[_state], FeedState.keys()[new_state]])
+	_state = new_state
+
+
+# =============================================================================
+# Sync Signal Handlers
+# =============================================================================
 
 func _on_friends_data_loaded(friends_data: Dictionary) -> void:
 	"""Handle friends data loaded"""
@@ -65,11 +138,13 @@ func _on_friends_data_loaded(friends_data: Dictionary) -> void:
 	if friends_data.is_empty():
 		_show_status("No friends yet. Add friends to see their catches!", false)
 		_show_loading(false)
-		_display_empty_state()
+		_show_empty_state(true, "No friends yet!\n\nAdd friends to see their catches in the feed.")
+		_set_state(FeedState.IDLE)
 
 
 func _on_sync_started() -> void:
 	"""Handle sync started"""
+	_set_state(FeedState.LOADING)
 	_show_status("Syncing friends' dex entries...", true)
 	_show_loading(true)
 
@@ -81,23 +156,32 @@ func _on_sync_completed(friends_data: Dictionary) -> void:
 
 	if friends_data.is_empty():
 		_show_status("No friends yet. Add friends to see their catches!", false)
-		_display_empty_state()
+		_show_empty_state(true, "No friends yet!\n\nAdd friends to see their catches in the feed.")
+		_set_state(FeedState.IDLE)
 		return
 
 	_show_status("Building feed...", true)
 	_load_feed_entries()
 	_display_feed()
+	_set_state(FeedState.IDLE)
 
 
 func _on_sync_failed(error: String) -> void:
 	"""Handle sync failed"""
 	_show_loading(false)
 	_show_status("Sync failed: %s" % error, false)
+	_set_state(FeedState.ERROR)
 
 	# Still try to display cached data
 	_load_feed_entries()
-	_display_feed()
+	if not feed_entries.is_empty():
+		_display_feed()
+		_set_state(FeedState.IDLE)
 
+
+# =============================================================================
+# Feed Data Management
+# =============================================================================
 
 func _populate_filter_dropdown(friends_data: Dictionary) -> void:
 	"""Populate the filter dropdown with friend names"""
@@ -128,6 +212,7 @@ func _load_feed_entries() -> void:
 
 	# Sort by date (newest first)
 	feed_entries.sort_custom(_sort_by_date_desc)
+	print("[DexFeed] Loaded %d feed entries" % feed_entries.size())
 
 
 func _create_feed_entry(dex_record: Dictionary, owner_id: String, friend_info: Dictionary) -> Dictionary:
@@ -153,28 +238,33 @@ func _sort_by_date_desc(a: Dictionary, b: Dictionary) -> bool:
 	"""Sort feed entries by date (newest first)"""
 	var date_a: String = a.get("updated_at", a.get("catch_date", ""))
 	var date_b: String = b.get("updated_at", b.get("catch_date", ""))
-	return date_a > date_b  # Newest first
+	return date_a > date_b
 
 
 func _display_feed() -> void:
-	"""Display the feed entries based on current filters"""
-	_clear_feed_display()
-
+	"""Display the feed entries using the carousel"""
 	# Apply filters
 	displayed_entries = _apply_filters(feed_entries)
 
 	if displayed_entries.is_empty():
 		_show_status("No entries to display", false)
-		_display_empty_state()
+		_show_empty_state(true, "No entries to display.\n\nYour friends haven't caught any animals yet!")
+		_carousel_renderer.clear()
 		return
 
-	# Display entries
-	print("[DexFeed] Displaying %d entries" % displayed_entries.size())
-	for entry in displayed_entries:
-		_add_feed_item(entry)
+	# Hide empty state
+	_show_empty_state(false)
+
+	# Configure carousel with entries
+	_carousel_renderer.set_entries(displayed_entries)
+	_touch_controller.set_total_items(displayed_entries.size())
+
+	# Scroll to first item
+	_touch_controller.scroll_to_index(0, false)
 
 	_show_status("%d entries" % displayed_entries.size(), true)
 	feed_loaded.emit(displayed_entries.size())
+	print("[DexFeed] Displaying %d entries in carousel" % displayed_entries.size())
 
 
 func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
@@ -193,38 +283,57 @@ func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
 	return entries.duplicate()
 
 
-func _add_feed_item(entry: Dictionary) -> void:
-	"""Add a feed item to the display"""
-	var item = FEED_ITEM_SCENE.instantiate()
-	feed_container.add_child(item)
-	item.setup(entry)
+# =============================================================================
+# Touch Controller Signal Handlers
+# =============================================================================
 
-	# Connect signals
-	item.item_pressed.connect(_on_view_in_dex)
-
-
-func _clear_feed_display() -> void:
-	"""Clear all feed items from the display"""
-	for child in feed_container.get_children():
-		child.queue_free()
+func _on_scroll_changed(offset: float) -> void:
+	"""Handle scroll position change from touch controller"""
+	if _carousel_renderer:
+		_carousel_renderer.update_scroll(offset, _touch_controller.current_index)
 
 
-func _display_empty_state() -> void:
-	"""Display empty state message"""
-	var empty_label := Label.new()
+func _on_snap_started(target_index: int) -> void:
+	"""Handle snap animation starting"""
+	_set_state(FeedState.SNAPPING)
 
-	if not FriendDexSyncService.has_friends():
-		empty_label.text = "No friends yet!\n\nAdd friends to see their catches in the feed."
-	else:
-		empty_label.text = "No entries to display.\n\nYour friends haven't caught any animals yet!"
 
-	empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	empty_label.custom_minimum_size = Vector2(400, 200)
+func _on_snap_completed(index: int) -> void:
+	"""Handle snap animation completed"""
+	_set_state(FeedState.IDLE)
+	# Update status with current entry info
+	if index >= 0 and index < displayed_entries.size():
+		var entry: Dictionary = displayed_entries[index]
+		var username: String = entry.get("owner_username", "Unknown")
+		_show_status("%d/%d - %s" % [index + 1, displayed_entries.size(), username], true)
 
-	feed_container.add_child(empty_label)
 
+func _on_item_tapped(index: int) -> void:
+	"""Handle tap on carousel item"""
+	if index >= 0 and index < displayed_entries.size():
+		var entry: Dictionary = displayed_entries[index]
+		_on_view_in_dex(entry)
+
+
+func _on_gesture_started() -> void:
+	"""Handle gesture start"""
+	if _state == FeedState.IDLE or _state == FeedState.SNAPPING:
+		_set_state(FeedState.SCROLLING)
+
+
+func _on_gesture_ended() -> void:
+	"""Handle gesture end - touch controller handles snap automatically"""
+	pass
+
+
+func _on_image_ready(index: int) -> void:
+	"""Handle image loaded for carousel item"""
+	print("[DexFeed] Image ready for entry %d" % index)
+
+
+# =============================================================================
+# Navigation
+# =============================================================================
 
 func _on_view_in_dex(entry: Dictionary) -> void:
 	"""Navigate to the friend's dex to view the full entry"""
@@ -255,6 +364,10 @@ func _on_back_pressed() -> void:
 	NavigationManager.go_back()
 
 
+# =============================================================================
+# Filter Handlers
+# =============================================================================
+
 func _on_refresh_pressed() -> void:
 	"""Refresh the feed by re-syncing all friends"""
 	print("[DexFeed] Refresh button pressed")
@@ -282,10 +395,15 @@ func _on_filter_dropdown_selected(index: int) -> void:
 	var friend_id = filter_dropdown.get_item_metadata(index)
 	if friend_id is String and not friend_id.is_empty():
 		var username: String = FriendDexSyncService.get_friend_username(friend_id)
+		print("[DexFeed] Filter: %s" % username)
 		current_filter = "friend"
 		selected_friend_id = friend_id
 		_display_feed()
 
+
+# =============================================================================
+# UI Helpers
+# =============================================================================
 
 func _show_loading(visible: bool) -> void:
 	"""Show or hide loading overlay"""
@@ -309,3 +427,30 @@ func _show_status(message: String, is_success: bool) -> void:
 			_feed_status_label.modulate = Color.GREEN
 		else:
 			_feed_status_label.modulate = Color.RED
+
+
+func _show_empty_state(visible: bool, message: String = "") -> void:
+	"""Show or hide empty state message"""
+	if _empty_state_label:
+		_empty_state_label.visible = visible
+		if visible and not message.is_empty():
+			_empty_state_label.text = message
+
+
+# =============================================================================
+# Cleanup
+# =============================================================================
+
+func _on_scene_exit() -> void:
+	"""Clean up when scene exits"""
+	# Disconnect sync signals
+	if FriendDexSyncService.sync_started.is_connected(_on_sync_started):
+		FriendDexSyncService.sync_started.disconnect(_on_sync_started)
+	if FriendDexSyncService.sync_completed.is_connected(_on_sync_completed):
+		FriendDexSyncService.sync_completed.disconnect(_on_sync_completed)
+	if FriendDexSyncService.sync_failed.is_connected(_on_sync_failed):
+		FriendDexSyncService.sync_failed.disconnect(_on_sync_failed)
+	if FriendDexSyncService.friends_loaded.is_connected(_on_friends_data_loaded):
+		FriendDexSyncService.friends_loaded.disconnect(_on_friends_data_loaded)
+
+	print("[DexFeed] Scene cleanup complete")
