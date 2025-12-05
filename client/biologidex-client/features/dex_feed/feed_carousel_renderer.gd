@@ -2,7 +2,7 @@ class_name FeedCarouselRenderer
 extends Control
 
 ## Manages a pool of DexRecordImage instances for efficient carousel rendering.
-## Only 3 images are ever loaded at once (previous, current, next).
+## Supports 2D scrolling with horizontal offset and zoom scaling.
 ## Applies randomization to spacing, size, offset, and rotation for organic scrapbook feel.
 
 signal image_ready(index: int)
@@ -55,13 +55,14 @@ enum SlotState { EMPTY, LOADING, READY, ERROR }
 const DEFAULT_ASPECT_RATIO: float = 1.33
 
 var _entries: Array[Dictionary] = []
-var _scroll_offset: float = 0.0
+var _scroll_offset: Vector2 = Vector2.ZERO  # 2D scroll offset
+var _current_scale: float = 1.0             # Zoom scale factor
 
 # Per-entry random values (cached so they stay consistent)
 # Each entry: { "spacing": float, "size_mult": float, "x_offset": float, "rotation": float }
 var _entry_randoms: Array[Dictionary] = []
 
-# Computed layout positions (Y position of each entry's top edge)
+# Computed layout positions (Y position of each entry's top edge in content space)
 var _entry_positions: Array[float] = []
 var _total_content_height: float = 0.0
 
@@ -111,9 +112,10 @@ func set_entries(entries: Array[Dictionary]) -> void:
 	print("[FeedCarouselRenderer] Set %d entries, total height=%.0f" % [entries.size(), _total_content_height])
 
 
-func update_scroll(offset: float) -> void:
-	"""Update based on scroll position. Called by touch controller."""
+func update_scroll(offset: Vector2, scale: float = 1.0) -> void:
+	"""Update based on scroll position and scale. Called by touch controller."""
 	_scroll_offset = offset
+	_current_scale = scale
 
 	if _entries.is_empty():
 		return
@@ -156,6 +158,8 @@ func clear() -> void:
 	_entry_randoms.clear()
 	_entry_positions.clear()
 	_total_content_height = 0.0
+	_scroll_offset = Vector2.ZERO
+	_current_scale = 1.0
 	_clear_all_assignments()
 
 
@@ -237,12 +241,14 @@ func _get_entry_width(index: int) -> float:
 # =============================================================================
 
 func _get_visible_indices() -> Array[int]:
-	"""Determine which entry indices are currently visible."""
+	"""Determine which entry indices are currently visible (accounting for scale)."""
 	var visible: Array[int] = []
 
-	# View bounds with buffer (half screen above, 1.5 screens below)
-	var view_top := _scroll_offset - size.y * 0.5
-	var view_bottom := _scroll_offset + size.y * 1.5
+	# View bounds in content space with buffer
+	# Larger buffer when zoomed out (more items visible), smaller when zoomed in
+	var buffer_factor := 1.5 / _current_scale
+	var view_top := _scroll_offset.y - size.y * buffer_factor
+	var view_bottom := _scroll_offset.y + size.y * (1.0 + buffer_factor)
 
 	for i in range(_entry_positions.size()):
 		var entry_top: float = _entry_positions[i]
@@ -265,13 +271,16 @@ func _update_pool_assignments(visible_indices: Array[int]) -> void:
 	var slots_to_reassign: Array[int] = []
 	var indices_needing_slots: Array[int] = visible_indices.duplicate()
 
-	# Check current assignments
-	for pool_idx in _active_assignments:
-		var current_data_idx: int = _active_assignments[pool_idx]
+	# Check current assignments - need to iterate over a copy since we modify the dict
+	var current_assignments := _active_assignments.duplicate()
+	for pool_idx in current_assignments:
+		var current_data_idx: int = current_assignments[pool_idx]
 		if current_data_idx in visible_indices:
 			indices_needing_slots.erase(current_data_idx)
 		else:
+			# Entry is no longer visible - free this slot
 			slots_to_reassign.append(pool_idx)
+			_active_assignments.erase(pool_idx)  # Remove the stale assignment
 			# Hide the image being recycled
 			_image_pool[pool_idx].visible = false
 
@@ -316,7 +325,9 @@ func _assign_entry_to_slot(data_idx: int, pool_idx: int) -> void:
 
 
 func _position_active_images() -> void:
-	"""Position all active images based on current scroll offset and randomization."""
+	"""Position all active images based on current scroll offset, scale, and randomization."""
+	var viewport_center := size / 2.0
+
 	for pool_idx in _active_assignments:
 		var data_idx: int = _active_assignments[pool_idx]
 		var img: DexRecordImage = _image_pool[pool_idx]
@@ -324,38 +335,52 @@ func _position_active_images() -> void:
 		if data_idx >= _entry_positions.size():
 			continue
 
-		# Get entry's Y position (in actual pixels)
+		# Get entry's Y position in content space
 		var entry_y: float = _entry_positions[data_idx]
 
-		# Convert to screen space: entry position minus scroll offset
-		var screen_y := entry_y - _scroll_offset
-
-		# Get dimensions (already in actual pixels from _get_entry_* functions)
+		# Get base dimensions (in content space)
 		var entry_width := _get_entry_width(data_idx)
 		var entry_height := _get_entry_height(data_idx)
 
-		# Get random offset (as ratio of container width)
+		# Get random offset (as ratio of container width) and rotation
 		var x_offset_ratio := 0.0
 		var rotation := 0.0
 		if data_idx < _entry_randoms.size():
 			x_offset_ratio = _entry_randoms[data_idx].x_offset
 			rotation = _entry_randoms[data_idx].rotation
 
-		# Calculate X position (centered with random offset)
-		var base_x := (size.x - entry_width) / 2.0
-		var x_offset_px := x_offset_ratio * size.x
-		var final_x := base_x + x_offset_px
+		# Content space: X=0 is horizontal center, Y=0 is top
+		# Random X offset from center
+		var content_x := x_offset_ratio * size.x
+		var content_y := entry_y + entry_height / 2.0
+
+		# Create content-space center position for this entry
+		var content_pos := Vector2(content_x, content_y)
+
+		# Transform to screen space:
+		# - Subtract scroll_offset (panning)
+		# - Multiply by scale (zooming)
+		# - Add viewport_center (screen origin is top-left, we want center-based positioning)
+		var screen_center := (content_pos - _scroll_offset) * _current_scale + viewport_center
+
+		# Apply scale to dimensions
+		var scaled_width := entry_width * _current_scale
+		var scaled_height := entry_height * _current_scale
+
+		# Calculate final screen position (top-left corner)
+		var screen_x := screen_center.x - scaled_width / 2.0
+		var screen_y := screen_center.y - scaled_height / 2.0
 
 		# Apply position and size
-		img.position = Vector2(final_x, screen_y)
-		img.custom_minimum_size = Vector2(entry_width, entry_height)
-		img.size = Vector2(entry_width, entry_height)
+		img.position = Vector2(screen_x, screen_y)
+		img.custom_minimum_size = Vector2(scaled_width, scaled_height)
+		img.size = Vector2(scaled_width, scaled_height)
 
 		# DON'T override ratio - let DexRecordImage set it from loaded image
 		# The AspectRatioContainer will constrain content to the image's natural ratio
 
-		# Apply rotation (around center)
-		img.pivot_offset = Vector2(entry_width / 2.0, entry_height / 2.0)
+		# Apply rotation (around center) and scale
+		img.pivot_offset = Vector2(scaled_width / 2.0, scaled_height / 2.0)
 		img.rotation_degrees = rotation
 
 
