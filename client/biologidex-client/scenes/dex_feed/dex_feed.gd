@@ -14,9 +14,10 @@ var displayed_entries: Array[Dictionary] = []
 var current_filter: String = "all"
 var selected_friend_id: String = ""
 
-# Carousel components (created dynamically)
-var _touch_controller: BackgroundTouchController
-var _carousel_renderer: FeedCarouselRenderer
+# Carousel components
+var _touch_controller: BackgroundTouchController  # Created dynamically in content area
+var _carousel_renderer: FeedCarouselRenderer  # Created dynamically
+var _bg_shader_material: ShaderMaterial  # For syncing background scroll
 
 # Feed-specific scroll configuration
 const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizontal scroll
@@ -30,6 +31,7 @@ const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizon
 @onready var _empty_state_label: Label = get_node("%EmptyStateLabel")
 @onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
+@onready var _interactive_bg: Control = $UI/InteractiveBackground
 
 # Configuration - item dimensions are now calculated automatically from container width
 
@@ -68,7 +70,13 @@ func _setup_carousel_components() -> void:
 	var content_height := _content_area.size.y
 	assert(content_width > 0 and content_height > 0, "DexFeed: ContentArea size must be > 0. Ensure layout has settled before setup.")
 
-	# Create and configure touch controller
+	# Get shader material from InteractiveBackground to sync scroll
+	if _interactive_bg:
+		var bg_rect: ColorRect = _interactive_bg.get_node_or_null("Background")
+		if bg_rect and bg_rect.material is ShaderMaterial:
+			_bg_shader_material = bg_rect.material as ShaderMaterial
+
+	# Create and configure touch controller in content area
 	_touch_controller = BackgroundTouchController.new()
 	_touch_controller.name = "TouchController"
 	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -81,6 +89,10 @@ func _setup_carousel_components() -> void:
 	_touch_controller.scroll_min = Vector2(-horizontal_max, 0.0)
 	_touch_controller.scroll_max = Vector2(horizontal_max, 0.0)  # Y max set in _on_layout_calculated
 	_touch_controller.rubber_band_enabled = true
+
+	# Disable zoom for feed (vertical scroll only)
+	_touch_controller.min_scale = 1.0
+	_touch_controller.max_scale = 1.0
 
 	# Connect touch controller signals
 	_touch_controller.scroll_changed.connect(_on_scroll_changed)
@@ -299,12 +311,18 @@ func _on_scroll_changed(offset: Vector2) -> void:
 	"""Handle scroll position change from touch controller"""
 	if _carousel_renderer:
 		_carousel_renderer.update_scroll(offset, _touch_controller.current_scale)
+	# Sync background shader
+	if _bg_shader_material:
+		_bg_shader_material.set_shader_parameter("scroll", offset)
 
 
 func _on_scale_changed(scale: float) -> void:
 	"""Handle scale change from touch controller"""
 	if _carousel_renderer:
 		_carousel_renderer.update_scroll(_touch_controller.scroll_offset, scale)
+	# Sync background shader
+	if _bg_shader_material:
+		_bg_shader_material.set_shader_parameter("scale", scale)
 
 
 func _on_layout_calculated(total_height: float) -> void:

@@ -1,7 +1,8 @@
 shader_type canvas_item;
 
-uniform vec2 scroll = vec2(0.0); // pixel scroll offset (driven by script)
-uniform float scale : hint_range(0.5, 4.0) = 1.0; // zoom multiplier (driven by script)
+uniform vec2 scroll = vec2(0.0); // world-space scroll offset (driven by script)
+uniform float scale : hint_range(0.1, 10.0) = 1.0; // zoom multiplier (driven by script)
+uniform vec2 viewport_size = vec2(1280.0, 720.0); // viewport dimensions (driven by script)
 
 uniform float grid_scale : hint_range(8.0, 64.0, 0.5) = 24.0;    // px per cell
 uniform float line_px    : hint_range(0.5, 3.0, 0.1) = 1.0;      // px line width
@@ -60,12 +61,13 @@ mat2 rot(float a){
 }
 
 void fragment() {
-    // Apply scale to coordinates - dividing zooms in, scroll adjusted for consistent pan speed
-    vec2 scaled_scroll = scroll / scale;
-    vec2 px = (FRAGCOORD.xy / scale) + scaled_scroll;
+    // Convert screen coordinates to world coordinates
+    // This ensures the shader background moves in perfect sync with UI elements
+    // Formula: world = (screen - viewport_center) / scale + scroll
+    vec2 px = (FRAGCOORD.xy - viewport_size / 2.0) / scale + scroll;
 
-    // Keep grid lines same screen-width at all zoom levels
-    float scaled_line = line_px / scale;
+    // Line width in world units - scales with zoom like real paper
+    float scaled_line = line_px;
 
     // -----------------------
     // Base paper noise

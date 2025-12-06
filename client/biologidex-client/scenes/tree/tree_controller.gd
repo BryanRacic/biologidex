@@ -194,6 +194,10 @@ func _setup_touch_controller() -> void:
 	_scroll_offset = touch_controller.scroll_offset
 	_current_scale = touch_controller.current_scale
 
+	# Emit signals to sync shader with initial state
+	touch_controller.scroll_changed.emit(_scroll_offset)
+	touch_controller.scale_changed.emit(_current_scale)
+
 	print("[TreeController] Touch controller connected (initial scale: %.1f)" % _current_scale)
 
 
@@ -245,12 +249,14 @@ func _on_scroll_changed(offset: Vector2) -> void:
 	"""Handle scroll offset changes from touch controller."""
 	_scroll_offset = offset
 	_update_tree_transform()
+	print("[TreeController] scroll=%s, viewport_center=%s" % [_scroll_offset, _viewport_center])
 
 
 func _on_scale_changed(new_scale: float) -> void:
 	"""Handle scale changes from touch controller."""
 	_current_scale = new_scale
 	_update_tree_transform()
+	print("[TreeController] scale=%.2f" % _current_scale)
 
 
 func _update_tree_transform() -> void:

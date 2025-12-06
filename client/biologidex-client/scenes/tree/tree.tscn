@@ -67,14 +67,16 @@ text = "<<"
 
 [node name="SearchBar" type="LineEdit" parent="UILayer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 44)
+visible = false
+custom_minimum_size = Vector2(80, 44)
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "Search animals..."
+placeholder_text = "Search..."
 
 [node name="ModeDropdown" type="OptionButton" parent="UILayer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 44)
+visible = false
+custom_minimum_size = Vector2(60, 44)
 layout_mode = 2
 
 [node name="ZoomControls" type="HBoxContainer" parent="UILayer/Control/VBoxContainer/Header"]
@@ -84,25 +86,25 @@ theme_override_constants/separation = 5
 
 [node name="ZoomInButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(44, 44)
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 text = "+"
 
 [node name="ZoomOutButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(44, 44)
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 text = "-"
 
 [node name="ZoomResetButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(44, 44)
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 text = "○"
 
 [node name="CenterButton" type="Button" parent="UILayer/Control/VBoxContainer/Header/ZoomControls"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(44, 44)
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 tooltip_text = "Center on root"
 text = "◎"

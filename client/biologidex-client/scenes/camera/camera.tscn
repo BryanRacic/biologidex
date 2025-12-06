@@ -1,8 +1,8 @@
 [gd_scene load_steps=5 format=3 uid="uid://b12e8gabmy5f0"]
 
 [ext_resource type="Script" uid="uid://cc3lv4isgvhri" path="res://scenes/camera/camera.gd" id="1_camera"]
-[ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
 [ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="3_intbg"]
+[ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="5_4ph7v"]
 
 [node name="Camera" type="Node2D" node_paths=PackedStringArray("back_button", "status_label", "loading_spinner")]
@@ -69,7 +69,6 @@ alignment = 1
 [node name="InstructionLabel" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -79,8 +78,6 @@ autowrap_mode = 3
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 
 [node name="RotateImageButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
@@ -103,7 +100,6 @@ text = "Select Photo"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "currentstatus"
 horizontal_alignment = 1
@@ -112,7 +108,6 @@ autowrap_mode = 3
 [node name="ResultLabel" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -121,7 +116,6 @@ autowrap_mode = 3
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 
@@ -157,7 +151,6 @@ text = "Manual Entry"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Processing..."
 horizontal_alignment = 1
