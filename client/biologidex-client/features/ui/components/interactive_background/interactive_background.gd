@@ -51,14 +51,6 @@ func _on_scale_changed(new_scale: float) -> void:
 	print("[InteractiveBackground] scale=%.2f" % new_scale)
 
 
-func _update_viewport_size() -> void:
-	"""Update shader with current viewport dimensions for world-space coordinate conversion."""
-	if _shader_material:
-		var vp_size = get_viewport_rect().size
-		_shader_material.set_shader_parameter("viewport_size", vp_size)
-		print("[InteractiveBackground] viewport_size=%s" % vp_size)
-
-
 func reset() -> void:
 	"""Reset scroll and scale to defaults."""
 	touch_controller.reset()

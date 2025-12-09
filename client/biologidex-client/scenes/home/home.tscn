@@ -98,6 +98,14 @@ theme = ExtResource("4_vut6t")
 theme_override_font_sizes/font_size = 124
 text = "Lineage Tree"
 
+[node name="TreeCameraButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 44)
+layout_mode = 2
+theme = ExtResource("4_vut6t")
+theme_override_font_sizes/font_size = 124
+text = "Tree (Camera2D)"
+
 [node name="SocialButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 44)

@@ -172,6 +172,46 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - Extended positions stored in `extended_positions` dictionary, edges draw to extended endpoints
 - **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data)
 
+**Tree Camera Scene (Updated 2025-12-09)** (Camera2D-based tree - WORKING):
+- **Purpose**: Tree visualization using Camera2D for **perfect background/foreground sync** (solves the parallax drift issue)
+- **Location**: `scenes/tree_camera/` (tree_camera.tscn, tree_camera_controller.gd)
+- **Architecture**:
+  - `Camera2D`: Single source of truth for view transform (position, zoom)
+  - `TreeCameraController` (`features/tree/camera_controller.gd`): Pan/zoom/touch handling with smooth animations
+  - `paper_camera.gdshader`: Computes world coords in vertex shader, Godot handles camera transform
+  - `WorldContent` (Node2D): Contains background + tree graph, transforms with camera automatically
+- **Why It Works**:
+  - Camera2D transforms ALL Node2D children uniformly (both background and tree nodes)
+  - Shader passes world coordinates via `varying`, fragment shader uses them for procedural texture
+  - Background is `Polygon2D` (Node2D-based), NOT `ColorRect` (Control) - Camera2D only transforms Node2D!
+  - No manual coordinate conversion needed - everything stays in world space
+- **Critical Implementation Details**:
+  - Background MUST be `Polygon2D` or `Sprite2D` (Node2D), NOT `ColorRect` (Control won't transform with Camera2D)
+  - Shader does NOT use `skip_vertex_transform` - let Godot handle the transform chain
+  - Vertex shader: `world_coord = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy` to capture world position
+  - Fragment shader uses interpolated `world_coord` for procedural texturing
+- **Scene Structure**:
+  ```
+  TreeCamera (Node2D)
+  ├── Camera2D (enabled=true) ← Single source of truth
+  │   └── CameraController ← Pan/zoom/touch handling
+  ├── WorldContent (Node2D) ← Camera automatically transforms this
+  │   ├── PaperBackground (Polygon2D + paper_camera.gdshader)
+  │   └── TreeGraph (Node2D)
+  │       ├── EdgesLayer, NodesLayer, DexImagesLayer, LabelsLayer
+  └── UILayer (CanvasLayer, layer=10) ← Fixed UI (not affected by camera)
+  ```
+- **Camera Controller Features** (`features/tree/camera_controller.gd`):
+  - Smooth pan/zoom with Unity-style SmoothDamp
+  - Touch gestures: Single-finger pan, two-finger pinch zoom
+  - Mouse: Left-drag to pan, scroll wheel to zoom
+  - Cursor-centric zoom (zoom toward cursor position)
+  - Inertia/momentum after release
+  - Uses `_input()` not `_unhandled_input()` to ensure events are captured
+  - Public API: `center_on()`, `set_zoom()`, `get_view_rect()`, `reset()`
+- **Home Screen Access**: "Tree (Camera2D)" button navigates to this scene
+- **Testing**: Run `godot --path . res://scenes/tree_camera/tree_camera.tscn`
+
 **Touch Controller Velocity (Updated 2025-12-03)**:
 - **Velocity direction**: `newest_pos - oldest_pos` (NOT `oldest - newest` which inverts momentum)
 - **Stop inertia on touch start**: Call `_stop_inertia()` when first finger touches to clear old velocity samples
