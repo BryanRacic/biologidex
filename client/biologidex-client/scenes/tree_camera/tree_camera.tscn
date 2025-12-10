@@ -1,8 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://tree_camera_001"]
+[gd_scene load_steps=6 format=3 uid="uid://difh2a0q52jos"]
 
-[ext_resource type="Script" path="res://scenes/tree_camera/tree_camera_controller.gd" id="1_controller"]
-[ext_resource type="Script" path="res://features/tree/camera_controller.gd" id="2_camera_ctrl"]
-[ext_resource type="Shader" path="res://shaders/paper_camera.gdshader" id="3_shader"]
+[ext_resource type="Script" uid="uid://crjr7csjuv2g6" path="res://scenes/tree_camera/tree_camera_controller.gd" id="1_controller"]
+[ext_resource type="Script" uid="uid://wew670dyr7wg" path="res://features/tree/camera_controller.gd" id="2_camera_ctrl"]
+[ext_resource type="Shader" uid="uid://ccn8gw8tklvwp" path="res://shaders/paper_camera.gdshader" id="3_shader"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="4_theme"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_paper"]
@@ -27,16 +27,16 @@ editor_preview = true
 
 [node name="Camera2D" type="Camera2D" parent="."]
 unique_name_in_owner = true
-enabled = true
+zoom = Vector2(2, 2)
 position_smoothing_enabled = true
 position_smoothing_speed = 15.0
-zoom = Vector2(2, 2)
 
 [node name="CameraController" type="Node" parent="Camera2D"]
 unique_name_in_owner = true
 script = ExtResource("2_camera_ctrl")
-min_zoom = 0.1
-max_zoom = 10.0
+zoom_step = 1.0
+pan_snap_threshold = 10.0
+inertia_enabled = false
 
 [node name="WorldContent" type="Node2D" parent="."]
 unique_name_in_owner = true
@@ -44,9 +44,8 @@ unique_name_in_owner = true
 [node name="PaperBackground" type="Polygon2D" parent="WorldContent"]
 unique_name_in_owner = true
 z_index = -100
-color = Color(1, 1, 1, 1)
-polygon = PackedVector2Array(-25000, -25000, 25000, -25000, 25000, 25000, -25000, 25000)
 material = SubResource("ShaderMaterial_paper")
+polygon = PackedVector2Array(-25000, -25000, 25000, -25000, 25000, 25000, -25000, 25000)
 
 [node name="TreeGraph" type="Node2D" parent="WorldContent"]
 unique_name_in_owner = true

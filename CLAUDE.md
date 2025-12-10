@@ -172,12 +172,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - Extended positions stored in `extended_positions` dictionary, edges draw to extended endpoints
 - **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data)
 
-**Tree Camera Scene (Updated 2025-12-09)** (Camera2D-based tree - WORKING):
+**Tree Camera Scene (Updated 2025-12-10)** (Camera2D-based tree - WORKING):
 - **Purpose**: Tree visualization using Camera2D for **perfect background/foreground sync** (solves the parallax drift issue)
 - **Location**: `scenes/tree_camera/` (tree_camera.tscn, tree_camera_controller.gd)
 - **Architecture**:
   - `Camera2D`: Single source of truth for view transform (position, zoom)
-  - `TreeCameraController` (`features/tree/camera_controller.gd`): Pan/zoom/touch handling with smooth animations
+  - `TreeCameraController` (`features/tree/camera_controller.gd`): Direct pan/zoom/touch handling (no smoothing/inertia)
   - `paper_camera.gdshader`: Computes world coords in vertex shader, Godot handles camera transform
   - `WorldContent` (Node2D): Contains background + tree graph, transforms with camera automatically
 - **Why It Works**:
@@ -202,21 +202,20 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   └── UILayer (CanvasLayer, layer=10) ← Fixed UI (not affected by camera)
   ```
 - **Camera Controller Features** (`features/tree/camera_controller.gd`):
-  - Smooth pan/zoom with Unity-style SmoothDamp
+  - Direct pan/zoom response (no smoothing or inertia - immediate 1:1 input)
   - Touch gestures: Single-finger pan, two-finger pinch zoom
   - Mouse: Left-drag to pan, scroll wheel to zoom
   - Cursor-centric zoom (zoom toward cursor position)
-  - Inertia/momentum after release
   - Uses `_input()` not `_unhandled_input()` to ensure events are captured
+  - Export vars: `min_zoom`, `max_zoom`, `zoom_step`, `pinch_sensitivity`, `scroll_sensitivity`, `drag_threshold`, `pan_sensitivity`
   - Public API: `center_on()`, `set_zoom()`, `get_view_rect()`, `reset()`
+- **Paper Background Exports** (on root TreeCamera node):
+  - Grid: `grid_scale`, `grid_line_px`, `grid_line_color`, `grid_line_alpha`
+  - Paper: `paper_color`, `paper_noise_amount`, `paper_noise_scale`
+  - Speckles: `speckle_amount`, `speckle_density`, `speckle_scale`
+  - Fibers: `fiber_amount`, `fiber_scale`
 - **Home Screen Access**: "Tree (Camera2D)" button navigates to this scene
 - **Testing**: Run `godot --path . res://scenes/tree_camera/tree_camera.tscn`
-
-**Touch Controller Velocity (Updated 2025-12-03)**:
-- **Velocity direction**: `newest_pos - oldest_pos` (NOT `oldest - newest` which inverts momentum)
-- **Stop inertia on touch start**: Call `_stop_inertia()` when first finger touches to clear old velocity samples
-- **Pinch zoom velocity**: Record pinch center position for velocity calculation to enable inertia after pinch
-- **Reset state completely**: `reset()` must clear `_last_positions` and `_last_times` arrays
 
 **Dex Feed Carousel (Updated 2025-12-05)**:
 - **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization

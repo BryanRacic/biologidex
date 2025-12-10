@@ -19,6 +19,78 @@ const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
 		if Engine.is_editor_hint() and value:
 			_load_editor_preview()
 
+# =============================================================================
+# Paper Background Shader Settings (tweakable in editor)
+# =============================================================================
+
+@export_group("Paper Grid")
+## Size of the grid cells in world units
+@export_range(8.0, 64.0, 0.5) var grid_scale: float = 22.0:
+	set(value):
+		grid_scale = value
+		_update_shader_param("grid_scale", value)
+## Thickness of grid lines in pixels
+@export_range(0.5, 3.0, 0.1) var grid_line_px: float = 0.5:
+	set(value):
+		grid_line_px = value
+		_update_shader_param("line_px", value)
+## Grid line color (RGB, alpha ignored)
+@export var grid_line_color: Color = Color(0.55, 0.53, 0.5, 1.0):
+	set(value):
+		grid_line_color = value
+		_update_shader_param("line_color", Vector4(value.r, value.g, value.b, 1.0))
+## Grid line opacity (0 = invisible, 1 = fully opaque)
+@export_range(0.0, 0.6, 0.01) var grid_line_alpha: float = 0.07:
+	set(value):
+		grid_line_alpha = value
+		_update_shader_param("line_alpha", value)
+
+@export_group("Paper Base")
+## Base paper color
+@export var paper_color: Color = Color(0.85, 0.82, 0.78, 1.0):
+	set(value):
+		paper_color = value
+		_update_shader_param("paper_color", Vector4(value.r, value.g, value.b, 1.0))
+## Amount of noise variation in paper color
+@export_range(0.0, 0.15, 0.001) var paper_noise_amount: float = 0.05:
+	set(value):
+		paper_noise_amount = value
+		_update_shader_param("paper_noise_amount", value)
+## Scale of the paper noise pattern
+@export_range(0.05, 1.5, 0.01) var paper_noise_scale: float = 0.35:
+	set(value):
+		paper_noise_scale = value
+		_update_shader_param("paper_noise_scale", value)
+
+@export_group("Paper Speckles")
+## Amount of speckle darkness (0 = none, higher = darker spots)
+@export_range(0.0, 0.30, 0.001) var speckle_amount: float = 0.064:
+	set(value):
+		speckle_amount = value
+		_update_shader_param("speckle_amount", value)
+## Density of speckles (higher = more frequent)
+@export_range(0.25, 3.0, 0.01) var speckle_density: float = 1.68:
+	set(value):
+		speckle_density = value
+		_update_shader_param("speckle_density", value)
+## Scale of individual speckles
+@export_range(0.5, 6.0, 0.01) var speckle_scale: float = 6.0:
+	set(value):
+		speckle_scale = value
+		_update_shader_param("speckle_scale", value)
+
+@export_group("Paper Fibers")
+## Amount of fiber visibility
+@export_range(0.0, 0.20, 0.001) var fiber_amount: float = 0.111:
+	set(value):
+		fiber_amount = value
+		_update_shader_param("fiber_amount", value)
+## Scale of fiber patterns
+@export_range(0.2, 4.0, 0.01) var fiber_scale: float = 0.57:
+	set(value):
+		fiber_scale = value
+		_update_shader_param("fiber_scale", value)
+
 # Node references
 @onready var camera: Camera2D = %Camera2D
 @onready var camera_controller: TreeCameraControllerClass = %CameraController
@@ -47,6 +119,43 @@ var is_initialized: bool = false
 var _friends_synced: bool = false
 var _tree_loaded: bool = false
 var _pending_tree_data: TreeDataModels.TreeData = null
+
+
+# =============================================================================
+# Shader Parameter Updates
+# =============================================================================
+
+func _update_shader_param(param_name: String, value: Variant) -> void:
+	"""Update a shader parameter on the paper background material."""
+	if not is_inside_tree():
+		return
+	if not paper_background:
+		return
+	var mat := paper_background.material as ShaderMaterial
+	if mat:
+		mat.set_shader_parameter(param_name, value)
+
+
+func _sync_all_shader_params() -> void:
+	"""Sync all exported shader params to the material (call after _ready)."""
+	if not paper_background:
+		return
+	var mat := paper_background.material as ShaderMaterial
+	if not mat:
+		return
+
+	mat.set_shader_parameter("grid_scale", grid_scale)
+	mat.set_shader_parameter("line_px", grid_line_px)
+	mat.set_shader_parameter("line_color", Vector4(grid_line_color.r, grid_line_color.g, grid_line_color.b, 1.0))
+	mat.set_shader_parameter("line_alpha", grid_line_alpha)
+	mat.set_shader_parameter("paper_color", Vector4(paper_color.r, paper_color.g, paper_color.b, 1.0))
+	mat.set_shader_parameter("paper_noise_amount", paper_noise_amount)
+	mat.set_shader_parameter("paper_noise_scale", paper_noise_scale)
+	mat.set_shader_parameter("speckle_amount", speckle_amount)
+	mat.set_shader_parameter("speckle_density", speckle_density)
+	mat.set_shader_parameter("speckle_scale", speckle_scale)
+	mat.set_shader_parameter("fiber_amount", fiber_amount)
+	mat.set_shader_parameter("fiber_scale", fiber_scale)
 
 
 # =============================================================================
@@ -158,6 +267,9 @@ func _on_scene_ready() -> void:
 
 	# Setup renderer
 	_setup_renderer()
+
+	# Sync shader params from exported vars to material
+	_sync_all_shader_params()
 
 	# Connect friend sync signals
 	FriendDexSyncService.sync_completed.connect(_on_friends_sync_completed)
@@ -467,10 +579,10 @@ func _on_node_unhovered() -> void:
 # UI Updates
 # =============================================================================
 
-func _show_loading(show: bool) -> void:
+func _show_loading(should_show: bool) -> void:
 	"""Show/hide loading indicator."""
 	if loading_label:
-		loading_label.visible = show
+		loading_label.visible = should_show
 
 
 func _update_stats_display() -> void:
