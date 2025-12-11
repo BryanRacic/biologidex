@@ -118,6 +118,19 @@ var _current_scale: float = 1.0
 var _viewport_center: Vector2 = Vector2.ZERO
 var _viewport_size: Vector2 = Vector2(1280, 720)
 
+# Visibility throttling
+var _visibility_dirty: bool = false
+var _last_view_rect: Rect2 = Rect2()
+const VIEW_CHANGE_THRESHOLD: float = 50.0  # World units - minimum change to trigger update
+const MIN_UPDATE_INTERVAL: float = 0.001    # 50ms minimum between updates (20 FPS cap on updates)
+var _last_update_time: float = 0.0
+
+# Image loading queue (lazy loading)
+var _pending_loads: Array[String] = []  # Queue of image_keys waiting to load
+var _loading_in_progress: Dictionary = {}  # {image_key: true} - currently loading
+const IMAGES_PER_FRAME: int = 1  # Maximum images to start loading per frame
+const MAX_CONCURRENT_LOADS: int = 4  # Maximum simultaneous HTTP requests
+
 # Spatial indexing for click detection
 var nodes_by_position: Dictionary = {}
 
@@ -256,10 +269,13 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	print("[TreeRenderer] Rendering tree with %d nodes" % data.nodes.size())
 	tree_data = data
 
+	# Clear previous state including loading queues
 	render_nodes.clear()
 	visible_nodes.clear()
 	nodes_by_position.clear()
 	_deactivate_all_dex_images()
+	_pending_loads.clear()
+	_loading_in_progress.clear()
 
 	# Build render data for all nodes
 	for node in data.nodes:
@@ -282,34 +298,74 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	# Pre-calculate label positions (alternating above/below for siblings)
 	_calculate_label_positions()
 
+	# Initial visibility update (will queue image loads)
+	_last_view_rect = _get_view_rect()
 	_update_visible_nodes()
 	_update_dex_images()
 	_update_multimesh()
 	_render_radial_edges()
 	_render_taxonomy_labels()
 
-	print("[TreeRenderer] Tree rendering complete")
+	print("[TreeRenderer] Tree rendering complete, %d images queued" % _pending_loads.size())
 
 
 func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
-	"""Update view parameters (called when transform changes)."""
+	"""Update view parameters (called when transform changes).
+	Uses dirty flag to throttle visibility recalculation."""
 	var old_scale = _current_scale
-	var old_scroll = _scroll_offset
 	_scroll_offset = scroll
 	_current_scale = scale
 	_viewport_center = center
 	_viewport_size = get_viewport_rect().size
 
-	if tree_data:
-		var view_changed = (scale != old_scale) or (scroll != old_scroll)
+	if not tree_data:
+		return
+
+	var new_rect := _get_view_rect()
+
+	# Check if view changed enough to warrant update
+	var scale_changed: bool = abs(scale - old_scale) > 0.01
+	var position_changed: bool = _rect_moved_significantly(new_rect, _last_view_rect)
+
+	if scale_changed or position_changed:
+		_visibility_dirty = true
+		_last_view_rect = new_rect
+
+
+func _rect_moved_significantly(new_rect: Rect2, old_rect: Rect2) -> bool:
+	"""Check if the view rect moved enough to warrant a visibility update."""
+	if old_rect.size == Vector2.ZERO:
+		return true  # First update
+
+	# Check if center moved more than threshold (in world units)
+	var old_center := old_rect.position + old_rect.size / 2.0
+	var new_center := new_rect.position + new_rect.size / 2.0
+
+	return old_center.distance_to(new_center) > VIEW_CHANGE_THRESHOLD
+
+
+func _process(_delta: float) -> void:
+	"""Process deferred visibility updates and image loading queue."""
+	if Engine.is_editor_hint():
+		return
+
+	if not tree_data:
+		return
+
+	# Throttle updates by time
+	var current_time := Time.get_ticks_msec() / 1000.0
+	if _visibility_dirty and (current_time - _last_update_time) >= MIN_UPDATE_INTERVAL:
+		_visibility_dirty = false
+		_last_update_time = current_time
+
 		_update_visible_nodes()
 		_update_dex_images()
 		_update_multimesh()
-		# Re-render edges when view changes (scroll or scale)
-		# Edge visibility depends on view rect intersection, so must update when panning
-		if view_changed:
-			_render_radial_edges()
+		_render_radial_edges()
 		_render_taxonomy_labels()
+
+	# Process loading queue (Phase 3)
+	_process_loading_queue()
 
 
 func clear() -> void:
@@ -320,6 +376,12 @@ func clear() -> void:
 	extended_positions.clear()
 	label_above_nodes.clear()
 	tree_data = null
+
+	# Clear loading queues and visibility state
+	_pending_loads.clear()
+	_loading_in_progress.clear()
+	_visibility_dirty = false
+	_last_view_rect = Rect2()
 
 	if nodes_multimesh and nodes_multimesh.multimesh:
 		nodes_multimesh.multimesh.instance_count = 0
@@ -498,8 +560,7 @@ func _should_label_be_above(node: TreeDataModels.TaxonomicNode) -> bool:
 
 func _update_dex_images() -> void:
 	"""Update dex images for visible animal nodes captured by user or friends.
-	Loads images from DexDatabase and positions them in world space.
-	Handles cache/download automatically via TreeDexImage and DexImageLoader."""
+	Queues image loads instead of loading immediately for better performance."""
 	if not dex_images_container:
 		return
 
@@ -546,9 +607,15 @@ func _update_dex_images() -> void:
 		var img: TreeDexImage = active_dex_images[key]
 		img.deactivate()
 		active_dex_images.erase(key)
+		# Remove from queues
+		_pending_loads.erase(key)
+		_loading_in_progress.erase(key)
 
 	# Rebuild nodes_with_dex_images
 	nodes_with_dex_images.clear()
+
+	# Track newly visible captures to queue
+	var newly_visible: Array[String] = []
 
 	# Activate/update images for visible captures
 	for image_key in visible_captures:
@@ -568,7 +635,7 @@ func _update_dex_images() -> void:
 			var img: TreeDexImage = active_dex_images[image_key]
 			img.position = image_position
 		else:
-			# Need to activate a new image
+			# NEW: Activate but don't load - add to queue
 			var entry_data = _get_dex_entry_data(creation_index, user_id, node, capture_data.capture_info)
 
 			var img = _get_available_dex_image()
@@ -576,9 +643,16 @@ func _update_dex_images() -> void:
 				# Pool exhausted
 				continue
 
-			# Activate handles cache check and download via DexImageLoader
+			# Activate WITHOUT loading
 			img.activate(image_position, creation_index, user_id, entry_data, DEX_IMAGE_SIZE)
 			active_dex_images[image_key] = img
+
+			# Queue for loading (if not already queued or loading)
+			if not _pending_loads.has(image_key) and not _loading_in_progress.has(image_key):
+				newly_visible.append(image_key)
+
+	# Add newly visible to queue, prioritized by distance to viewport center
+	_queue_images_by_priority(newly_visible, visible_captures)
 
 
 func _get_dex_entry_data(creation_index: int, user_id: String, node: TreeDataModels.TaxonomicNode, capture_info: Dictionary = {}) -> Dictionary:
@@ -622,6 +696,81 @@ func _get_dex_entry_data(creation_index: int, user_id: String, node: TreeDataMod
 	return entry_data
 
 
+func _queue_images_by_priority(image_keys: Array[String], capture_data: Dictionary) -> void:
+	"""Add images to loading queue, prioritized by distance to viewport center."""
+	if image_keys.is_empty():
+		return
+
+	# Calculate priority scores (lower = higher priority)
+	var scored_keys: Array = []
+	var viewport_center := _scroll_offset  # World position at center of view
+
+	for key in image_keys:
+		if not capture_data.has(key):
+			continue
+		var data: Dictionary = capture_data[key]
+		var render_data = data.render_data
+		var distance: float = render_data.position.distance_to(viewport_center)
+		scored_keys.append({"key": key, "distance": distance})
+
+	# Sort by distance (closest first)
+	scored_keys.sort_custom(func(a, b): return a.distance < b.distance)
+
+	# Add to queue in priority order
+	for item in scored_keys:
+		_pending_loads.append(item.key)
+
+
+func _process_loading_queue() -> void:
+	"""Process the image loading queue with frame budget."""
+	if _pending_loads.is_empty():
+		return
+
+	# Don't exceed concurrent load limit
+	if _loading_in_progress.size() >= MAX_CONCURRENT_LOADS:
+		return
+
+	var loads_this_frame := 0
+	var available_slots := MAX_CONCURRENT_LOADS - _loading_in_progress.size()
+	var max_loads := mini(IMAGES_PER_FRAME, available_slots)
+
+	while _pending_loads.size() > 0 and loads_this_frame < max_loads:
+		var image_key: String = _pending_loads.pop_front()
+
+		# Verify still active
+		if not active_dex_images.has(image_key):
+			continue
+
+		var img: TreeDexImage = active_dex_images[image_key]
+
+		# Skip if already loading or loaded
+		if img.is_loading() or img.is_loaded():
+			continue
+
+		# Start load
+		_loading_in_progress[image_key] = true
+		img.load_state_changed.connect(_on_image_load_state_changed.bind(image_key))
+		img.start_load()
+		loads_this_frame += 1
+
+
+func _on_image_load_state_changed(_new_state: int, image_key: String) -> void:
+	"""Handle load state changes from TreeDexImage."""
+	# Check if still loading by checking the image instance (more reliable than enum comparison)
+	var still_loading := false
+	if active_dex_images.has(image_key):
+		var img: TreeDexImage = active_dex_images[image_key]
+		still_loading = img.is_loading()
+
+		# Disconnect signal to avoid memory leaks
+		if img.load_state_changed.is_connected(_on_image_load_state_changed):
+			img.load_state_changed.disconnect(_on_image_load_state_changed)
+
+	# Remove from in-progress when no longer loading
+	if not still_loading:
+		_loading_in_progress.erase(image_key)
+
+
 func _update_multimesh() -> void:
 	"""Update MultiMesh with visible nodes.
 	Skips animal nodes that have dex images (they're rendered separately)."""
@@ -642,10 +791,10 @@ func _update_multimesh() -> void:
 		var render_data = nodes_for_multimesh[i]
 		render_data.instance_index = i
 
-		var transform = Transform2D()
-		transform = transform.scaled(Vector2(render_data.scale, render_data.scale))
-		transform.origin = render_data.position
-		multimesh.set_instance_transform_2d(i, transform)
+		var node_transform := Transform2D()
+		node_transform = node_transform.scaled(Vector2(render_data.scale, render_data.scale))
+		node_transform.origin = render_data.position
+		multimesh.set_instance_transform_2d(i, node_transform)
 
 		var color = render_data.color
 
@@ -1059,5 +1208,7 @@ func get_stats() -> Dictionary:
 		"total_edges": tree_data.edges.size() if tree_data else 0,
 		"rendered_edges": edges_container.get_child_count() if edges_container else 0,
 		"active_dex_images": active_dex_images.size(),
-		"dex_image_pool_size": dex_image_pool.size()
+		"dex_image_pool_size": dex_image_pool.size(),
+		"pending_loads": _pending_loads.size(),
+		"concurrent_loads": _loading_in_progress.size()
 	}

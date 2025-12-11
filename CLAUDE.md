@@ -150,7 +150,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
 - **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social (NOT tree)
 
-**Taxonomic Tree Visualization (Updated 2025-12-04)**:
+**Taxonomic Tree Visualization (Updated 2025-12-10)**:
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
   - `scroll_offset`: World-space position that appears at viewport center
   - When `scroll_offset = (0,0)`, world origin is at viewport center
@@ -170,7 +170,21 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `BRANCH_EXTENSION_ALT_RATIO`: Additional extension for alternating siblings (default: 0.5 = 500 world units)
   - Alternation pattern: Even siblings get base extension, odd siblings get base + alt extension
   - Extended positions stored in `extended_positions` dictionary, edges draw to extended endpoints
-- **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data)
+- **Dex Image Lazy Loading** (optimizes scrolling performance):
+  - `TreeDexImage`: Uses `VisibleOnScreenNotifier2D` with 500 world unit preload margin
+  - `LoadState` enum: IDLE → QUEUED → LOADING → LOADED (or FAILED)
+  - Images activated without loading; `start_load()` called by queue processor
+  - Signals: `visibility_entered`, `visibility_exited`, `load_state_changed`
+- **Visibility Throttling** (TreeRenderer):
+  - Dirty flag system: Only recalculates when view moves >50 world units
+  - Minimum update interval prevents excessive recalculation during fast scrolling
+  - `_process()` handles deferred visibility updates and queue processing
+- **Image Loading Queue** (TreeRenderer):
+  - `_pending_loads`: Priority queue sorted by distance to viewport center
+  - `_loading_in_progress`: Tracks concurrent HTTP requests
+  - `IMAGES_PER_FRAME`: Max new loads started per frame (default: 1)
+  - `MAX_CONCURRENT_LOADS`: Max simultaneous HTTP requests (default: 4)
+- **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data), `tree_dex_image.gd` (pooled image wrapper)
 
 **Tree Camera Scene (Updated 2025-12-10)** (Camera2D-based tree - WORKING):
 - **Purpose**: Tree visualization using Camera2D for **perfect background/foreground sync** (solves the parallax drift issue)
