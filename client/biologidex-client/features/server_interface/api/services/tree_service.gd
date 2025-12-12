@@ -3,7 +3,7 @@ class_name TreeService
 
 ## TreeService - Taxonomic tree API operations
 
-const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
+# TreeDataModels is globally available via class_name
 
 ## Debug flag: When enabled, caches tree API responses to res://resources/tree.json
 ## Useful for offline testing. Only works in editor (res:// is read-only in exports).

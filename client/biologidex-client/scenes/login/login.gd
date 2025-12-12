@@ -3,13 +3,14 @@ extends Node2D
 # Login scene - Handles user authentication
 # Shows login form if no valid refresh token exists
 
-# UI Elements
-@onready var username_input: LineEdit = get_node("%UsernameInput")
-@onready var password_input: LineEdit = get_node("%PasswordInput")
-@onready var login_button: Button = get_node("%LoginButton")
-@onready var create_acct_button: Button = get_node("%CreateAcctButton")
-@onready var status_label: Label = get_node("%StatusLabel")
-@onready var loading_spinner: Label = get_node("%LoadingSpinner")
+# UI Elements - using explicit paths due to instanced scene ownership issues in web export
+const _UI_PATH := "PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"
+@onready var username_input: LineEdit = get_node(_UI_PATH + "/UsernameField/UsernameInput")
+@onready var password_input: LineEdit = get_node(_UI_PATH + "/PasswordField/PasswordInput")
+@onready var login_button: Button = get_node(_UI_PATH + "/LoginButton")
+@onready var create_acct_button: Button = get_node(_UI_PATH + "/CreateAcctButton")
+@onready var status_label: Label = get_node(_UI_PATH + "/StatusLabel")
+@onready var loading_spinner: Label = get_node(_UI_PATH + "/LoadingSpinner")
 
 # Services (accessed via ServiceLocator)
 var token_manager

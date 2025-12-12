@@ -7,8 +7,7 @@ Updated to work with external transform control (no internal camera).
 extends Node2D
 class_name TreeRenderer
 
-const TreeDataModels = preload("res://features/tree/tree_data_models.gd")
-const TreeDexImage = preload("res://features/tree/tree_dex_image.gd")
+# TreeDataModels and TreeDexImage are globally available via class_name
 
 # Theme for labels
 var _theme: Theme = preload("res://theme.tres")

@@ -118,15 +118,15 @@ extends Node2D
 		_update_shader_param("fiber_scale", value)
 
 # =============================================================================
-# Node References
+# Node References - using explicit paths due to web export unique name issues
 # =============================================================================
 
-@onready var camera: Camera2D = %Camera2D
-@onready var camera_controller: CameraTouchController = %CameraController
-@onready var world_content: Node2D = %WorldContent
-@onready var paper_background: Polygon2D = %PaperBackground
-@onready var content_container: Node2D = %ContentContainer
-@onready var ui_container: Control = %UIContainer
+@onready var camera: Camera2D = $Camera2D
+@onready var camera_controller: CameraTouchController = $Camera2D/CameraController
+@onready var world_content: Node2D = $WorldContent
+@onready var paper_background: Polygon2D = $WorldContent/PaperBackground
+@onready var content_container: Node2D = $WorldContent/ContentContainer
+@onready var ui_container: Control = $UILayer/UIContainer
 
 # =============================================================================
 # Signals
