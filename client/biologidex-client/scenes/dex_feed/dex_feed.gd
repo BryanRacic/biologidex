@@ -1,9 +1,8 @@
 extends BaseSceneNode
 ## Dex Feed - Display friends' dex entries in a touch-driven vertical carousel.
-## Uses BackgroundTouchController for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
+## Uses PaperCameraScene for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
 ## Entries are displayed with randomized spacing, size, offset, and rotation for an organic scrapbook feel.
 
-const BackgroundTouchController = preload("res://features/ui/components/interactive_background/background_touch_controller.gd")
 const FeedCarouselRenderer = preload("res://features/dex_feed/feed_carousel_renderer.gd")
 
 # State Management
@@ -14,10 +13,11 @@ var displayed_entries: Array[Dictionary] = []
 var current_filter: String = "all"
 var selected_friend_id: String = ""
 
-# Carousel components
-var _touch_controller: BackgroundTouchController  # Created dynamically in content area
-var _carousel_renderer: FeedCarouselRenderer  # Created dynamically
-var _bg_shader_material: ShaderMaterial  # For syncing background scroll
+# PaperCameraScene component
+@onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
+
+# Carousel renderer (created dynamically)
+var _carousel_renderer: FeedCarouselRenderer
 
 # Feed-specific scroll configuration
 const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizontal scroll
@@ -31,7 +31,6 @@ const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizon
 @onready var _empty_state_label: Label = get_node("%EmptyStateLabel")
 @onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
-@onready var _interactive_bg: Control = $UI/InteractiveBackground
 
 # Configuration - item dimensions are now calculated automatically from container width
 
@@ -70,36 +69,18 @@ func _setup_carousel_components() -> void:
 	var content_height := _content_area.size.y
 	assert(content_width > 0 and content_height > 0, "DexFeed: ContentArea size must be > 0. Ensure layout has settled before setup.")
 
-	# Get shader material from InteractiveBackground to sync scroll
-	if _interactive_bg:
-		var bg_rect: ColorRect = _interactive_bg.get_node_or_null("Background")
-		if bg_rect and bg_rect.material is ShaderMaterial:
-			_bg_shader_material = bg_rect.material as ShaderMaterial
-
-	# Create and configure touch controller in content area
-	_touch_controller = BackgroundTouchController.new()
-	_touch_controller.name = "TouchController"
-	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
-	_touch_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_content_area.add_child(_touch_controller)
-
-	# Configure scroll limits for vertical feed (horizontal has bounded range, vertical set later)
+	# Configure scroll limits for vertical feed
 	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
-	_touch_controller.scroll_limits_enabled = true
-	_touch_controller.scroll_min = Vector2(-horizontal_max, 0.0)
-	_touch_controller.scroll_max = Vector2(horizontal_max, 0.0)  # Y max set in _on_layout_calculated
-	_touch_controller.rubber_band_enabled = true
+	_paper_camera.set_scroll_limits(
+		Vector2(-horizontal_max, 0.0),
+		Vector2(horizontal_max, 0.0)  # Y max set in _on_layout_calculated
+	)
 
-	# Disable zoom for feed (vertical scroll only)
-	_touch_controller.min_scale = 1.0
-	_touch_controller.max_scale = 1.0
-
-	# Connect touch controller signals
-	_touch_controller.scroll_changed.connect(_on_scroll_changed)
-	_touch_controller.scale_changed.connect(_on_scale_changed)
-	_touch_controller.tap_detected.connect(_on_tap_detected)
-	_touch_controller.gesture_started.connect(_on_gesture_started)
-	_touch_controller.gesture_ended.connect(_on_gesture_ended)
+	# Connect PaperCameraScene signals
+	_paper_camera.view_changed.connect(_on_view_changed)
+	_paper_camera.tap_detected.connect(_on_tap_detected)
+	_paper_camera.gesture_started.connect(_on_gesture_started)
+	_paper_camera.gesture_ended.connect(_on_gesture_ended)
 
 	# Create and configure carousel renderer
 	_carousel_renderer = FeedCarouselRenderer.new()
@@ -269,8 +250,14 @@ func _display_feed() -> void:
 		_show_status("No entries to display", false)
 		_show_empty_state(true, "No entries to display.\n\nYour friends haven't caught any animals yet!")
 		_carousel_renderer.clear()
-		_touch_controller.scroll_max.y = 0.0  # Reset vertical scroll limit
-		_touch_controller.reset()  # Reset scroll position and scale
+		# Reset scroll limits (horizontal only)
+		var content_width := _content_area.size.x
+		var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
+		_paper_camera.set_scroll_limits(
+			Vector2(-horizontal_max, 0.0),
+			Vector2(horizontal_max, 0.0)
+		)
+		_paper_camera.reset()
 		return
 
 	# Hide empty state
@@ -280,7 +267,7 @@ func _display_feed() -> void:
 	_carousel_renderer.set_entries(displayed_entries)
 
 	# Scroll to top (reset to origin)
-	_touch_controller.scroll_to(Vector2.ZERO, false)
+	_paper_camera.scroll_to(Vector2.ZERO, false)
 
 	_show_status("%d entries" % displayed_entries.size(), true)
 	feed_loaded.emit(displayed_entries.size())
@@ -304,25 +291,13 @@ func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
 
 
 # =============================================================================
-# Touch Controller Signal Handlers
+# PaperCameraScene Signal Handlers
 # =============================================================================
 
-func _on_scroll_changed(offset: Vector2) -> void:
-	"""Handle scroll position change from touch controller"""
+func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
+	"""Handle view change from PaperCameraScene"""
 	if _carousel_renderer:
-		_carousel_renderer.update_scroll(offset, _touch_controller.current_scale)
-	# Sync background shader
-	if _bg_shader_material:
-		_bg_shader_material.set_shader_parameter("scroll", offset)
-
-
-func _on_scale_changed(scale: float) -> void:
-	"""Handle scale change from touch controller"""
-	if _carousel_renderer:
-		_carousel_renderer.update_scroll(_touch_controller.scroll_offset, scale)
-	# Sync background shader
-	if _bg_shader_material:
-		_bg_shader_material.set_shader_parameter("scale", scale)
+		_carousel_renderer.update_scroll(cam_position, zoom)
 
 
 func _on_layout_calculated(total_height: float) -> void:
@@ -333,15 +308,23 @@ func _on_layout_calculated(total_height: float) -> void:
 	var extra_scroll := visible_height * 0.5
 	var max_scroll := maxf(0.0, total_height - visible_height + extra_scroll)
 
-	# Update vertical scroll limit (keep existing horizontal limits)
-	_touch_controller.scroll_max.y = max_scroll
+	# Update scroll limits (keep existing horizontal limits)
+	var content_width := _content_area.size.x
+	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
+	_paper_camera.set_scroll_limits(
+		Vector2(-horizontal_max, 0.0),
+		Vector2(horizontal_max, max_scroll)
+	)
 	print("[DexFeed] Layout: total_height=%.0f, visible=%.0f, max_scroll=%.0f" % [total_height, visible_height, max_scroll])
 
 
-func _on_tap_detected() -> void:
+func _on_tap_detected(world_pos: Vector2) -> void:
 	"""Handle tap on carousel background - find which entry was tapped"""
-	# Convert tap to content space and find entry (use Y component of scroll offset)
-	var tap_y := _touch_controller.scroll_offset.y + _content_area.size.y / 2.0
+	# Convert world position to content space and find entry
+	# The camera position represents the scroll offset
+	var cam_pos := _paper_camera.get_camera_position()
+	var tap_y := cam_pos.y + _content_area.size.y / 2.0
+
 	var entry_index := _carousel_renderer.get_entry_at_position(tap_y)
 
 	if entry_index >= 0 and entry_index < displayed_entries.size():
@@ -361,7 +344,7 @@ func _on_gesture_ended() -> void:
 		_set_state(FeedState.IDLE)
 
 
-func _on_image_ready(index: int) -> void:
+func _on_image_ready(_index: int) -> void:
 	"""Handle image loaded for carousel item"""
 	pass  # Could update status if needed
 
@@ -440,10 +423,10 @@ func _on_filter_dropdown_selected(index: int) -> void:
 # UI Helpers
 # =============================================================================
 
-func _show_loading(visible: bool) -> void:
+func _show_loading(should_show: bool) -> void:
 	"""Show or hide loading overlay"""
 	if loading_overlay:
-		loading_overlay.visible = visible
+		loading_overlay.visible = should_show
 
 
 func _show_status(message: String, is_success: bool) -> void:
@@ -464,11 +447,11 @@ func _show_status(message: String, is_success: bool) -> void:
 			_feed_status_label.modulate = Color.RED
 
 
-func _show_empty_state(visible: bool, message: String = "") -> void:
+func _show_empty_state(should_show: bool, message: String = "") -> void:
 	"""Show or hide empty state message"""
 	if _empty_state_label:
-		_empty_state_label.visible = visible
-		if visible and not message.is_empty():
+		_empty_state_label.visible = should_show
+		if should_show and not message.is_empty():
 			_empty_state_label.text = message
 
 

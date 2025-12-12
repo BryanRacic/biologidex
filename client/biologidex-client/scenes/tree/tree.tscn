@@ -1,34 +1,37 @@
 [gd_scene load_steps=4 format=3 uid="uid://he08vkkhgca1"]
 
 [ext_resource type="Script" uid="uid://bsgksie5hpp5l" path="res://scenes/tree/tree_controller.gd" id="1_tree_controller"]
-[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="2_interactive_bg"]
+[ext_resource type="PackedScene" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="3_theme"]
 
 [node name="Tree" type="Node2D"]
 script = ExtResource("1_tree_controller")
 editor_preview = true
 
-[node name="BackgroundLayer" type="CanvasLayer" parent="."]
-layer = -1
+[node name="PaperCameraScene" parent="." instance=ExtResource("2_paper_camera")]
+unique_name_in_owner = true
+min_zoom = 0.1
+max_zoom = 10.0
+zoom_step = 0.2
+initial_zoom = 2.0
+zoom_enabled = true
+inertia_enabled = true
 
-[node name="InteractiveBackground" parent="BackgroundLayer" instance=ExtResource("2_interactive_bg")]
+[node name="TreeGraph" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer"]
 unique_name_in_owner = true
 
-[node name="TreeGraph" type="Node2D" parent="."]
-unique_name_in_owner = true
-
-[node name="EdgesLayer" type="Node2D" parent="TreeGraph"]
+[node name="EdgesLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
 unique_name_in_owner = true
 z_index = -1
 
-[node name="NodesLayer" type="Node2D" parent="TreeGraph"]
+[node name="NodesLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
 unique_name_in_owner = true
 
-[node name="DexImagesLayer" type="Node2D" parent="TreeGraph"]
+[node name="DexImagesLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
 unique_name_in_owner = true
 z_index = 1
 
-[node name="LabelsLayer" type="Node2D" parent="TreeGraph"]
+[node name="LabelsLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
 unique_name_in_owner = true
 z_index = 2
 

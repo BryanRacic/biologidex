@@ -1,14 +1,13 @@
 @tool
 """
 TreeController - Orchestrates radial taxonomic tree visualization.
-Uses InteractiveBackground for pan/zoom gestures.
+Uses PaperCameraScene for pan/zoom gestures.
 Refactored to remove SubViewport and use direct Node2D transforms.
 """
 extends BaseSceneNode
 
 const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
-const BackgroundTouchController = preload("res://features/ui/components/interactive_background/background_touch_controller.gd")
 
 # Editor preview: Load tree from cached JSON file for UI development
 const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
@@ -20,7 +19,7 @@ const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
 
 # Node references
 @onready var tree_graph: Node2D = %TreeGraph
-@onready var interactive_bg: Control = %InteractiveBackground
+@onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
 @onready var search_bar: LineEdit = %SearchBar
 @onready var mode_dropdown: OptionButton = %ModeDropdown
 @onready var zoom_in_button: Button = %ZoomInButton
@@ -29,9 +28,6 @@ const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
 @onready var center_button: Button = %CenterButton
 @onready var loading_label: Label = %LoadingLabel
 @onready var stats_label: Label = %StatsLabel
-
-# Touch controller reference (from InteractiveBackground)
-var touch_controller: BackgroundTouchController = null
 
 # Tree data
 var current_tree_data: TreeDataModels.TreeData = null
@@ -47,7 +43,7 @@ var _friends_synced: bool = false
 var _tree_loaded: bool = false
 var _pending_tree_data: TreeDataModels.TreeData = null
 
-# Transform state (synced with touch controller)
+# View state (for TreeRenderer culling - Camera2D handles actual transform)
 var _scroll_offset: Vector2 = Vector2.ZERO
 var _current_scale: float = 1.0
 var _viewport_center: Vector2 = Vector2.ZERO
@@ -121,10 +117,6 @@ func _on_scene_ready() -> void:
 	scene_name = "TreeController"
 	print("[TreeController] Scene ready (radial layout)")
 
-	# Get viewport center for transform calculations
-	await get_tree().process_frame
-	_viewport_center = get_viewport_rect().size / 2.0
-
 	# Wire up back button
 	back_button = %BackButton
 	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
@@ -138,8 +130,8 @@ func _on_scene_ready() -> void:
 	zoom_reset_button.pressed.connect(_on_zoom_reset)
 	center_button.pressed.connect(_on_center_on_root)
 
-	# Setup touch controller integration
-	_setup_touch_controller()
+	# Setup PaperCameraScene integration
+	_setup_paper_camera()
 
 	# Connect API signals
 	APIManager.tree.tree_loaded.connect(_on_tree_loaded)
@@ -169,36 +161,21 @@ func _on_scene_ready() -> void:
 	_start_parallel_load()
 
 
-func _setup_touch_controller() -> void:
-	"""Connect to InteractiveBackground's touch controller."""
-	if not interactive_bg:
-		push_error("[TreeController] InteractiveBackground not found")
+func _setup_paper_camera() -> void:
+	"""Connect to PaperCameraScene signals."""
+	if not _paper_camera:
+		push_error("[TreeController] PaperCameraScene not found")
 		return
 
-	# Get the TouchController child
-	touch_controller = interactive_bg.get_node_or_null("TouchController")
-	if not touch_controller:
-		push_error("[TreeController] TouchController not found in InteractiveBackground")
-		return
+	# Connect to view_changed signal
+	_paper_camera.view_changed.connect(_on_view_changed)
 
-	# Connect to scroll/scale signals
-	touch_controller.scroll_changed.connect(_on_scroll_changed)
-	touch_controller.scale_changed.connect(_on_scale_changed)
+	# Get initial state for culling calculations
+	_scroll_offset = _paper_camera.get_camera_position()
+	_current_scale = _paper_camera.get_zoom()
+	_viewport_center = get_viewport_rect().size / 2.0
 
-	# Configure zoom limits for tree viewing
-	touch_controller.min_scale = 0.1
-	touch_controller.max_scale = 10.0
-
-	# Set initial zoom level (larger = more zoomed in)
-	touch_controller.current_scale = 2.0
-	_scroll_offset = touch_controller.scroll_offset
-	_current_scale = touch_controller.current_scale
-
-	# Emit signals to sync shader with initial state
-	touch_controller.scroll_changed.emit(_scroll_offset)
-	touch_controller.scale_changed.emit(_current_scale)
-
-	print("[TreeController] Touch controller connected (initial scale: %.1f)" % _current_scale)
+	print("[TreeController] PaperCameraScene connected (initial scale: %.1f)" % _current_scale)
 
 
 func _setup_mode_dropdown() -> void:
@@ -228,51 +205,26 @@ func _setup_renderer() -> void:
 
 
 # =============================================================================
-# Transform Handling
+# View Change Handling (Camera2D handles transform, we just update culling state)
 # =============================================================================
 #
 # COORDINATE SPACE CONVENTIONS:
-# - scroll_offset: The world-space position that appears at viewport center
-#   - When scroll_offset = (0,0), the world origin (0,0) is at viewport center
-#   - scroll_offset IS the world center directly (no scaling needed)
-# - World space: Tree node positions are in world coordinates
-#   - Root node is at (0,0), other nodes radiate outward
-# - Transform: tree_graph.transform.origin = viewport_center - scroll_offset * scale
-#   - Screen position of world point W: screen = (W - scroll_offset) * scale + viewport_center
-#
-# To center on a world position `pos`:
-#   scroll_offset = pos
+# - Camera2D.position: The world-space position at viewport center
+# - Camera2D.zoom: Scale factor (higher = zoomed in)
+# - TreeGraph is a child of PaperCameraScene/WorldContent/ContentContainer
+#   so it automatically transforms with the camera
+# - TreeRenderer needs scroll_offset and scale for culling calculations
 #
 # =============================================================================
 
-func _on_scroll_changed(offset: Vector2) -> void:
-	"""Handle scroll offset changes from touch controller."""
-	_scroll_offset = offset
-	_update_tree_transform()
-	print("[TreeController] scroll=%s, viewport_center=%s" % [_scroll_offset, _viewport_center])
+func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
+	"""Handle view changes from PaperCameraScene.
+	Camera2D handles the actual transform - we just update renderer for culling."""
+	_scroll_offset = cam_position
+	_current_scale = zoom
+	_viewport_center = get_viewport_rect().size / 2.0
 
-
-func _on_scale_changed(new_scale: float) -> void:
-	"""Handle scale changes from touch controller."""
-	_current_scale = new_scale
-	_update_tree_transform()
-	print("[TreeController] scale=%.2f" % _current_scale)
-
-
-func _update_tree_transform() -> void:
-	"""Apply current scroll/scale to tree graph."""
-	if not tree_graph:
-		return
-
-	# Transform: scale, then translate
-	# Tree origin (0,0) should appear at viewport center minus scroll offset
-	var transform = Transform2D()
-	transform = transform.scaled(Vector2(_current_scale, _current_scale))
-	transform.origin = _viewport_center - _scroll_offset * _current_scale
-
-	tree_graph.transform = transform
-
-	# Update renderer for culling/labels
+	# Update renderer for culling/labels (no transform needed - Camera2D does it)
 	if tree_renderer:
 		tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
 
@@ -285,7 +237,9 @@ func _process(_delta: float) -> void:
 	var new_center = get_viewport_rect().size / 2.0
 	if new_center != _viewport_center:
 		_viewport_center = new_center
-		_update_tree_transform()
+		# Trigger renderer update with current view state
+		if tree_renderer:
+			tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
 
 
 # =============================================================================
@@ -294,32 +248,29 @@ func _process(_delta: float) -> void:
 
 func _on_zoom_in() -> void:
 	"""Zoom in via button."""
-	if touch_controller:
-		var new_scale = clampf(_current_scale * 1.2, touch_controller.min_scale, touch_controller.max_scale)
-		touch_controller.current_scale = new_scale
-		touch_controller.scale_changed.emit(new_scale)
+	if _paper_camera:
+		var new_zoom = clampf(_current_scale * 1.2, _paper_camera.min_zoom, _paper_camera.max_zoom)
+		_paper_camera.set_zoom(new_zoom)
 
 
 func _on_zoom_out() -> void:
 	"""Zoom out via button."""
-	if touch_controller:
-		var new_scale = clampf(_current_scale / 1.2, touch_controller.min_scale, touch_controller.max_scale)
-		touch_controller.current_scale = new_scale
-		touch_controller.scale_changed.emit(new_scale)
+	if _paper_camera:
+		var new_zoom = clampf(_current_scale / 1.2, _paper_camera.min_zoom, _paper_camera.max_zoom)
+		_paper_camera.set_zoom(new_zoom)
 
 
 func _on_zoom_reset() -> void:
 	"""Reset zoom and position."""
-	if touch_controller:
-		touch_controller.reset()
+	if _paper_camera:
+		_paper_camera.reset()
 
 
 func _on_center_on_root() -> void:
 	"""Center view on tree root (center of radial layout)."""
-	if touch_controller:
+	if _paper_camera:
 		# Reset scroll to center (root is at 0,0 in radial layout)
-		touch_controller.scroll_offset = Vector2.ZERO
-		touch_controller.scroll_changed.emit(Vector2.ZERO)
+		_paper_camera.scroll_to(Vector2.ZERO, false)
 
 
 # =============================================================================
@@ -425,7 +376,13 @@ func _render_tree() -> void:
 
 	print("[TreeController] Rendering tree...")
 	tree_renderer.render_tree(current_tree_data)
-	_update_tree_transform()
+
+	# Initialize renderer with current view state (Camera2D handles transform)
+	_viewport_center = get_viewport_rect().size / 2.0
+	_scroll_offset = _paper_camera.get_camera_position()
+	_current_scale = _paper_camera.get_zoom()
+	tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
+
 	print("[TreeController] Rendering complete")
 
 
@@ -477,10 +434,9 @@ func _on_search_results(results: Array) -> void:
 		var position_array = first_result.get("position", [0, 0])
 		if position_array is Array and position_array.size() >= 2:
 			var pos = Vector2(position_array[0], position_array[1])
-			# Set scroll offset to center on this position (scroll_offset = world center)
-			if touch_controller:
-				touch_controller.scroll_offset = pos
-				touch_controller.scroll_changed.emit(touch_controller.scroll_offset)
+			# Center on this position
+			if _paper_camera:
+				_paper_camera.scroll_to(pos, true)
 				print("[TreeController] Centered on: ", first_result.get("scientific_name", ""))
 
 
@@ -543,10 +499,10 @@ func _on_node_unhovered() -> void:
 # UI Updates
 # =============================================================================
 
-func _show_loading(show: bool) -> void:
+func _show_loading(should_show: bool) -> void:
 	"""Show/hide loading indicator."""
 	if loading_label:
-		loading_label.visible = show
+		loading_label.visible = should_show
 
 
 func _update_stats_display() -> void:

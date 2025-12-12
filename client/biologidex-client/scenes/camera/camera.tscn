@@ -1,22 +1,21 @@
-[gd_scene load_steps=5 format=3 uid="uid://b12e8gabmy5f0"]
+[gd_scene load_steps=4 format=3 uid="uid://b12e8gabmy5f0"]
 
 [ext_resource type="Script" uid="uid://cc3lv4isgvhri" path="res://scenes/camera/camera.gd" id="1_camera"]
-[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="3_intbg"]
+[ext_resource type="PackedScene" uid="uid://paper_camera_scene_001" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
 [ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_qqjab"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="5_4ph7v"]
 
 [node name="Camera" type="Node2D" node_paths=PackedStringArray("back_button", "status_label", "loading_spinner")]
 script = ExtResource("1_camera")
-back_button = NodePath("UI/Control/MainVBox/Header/BackButton")
-status_label = NodePath("UI/Control/MainVBox/ContentMargin/ContentVBox/StatusLabel")
-loading_spinner = NodePath("UI/Control/MainVBox/ContentMargin/ContentVBox/LoadingSpinner")
+back_button = NodePath("PaperCameraScene/UILayer/UIContainer/Control/MainVBox/Header/BackButton")
+status_label = NodePath("PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/StatusLabel")
+loading_spinner = NodePath("PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/LoadingSpinner")
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="PaperCameraScene" parent="." instance=ExtResource("2_paper_camera")]
+unique_name_in_owner = true
 
-[node name="InteractiveBackground" parent="UI" instance=ExtResource("3_intbg")]
-
-[node name="Control" type="Control" parent="UI"]
-layout_mode = 3
+[node name="Control" type="Control" parent="PaperCameraScene/UILayer/UIContainer"]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -25,7 +24,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("5_4ph7v")
 
-[node name="MainVBox" type="VBoxContainer" parent="UI/Control"]
+[node name="MainVBox" type="VBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -34,24 +33,24 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Header" type="HBoxContainer" parent="UI/Control/MainVBox"]
+[node name="Header" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="BackButton" type="Button" parent="UI/Control/MainVBox/Header"]
+[node name="BackButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 124
 text = "<<"
 
-[node name="Spacer" type="Control" parent="UI/Control/MainVBox/Header"]
+[node name="Spacer" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
-[node name="ContentMargin" type="MarginContainer" parent="UI/Control/MainVBox"]
+[node name="ContentMargin" type="MarginContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox"]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -60,13 +59,13 @@ theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 40
 theme_override_constants/margin_bottom = 20
 
-[node name="ContentVBox" type="VBoxContainer" parent="UI/Control/MainVBox/ContentMargin"]
+[node name="ContentVBox" type="VBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="InstructionLabel" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="InstructionLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 124
@@ -74,12 +73,12 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="RecordImage" parent="UI/Control/MainVBox/ContentMargin/ContentVBox" instance=ExtResource("3_qqjab")]
+[node name="RecordImage" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox" instance=ExtResource("3_qqjab")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="RotateImageButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="RotateImageButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(200, 60)
@@ -88,7 +87,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 124
 text = "Rotate Image"
 
-[node name="SelectPhotoButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="SelectPhotoButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
@@ -96,7 +95,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 124
 text = "Select Photo"
 
-[node name="StatusLabel" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="StatusLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -105,21 +104,21 @@ text = "currentstatus"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="ResultLabel" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="ResultLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="ProgressLabel" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="ProgressLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 
-[node name="UploadButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="UploadButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(200, 60)
@@ -129,7 +128,7 @@ theme_override_font_sizes/font_size = 124
 disabled = true
 text = "Upload & Analyze"
 
-[node name="RetryButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="RetryButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(200, 60)
@@ -138,7 +137,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 124
 text = "Retry Analysis"
 
-[node name="ManualEntryButton" type="Button" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="ManualEntryButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(200, 60)
@@ -147,7 +146,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 124
 text = "Manual Entry"
 
-[node name="LoadingSpinner" type="Label" parent="UI/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="LoadingSpinner" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

@@ -8,7 +8,6 @@ extends Node2D
 @onready var dex_button: Button = get_node("%DexButton")
 @onready var feed_button: Button = get_node("%FeedButton")
 @onready var tree_button: Button = get_node("%TreeButton")
-@onready var tree_camera_button: Button = get_node("%TreeCameraButton")
 @onready var social_button: Button = get_node("%SocialButton")
 @onready var menu_button: Button = get_node("%MenuButton")
 
@@ -36,7 +35,6 @@ func _ready() -> void:
 	dex_button.pressed.connect(_on_dex_pressed)
 	feed_button.pressed.connect(_on_feed_pressed)
 	tree_button.pressed.connect(_on_tree_pressed)
-	tree_camera_button.pressed.connect(_on_tree_camera_pressed)
 	social_button.pressed.connect(_on_social_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
 
@@ -73,12 +71,6 @@ func _on_tree_pressed() -> void:
 	"""Navigate to taxonomic tree"""
 	print("[Home] Tree button pressed")
 	navigation_manager.navigate_to("res://scenes/tree/tree.tscn")
-
-
-func _on_tree_camera_pressed() -> void:
-	"""Navigate to Camera2D-based tree (experimental)"""
-	print("[Home] Tree Camera button pressed")
-	navigation_manager.navigate_to("res://scenes/tree_camera/tree_camera.tscn")
 
 
 func _on_social_pressed() -> void:

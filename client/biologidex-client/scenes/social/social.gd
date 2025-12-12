@@ -1,9 +1,7 @@
 extends BaseSceneNode
-## Social Scene - Lab book style friends management with touch scrolling
-## Uses BackgroundTouchController for scroll system similar to DexFeed
+## Social Scene - Lab book style friends management with PaperCameraScene scrolling
 
-const TouchController = preload("res://features/ui/components/interactive_background/background_touch_controller.gd")
-const ClipboardHelper = preload("res://features/ui/components/clipboard/clipboard_helper.gd")
+const ClipboardUtils = preload("res://features/ui/components/clipboard/clipboard_helper.gd")
 
 # State
 enum SocialState { IDLE, LOADING, SCROLLING }
@@ -11,8 +9,8 @@ var _state: SocialState = SocialState.IDLE
 var friends_data: Array = []
 var pending_requests: Array = []
 
-# Touch controller (created dynamically)
-var _touch_controller: TouchController
+# PaperCameraScene component
+@onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
 
 # Preloaded scenes
 var friend_item_scene = preload("res://scenes/social/components/friend_list_item.tscn")
@@ -53,7 +51,7 @@ func _on_scene_ready() -> void:
 	status_label = get_node("%StatusLabel")
 
 	_setup_ui()
-	await _setup_touch_controller()
+	await _setup_scroll_controller()
 	_setup_confirmation_dialog()
 
 	# Load initial data
@@ -77,37 +75,20 @@ func _setup_ui() -> void:
 	_show_status("", true)
 
 
-func _setup_touch_controller() -> void:
-	"""Setup touch controller for scroll system"""
+func _setup_scroll_controller() -> void:
+	"""Setup PaperCameraScene for scroll system"""
 	# Wait for layout to settle
 	await get_tree().process_frame
 
 	var content_height := content_area.size.y
 	assert(content_height > 0, "Social: ContentArea size must be > 0")
 
-	# Create and configure touch controller
-	_touch_controller = TouchController.new()
-	_touch_controller.name = "TouchController"
-	_touch_controller.mouse_filter = Control.MOUSE_FILTER_PASS
-	_touch_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
-	content_area.add_child(_touch_controller)
-	# Move to back (index 0) so buttons in scroll_content receive events first
-	content_area.move_child(_touch_controller, 0)
-
-	# Configure for vertical-only scrolling
-	_touch_controller.scroll_limits_enabled = true
-	_touch_controller.scroll_min = Vector2(0.0, 0.0)
-	_touch_controller.scroll_max = Vector2(0.0, 0.0)  # Updated when content changes
-	_touch_controller.rubber_band_enabled = true
-	_touch_controller.min_scale = 1.0  # Disable zoom
-	_touch_controller.max_scale = 1.0
-
 	# Connect signals
-	_touch_controller.scroll_changed.connect(_on_scroll_changed)
-	_touch_controller.gesture_started.connect(_on_gesture_started)
-	_touch_controller.gesture_ended.connect(_on_gesture_ended)
+	_paper_camera.view_changed.connect(_on_view_changed)
+	_paper_camera.gesture_started.connect(_on_gesture_started)
+	_paper_camera.gesture_ended.connect(_on_gesture_ended)
 
-	print("[Social] Touch controller setup complete")
+	print("[Social] PaperCameraScene setup complete")
 
 
 func _setup_confirmation_dialog() -> void:
@@ -122,10 +103,10 @@ func _setup_confirmation_dialog() -> void:
 # Scroll Handling
 # =============================================================================
 
-func _on_scroll_changed(offset: Vector2) -> void:
-	"""Handle scroll position change"""
+func _on_view_changed(cam_position: Vector2, _zoom: float) -> void:
+	"""Handle view change from PaperCameraScene"""
 	if scroll_content:
-		scroll_content.position.y = -offset.y
+		scroll_content.position.y = -cam_position.y
 
 
 func _on_gesture_started() -> void:
@@ -142,7 +123,7 @@ func _on_gesture_ended() -> void:
 
 func _update_scroll_limits() -> void:
 	"""Update max scroll based on content height"""
-	if not _touch_controller or not scroll_content or not content_area:
+	if not _paper_camera or not scroll_content or not content_area:
 		return
 
 	await get_tree().process_frame
@@ -151,7 +132,10 @@ func _update_scroll_limits() -> void:
 	var visible_height := content_area.size.y
 	var max_scroll := maxf(0.0, content_height - visible_height)
 
-	_touch_controller.scroll_max.y = max_scroll
+	_paper_camera.set_scroll_limits(
+		Vector2(0.0, 0.0),
+		Vector2(0.0, max_scroll)
+	)
 	print("[Social] Scroll limits updated: content=%d, visible=%d, max=%d" % [
 		int(content_height), int(visible_height), int(max_scroll)
 	])
@@ -189,7 +173,7 @@ func _on_own_friend_code_pressed() -> void:
 	if friend_code.is_empty() or friend_code == "Error" or friend_code == "Loading...":
 		return
 
-	var success := ClipboardHelper.copy_to_clipboard(friend_code)
+	var success := ClipboardUtils.copy_to_clipboard(friend_code)
 	if success:
 		print("[Social] Copied own friend code: ", friend_code)
 		_show_copy_feedback()

@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-05)
+## Status (2025-12-11)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -17,7 +17,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ Two-step image upload workflow (convert → download → analyze)
 - ✅ Multiple animal detection support with selection API
 - ✅ Client-side image rotation with post-conversion transformations
-- ✅ Touch-interactive paper background with pan/zoom (all scenes via InteractiveBackground component)
+- ✅ **PaperCameraScene**: Unified pan/zoom/scroll component for all scenes
 - ✅ DexRecordImage reusable component with unified API for image display/loading
 - ✅ Dex feed vertical carousel with snap-to-item and pooled DexRecordImage rendering
 - ✅ Social scene with lab book styling, touch scrolling, and copyable friend codes
@@ -119,36 +119,54 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
 
-**Touch-Interactive Background (Updated 2025-12-05)**:
-- **InteractiveBackground** (`features/ui/components/interactive_background/`): Self-contained reusable component
-  - `interactive_background.tscn`: Prefab scene - just instance it, no wiring needed
-  - `interactive_background.gd`: Auto-connects shader to touch controller signals
-  - `background_touch_controller.gd`: Pan/zoom gesture handler with threshold-based detection
-- **paper.gdshader** (`shaders/paper.gdshader`): Accepts `scroll` (Vector2) and `scale` (float) uniforms
-- **Gesture support**: Single-finger/mouse drag (pan), two-finger pinch (zoom), scroll wheel (zoom)
-- **Inertia**: Momentum-based scrolling with exponential decay after release
-- **Web compatibility**: Uses position-based touch tracking (not index) to work around iOS web bugs
-  - GitHub issues: #95941 (iOS index overflow), #94346 (multitouch relative), #3772 (cross-platform)
-- **Optional Scroll Limits** (for bounded scrolling like feeds):
-  - `scroll_limits_enabled`: Enable bounded scrolling with rubber-banding
-  - `scroll_min`/`scroll_max`: Vector2 limits (use INF/-INF for unbounded axes)
+**PaperCameraScene Component (Updated 2025-12-11)**:
+- **Location**: `features/camera_system/` - Unified pan/zoom/scroll component
+- **Files**:
+  - `paper_camera_scene.tscn`: Instancable scene with background + touch controller
+  - `paper_camera_scene.gd`: `class_name PaperCameraScene` - orchestrates background + controller
+  - `camera_touch_controller.gd`: `class_name CameraTouchController` - gesture handling
+- **Architecture**: 3-layer structure for all scenes:
+  ```
+  PaperCameraScene (Node2D)
+  ├── BackgroundLayer (CanvasLayer, layer=-1)
+  │   └── Background (ColorRect + paper.gdshader)
+  ├── TouchInputLayer (CanvasLayer, layer=0)
+  │   └── TouchInputArea (Control + CameraTouchController)
+  └── UILayer (CanvasLayer, layer=1)
+      └── UIContainer (Control) ← Add your UI here
+  ```
+- **Export Variables** (configurable in editor):
+  - `min_zoom`/`max_zoom`/`zoom_step`/`initial_zoom`: Zoom configuration
+  - `scroll_limits_enabled`: Enable bounded scrolling (feeds, social)
+  - `scroll_min`/`scroll_max`: Vector2 limits for bounded scrolling
   - `rubber_band_enabled`/`rubber_band_factor`/`rubber_band_max`: Overscroll resistance
-  - `snap_back_lerp`: Speed of snap-back animation when released past limits
-  - `set_scroll_limits(min, max)`: Runtime API to configure limits
-  - `scroll_to(offset, animated)`: Programmatic scrolling
-  - `tap_detected` signal: Emitted when gesture ends without drag (tap on background)
-  - **Zoom behavior**: Bounded mode zooms in-place (no scroll adjustment); infinite canvas keeps cursor point stationary
-- **Project settings** (`project.godot`):
-  - `pointing/emulate_touch_from_mouse = true` (desktop testing)
-  - `pointing/emulate_mouse_from_touch = true` (mobile buttons work via emulated mouse clicks)
-- **Input handling strategy**:
-  - TouchController uses `MOUSE_FILTER_PASS` (not STOP) to allow events through to buttons
-  - 10px `drag_threshold` distinguishes taps from drags - taps pass through, drags are consumed
-  - Touch events only tracked for pinch zoom; single-touch handled via mouse emulation
-  - Buttons receive emulated mouse clicks on mobile, work correctly
-- **Scene integration**: Instance `InteractiveBackground` as first child in UI CanvasLayer
-- **Critical**: UI overlay containers must have `mouse_filter = 2` (IGNORE) to pass events through; buttons keep default STOP
-- **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social (NOT tree)
+  - `zoom_enabled`/`inertia_enabled`: Toggle features
+- **Signals**:
+  - `view_changed(position: Vector2, zoom: float)`: Emitted on any scroll/zoom change
+  - `tap_detected(world_pos: Vector2)`: Background tap (no drag occurred)
+  - `gesture_started`, `gesture_ended`: For state machine integration
+- **Public API**:
+  ```gdscript
+  @onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
+
+  # Scroll/zoom control
+  _paper_camera.scroll_to(position, animated)  # Center on world position
+  _paper_camera.set_zoom(zoom_level)           # Set zoom level
+  _paper_camera.reset()                        # Reset to initial state
+
+  # Query state
+  _paper_camera.get_camera_position()          # Current scroll offset
+  _paper_camera.get_zoom()                     # Current zoom level
+
+  # Configure limits at runtime
+  _paper_camera.set_scroll_limits(min_vec, max_vec)
+  ```
+- **Scene Integration Pattern**:
+  1. Instance `PaperCameraScene` as child of root
+  2. Add UI content under `PaperCameraScene/UILayer/UIContainer/`
+  3. Connect `view_changed` signal for scroll-driven content (feeds, tree)
+  4. UI containers: `mouse_filter = 2` (IGNORE); buttons keep default STOP
+- **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social, tree
 
 **Taxonomic Tree Visualization (Updated 2025-12-10)**:
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
@@ -186,57 +204,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `MAX_CONCURRENT_LOADS`: Max simultaneous HTTP requests (default: 4)
 - **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data), `tree_dex_image.gd` (pooled image wrapper)
 
-**Tree Camera Scene (Updated 2025-12-10)** (Camera2D-based tree - WORKING):
-- **Purpose**: Tree visualization using Camera2D for **perfect background/foreground sync** (solves the parallax drift issue)
-- **Location**: `scenes/tree_camera/` (tree_camera.tscn, tree_camera_controller.gd)
-- **Architecture**:
-  - `Camera2D`: Single source of truth for view transform (position, zoom)
-  - `TreeCameraController` (`features/tree/camera_controller.gd`): Direct pan/zoom/touch handling (no smoothing/inertia)
-  - `paper_camera.gdshader`: Computes world coords in vertex shader, Godot handles camera transform
-  - `WorldContent` (Node2D): Contains background + tree graph, transforms with camera automatically
-- **Why It Works**:
-  - Camera2D transforms ALL Node2D children uniformly (both background and tree nodes)
-  - Shader passes world coordinates via `varying`, fragment shader uses them for procedural texture
-  - Background is `Polygon2D` (Node2D-based), NOT `ColorRect` (Control) - Camera2D only transforms Node2D!
-  - No manual coordinate conversion needed - everything stays in world space
-- **Critical Implementation Details**:
-  - Background MUST be `Polygon2D` or `Sprite2D` (Node2D), NOT `ColorRect` (Control won't transform with Camera2D)
-  - Shader does NOT use `skip_vertex_transform` - let Godot handle the transform chain
-  - Vertex shader: `world_coord = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy` to capture world position
-  - Fragment shader uses interpolated `world_coord` for procedural texturing
-- **Scene Structure**:
-  ```
-  TreeCamera (Node2D)
-  ├── Camera2D (enabled=true) ← Single source of truth
-  │   └── CameraController ← Pan/zoom/touch handling
-  ├── WorldContent (Node2D) ← Camera automatically transforms this
-  │   ├── PaperBackground (Polygon2D + paper_camera.gdshader)
-  │   └── TreeGraph (Node2D)
-  │       ├── EdgesLayer, NodesLayer, DexImagesLayer, LabelsLayer
-  └── UILayer (CanvasLayer, layer=10) ← Fixed UI (not affected by camera)
-  ```
-- **Camera Controller Features** (`features/tree/camera_controller.gd`):
-  - Direct pan/zoom response (no smoothing or inertia - immediate 1:1 input)
-  - Touch gestures: Single-finger pan, two-finger pinch zoom
-  - Mouse: Left-drag to pan, scroll wheel to zoom
-  - Cursor-centric zoom (zoom toward cursor position)
-  - Uses `_input()` not `_unhandled_input()` to ensure events are captured
-  - Export vars: `min_zoom`, `max_zoom`, `zoom_step`, `pinch_sensitivity`, `scroll_sensitivity`, `drag_threshold`, `pan_sensitivity`
-  - Public API: `center_on()`, `set_zoom()`, `get_view_rect()`, `reset()`
-- **Paper Background Exports** (on root TreeCamera node):
-  - Grid: `grid_scale`, `grid_line_px`, `grid_line_color`, `grid_line_alpha`
-  - Paper: `paper_color`, `paper_noise_amount`, `paper_noise_scale`
-  - Speckles: `speckle_amount`, `speckle_density`, `speckle_scale`
-  - Fibers: `fiber_amount`, `fiber_scale`
-- **Home Screen Access**: "Tree (Camera2D)" button navigates to this scene
-- **Testing**: Run `godot --path . res://scenes/tree_camera/tree_camera.tscn`
-
-**Dex Feed Carousel (Updated 2025-12-05)**:
+**Dex Feed Carousel (Updated 2025-12-11)**:
 - **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization
 - **Location**: `features/dex_feed/` (FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
 - **Key Design**: Pool of 5 DexRecordImage instances, recycled as user scrolls for memory efficiency
 - **Components**:
-  - `BackgroundTouchController`: Shared with InteractiveBackground, configured with scroll limits for feed
+  - `PaperCameraScene`: Configured with scroll limits for vertical feed scrolling
   - `FeedCarouselRenderer`: Pooled DexRecordImage instances with per-entry randomization
   - `dex_feed.gd`: State machine orchestrating sync, filter, and carousel components
 - **State Machine**: IDLE → LOADING → SCROLLING → (back to IDLE or ERROR)
@@ -247,7 +220,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `max_rand_offset`: Horizontal offset +/- percentage of width (default: 0.1 = 10%)
   - `max_rand_rotate`: Rotation +/- degrees (default: 8°)
 - **Per-entry Random Caching**: `_entry_randoms` array stores consistent random values per entry
-- **Touch Behavior** (via BackgroundTouchController with scroll limits):
+- **Touch Behavior** (via PaperCameraScene with scroll limits):
   - Free scroll up/down with configurable vertical limits (0 to max_scroll_y)
   - Horizontal scroll bounded to ±50% of viewport width
   - 10px drag threshold (tap passes through to navigate to dex)
@@ -258,11 +231,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - Visibility buffer: scroll_offset ± 0.5-1.5× viewport height
 - **Signals**: FeedCarouselRenderer emits `item_pressed`, `image_ready`, `layout_calculated`
 
-**Social Scene (Updated 2025-12-05)**:
-- **Architecture**: Lab book "table of contents" style with BackgroundTouchController scrolling
+**Social Scene (Updated 2025-12-11)**:
+- **Architecture**: Lab book "table of contents" style with PaperCameraScene scrolling
 - **Location**: `scenes/social/` (social.gd/tscn), `scenes/social/components/` (friend_list_item, pending_request_item)
 - **Features**:
-  - InteractiveBackground with vertical-only scrolling (zoom disabled)
+  - PaperCameraScene with vertical-only scrolling (zoom disabled)
   - Copyable friend codes with "Copied!" feedback animation
   - Friend entries show: username, catches, unique species, copyable friend code, action buttons
   - Pending requests section (hidden when empty)

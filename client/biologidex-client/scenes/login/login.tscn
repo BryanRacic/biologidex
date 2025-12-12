@@ -1,26 +1,16 @@
-[gd_scene load_steps=4 format=3 uid="uid://b3cxkv5r1h4yp"]
+[gd_scene load_steps=3 format=3 uid="uid://b3cxkv5r1h4yp"]
 
 [ext_resource type="Script" uid="uid://mw7akwjj2k3k" path="res://scenes/login/login.gd" id="1_login"]
-[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="2_intbg"]
+[ext_resource type="PackedScene" uid="uid://paper_camera_scene_001" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="4_sce6i"]
 
 [node name="Login" type="Node2D"]
 script = ExtResource("1_login")
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="PaperCameraScene" parent="." instance=ExtResource("2_paper_camera")]
+unique_name_in_owner = true
 
-[node name="InteractiveBackground" parent="UI" instance=ExtResource("2_intbg")]
-
-[node name="Control" type="Control" parent="UI"]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="CenterContainer" type="CenterContainer" parent="UI/Control"]
+[node name="Control" type="Control" parent="PaperCameraScene/UILayer/UIContainer"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -29,25 +19,34 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control/CenterContainer"]
+[node name="CenterContainer" type="CenterContainer" parent="PaperCameraScene/UILayer/UIContainer/Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer"]
 layout_mode = 2
 theme = ExtResource("4_sce6i")
 theme_override_constants/separation = 30
 alignment = 1
 mouse_filter = 2
 
-[node name="UsernameField" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="UsernameField" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 theme = ExtResource("4_sce6i")
 mouse_filter = 2
 
-[node name="UsernameLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer/UsernameField"]
+[node name="UsernameLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer/UsernameField"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Username:"
 
-[node name="UsernameInput" type="LineEdit" parent="UI/Control/CenterContainer/VBoxContainer/UsernameField"]
+[node name="UsernameInput" type="LineEdit" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer/UsernameField"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 50)
 layout_mode = 2
@@ -57,18 +56,18 @@ placeholder_text = "click here"
 alignment = 1
 expand_to_text_length = true
 
-[node name="PasswordField" type="HBoxContainer" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="PasswordField" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 mouse_filter = 2
 
-[node name="PasswordLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer/PasswordField"]
+[node name="PasswordLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer/PasswordField"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 124
 text = "Password:"
 
-[node name="PasswordInput" type="LineEdit" parent="UI/Control/CenterContainer/VBoxContainer/PasswordField"]
+[node name="PasswordInput" type="LineEdit" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer/PasswordField"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 50)
 layout_mode = 2
@@ -78,12 +77,12 @@ alignment = 1
 expand_to_text_length = true
 secret = true
 
-[node name="Spacer3" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="Spacer3" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="LoginButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="LoginButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
@@ -91,7 +90,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 124
 text = "Login"
 
-[node name="StatusLabel" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="StatusLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -100,7 +99,7 @@ theme_override_font_sizes/font_size = 124
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="LoadingSpinner" type="Label" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="LoadingSpinner" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -109,17 +108,17 @@ theme_override_font_sizes/font_size = 124
 text = "Loading..."
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="Spacer" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="Spacer2" type="Control" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="Spacer2" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="CreateAcctButton" type="Button" parent="UI/Control/CenterContainer/VBoxContainer"]
+[node name="CreateAcctButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2

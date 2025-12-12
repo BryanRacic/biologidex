@@ -1,19 +1,24 @@
-[gd_scene load_steps=4 format=3 uid="uid://c8v7k2naoawq2"]
+[gd_scene load_steps=3 format=3 uid="uid://c8v7k2naoawq2"]
 
 [ext_resource type="Script" uid="uid://c0evumno1kr2k" path="res://scenes/dex_feed/dex_feed.gd" id="1_dex_feed"]
-[ext_resource type="PackedScene" path="res://features/ui/components/interactive_background/interactive_background.tscn" id="2_intbg"]
+[ext_resource type="PackedScene" uid="uid://paper_camera_scene_001" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="3_4phfc"]
 
 [node name="DexFeed" type="Node2D" node_paths=PackedStringArray("back_button")]
 script = ExtResource("1_dex_feed")
-back_button = NodePath("UI/Control/VBoxContainer/Header/BackButton")
+back_button = NodePath("PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/Header/BackButton")
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="PaperCameraScene" parent="." instance=ExtResource("2_paper_camera")]
+unique_name_in_owner = true
+scroll_limits_enabled = true
+scroll_min = Vector2(-640, 0)
+scroll_max = Vector2(640, 0)
+rubber_band_enabled = true
+zoom_enabled = false
+inertia_enabled = true
 
-[node name="InteractiveBackground" parent="UI" instance=ExtResource("2_intbg")]
-
-[node name="Control" type="Control" parent="UI"]
-layout_mode = 3
+[node name="Control" type="Control" parent="PaperCameraScene/UILayer/UIContainer"]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -22,7 +27,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("3_4phfc")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Control"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -31,41 +36,41 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 0
 
-[node name="Header" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
+[node name="Header" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 
-[node name="BackButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+[node name="BackButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 44)
 layout_mode = 2
 text = "<<"
 
-[node name="StatusLabel" type="Label" parent="UI/Control/VBoxContainer/Header"]
+[node name="StatusLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 horizontal_alignment = 1
 
-[node name="RefreshButton" type="Button" parent="UI/Control/VBoxContainer/Header"]
+[node name="RefreshButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 44)
 layout_mode = 2
 text = "Refresh"
 
-[node name="FilterBar" type="HBoxContainer" parent="UI/Control/VBoxContainer"]
+[node name="FilterBar" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer"]
 visible = false
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="AllButton" type="Button" parent="UI/Control/VBoxContainer/FilterBar"]
+[node name="AllButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/FilterBar"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 44)
 layout_mode = 2
 text = "All Friends"
 
-[node name="FriendsDropdown" type="OptionButton" parent="UI/Control/VBoxContainer/FilterBar"]
+[node name="FriendsDropdown" type="OptionButton" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/FilterBar"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
@@ -74,14 +79,14 @@ theme = ExtResource("3_4phfc")
 item_count = 1
 popup/item_0/id = 0
 
-[node name="ContentArea" type="Control" parent="UI/Control/VBoxContainer"]
+[node name="ContentArea" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer"]
 unique_name_in_owner = true
 clip_contents = true
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="CarouselContainer" type="Control" parent="UI/Control/VBoxContainer/ContentArea"]
+[node name="CarouselContainer" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/ContentArea"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -91,16 +96,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="CarouselContainer" type="Control" parent="UI/Control/VBoxContainer/ContentArea/CarouselContainer"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="EmptyStateLabel" type="Label" parent="UI/Control/VBoxContainer/ContentArea"]
+[node name="EmptyStateLabel" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/VBoxContainer/ContentArea"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
