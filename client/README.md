@@ -93,14 +93,14 @@ ip addr show | grep "inet " | grep -v 127.0.0.1
 hostname -I
 ```
 
-Note your local IP (e.g., `192.168.1.100`).
+Note your local IP (e.g., `192.168.1.3`).
 
 ### Step 4: Run & Test
 
 1. In Godot, click **Remote Debug → Run in Browser** (the fourth button from the right in the top-right corner)
 2. On your mobile device, open a browser and navigate to:
-   - **With SSL:** `https://192.168.1.100:8060/tmp_js_export.html`
-   - **Without SSL:** `http://192.168.1.100:8060/tmp_js_export.html`
+   - **With SSL:** `https://192.168.1.3:8060/tmp_js_export.html`
+   - **Without SSL:** `http://192.168.1.3:8060/tmp_js_export.html`
 3. Accept the self-signed certificate warning on mobile if using HTTPS
 
 ### Workflow Tips for UI Development

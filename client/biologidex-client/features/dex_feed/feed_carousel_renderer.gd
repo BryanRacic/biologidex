@@ -66,6 +66,10 @@ var _entry_randoms: Array[Dictionary] = []
 var _entry_positions: Array[float] = []
 var _total_content_height: float = 0.0
 
+# Stored container dimensions (set via setup() - used instead of size to avoid web export issues)
+var _container_width: float = 0.0
+var _container_height: float = 0.0
+
 
 func _ready() -> void:
 	# Wait a frame to get accurate size
@@ -97,8 +101,10 @@ func _setup_pool() -> void:
 # =============================================================================
 
 func setup(container_width: float, container_height: float) -> void:
-	"""Configure carousel dimensions. Item dimensions are calculated from actual size."""
-	# Note: container_width/height are passed for logging but actual size is used dynamically
+	"""Configure carousel dimensions. Stores dimensions for layout calculations."""
+	# Store container dimensions - use these instead of size.x to avoid web export sizing issues
+	_container_width = container_width
+	_container_height = container_height
 	var calculated_height := _get_base_item_height()
 	print("[FeedCarouselRenderer] Configured: %.0fx%.0f, calculated item_height=%.0f" % [container_width, container_height, calculated_height])
 
@@ -210,9 +216,9 @@ func _compute_layout() -> void:
 
 
 func _get_base_item_width() -> float:
-	"""Get the base width for items (90% of actual container width)."""
-	assert(size.x > 0, "FeedCarouselRenderer: size.x must be > 0. Ensure renderer is added to scene tree before use.")
-	return size.x * 0.9
+	"""Get the base width for items (90% of stored container width)."""
+	assert(_container_width > 0, "FeedCarouselRenderer: setup() must be called before using layout functions.")
+	return _container_width * 0.9
 
 
 func _get_base_item_height() -> float:
@@ -247,8 +253,8 @@ func _get_visible_indices() -> Array[int]:
 	# View bounds in content space with buffer
 	# Larger buffer when zoomed out (more items visible), smaller when zoomed in
 	var buffer_factor := 1.5 / _current_scale
-	var view_top := _scroll_offset.y - size.y * buffer_factor
-	var view_bottom := _scroll_offset.y + size.y * (1.0 + buffer_factor)
+	var view_top := _scroll_offset.y - _container_height * buffer_factor
+	var view_bottom := _scroll_offset.y + _container_height * (1.0 + buffer_factor)
 
 	for i in range(_entry_positions.size()):
 		var entry_top: float = _entry_positions[i]
@@ -326,7 +332,8 @@ func _assign_entry_to_slot(data_idx: int, pool_idx: int) -> void:
 
 func _position_active_images() -> void:
 	"""Position all active images based on current scroll offset, scale, and randomization."""
-	var viewport_center := size / 2.0
+	# Use stored container dimensions for consistent positioning (avoids web export size issues)
+	var viewport_center := Vector2(_container_width, _container_height) / 2.0
 
 	for pool_idx in _active_assignments:
 		var data_idx: int = _active_assignments[pool_idx]
@@ -351,7 +358,7 @@ func _position_active_images() -> void:
 
 		# Content space: X=0 is horizontal center, Y=0 is top
 		# Random X offset from center
-		var content_x := x_offset_ratio * size.x
+		var content_x := x_offset_ratio * _container_width
 		var content_y := entry_y + entry_height / 2.0
 
 		# Create content-space center position for this entry

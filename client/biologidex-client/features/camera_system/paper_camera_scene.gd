@@ -250,6 +250,8 @@ func get_camera_position() -> Vector2:
 
 
 func get_view_rect() -> Rect2:
+	if not is_inside_tree():
+		return Rect2()
 	var viewport_size := get_viewport_rect().size
 	var half_size := viewport_size / (2.0 * camera.zoom.x)
 	return Rect2(camera.position - half_size, half_size * 2.0)

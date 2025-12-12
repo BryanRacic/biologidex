@@ -17,17 +17,23 @@ const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
 		if Engine.is_editor_hint() and value:
 			_load_editor_preview()
 
-# Node references
-@onready var tree_graph: Node2D = %TreeGraph
-@onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
-@onready var search_bar: LineEdit = %SearchBar
-@onready var mode_dropdown: OptionButton = %ModeDropdown
-@onready var zoom_in_button: Button = %ZoomInButton
-@onready var zoom_out_button: Button = %ZoomOutButton
-@onready var zoom_reset_button: Button = %ZoomResetButton
-@onready var center_button: Button = %CenterButton
-@onready var loading_label: Label = %LoadingLabel
-@onready var stats_label: Label = %StatsLabel
+# Node references (TreeGraph created dynamically to avoid web export bug GitHub #101975)
+var tree_graph: Node2D = null
+var _edges_layer: Node2D = null
+var _nodes_layer: Node2D = null
+var _labels_layer: Node2D = null
+var _dex_images_layer: Node2D = null
+
+# UI node references - using explicit paths to work around web export unique name issues
+var _paper_camera: PaperCameraScene = null
+var search_bar: LineEdit = null
+var mode_dropdown: OptionButton = null
+var zoom_in_button: Button = null
+var zoom_out_button: Button = null
+var zoom_reset_button: Button = null
+var center_button: Button = null
+var loading_label: Label = null
+var stats_label: Label = null
 
 # Tree data
 var current_tree_data: TreeDataModels.TreeData = null
@@ -90,18 +96,48 @@ func _load_editor_preview() -> void:
 
 	current_tree_data = TreeDataModels.TreeData.new(response)
 
-	if not tree_renderer and tree_graph:
+	if not tree_renderer:
 		_setup_renderer_for_editor()
 
 	_render_tree()
 
 
 func _setup_renderer_for_editor() -> void:
-	"""Setup renderer in editor mode."""
+	"""Setup renderer in editor mode (also creates TreeGraph dynamically)."""
+	# Create TreeGraph and layers for editor preview
+	if not _paper_camera:
+		_paper_camera = get_node_or_null("PaperCameraScene")
+	if not _paper_camera or not _paper_camera.content_container:
+		push_warning("[TreeController] Cannot setup editor preview: PaperCameraScene not ready")
+		return
+
+	tree_graph = Node2D.new()
+	tree_graph.name = "EditorTreeGraph"
+	_paper_camera.content_container.add_child(tree_graph)
+
+	_edges_layer = Node2D.new()
+	_edges_layer.name = "EdgesLayer"
+	_edges_layer.z_index = -1
+	tree_graph.add_child(_edges_layer)
+
+	_nodes_layer = Node2D.new()
+	_nodes_layer.name = "NodesLayer"
+	tree_graph.add_child(_nodes_layer)
+
+	_dex_images_layer = Node2D.new()
+	_dex_images_layer.name = "DexImagesLayer"
+	_dex_images_layer.z_index = 1
+	tree_graph.add_child(_dex_images_layer)
+
+	_labels_layer = Node2D.new()
+	_labels_layer.name = "LabelsLayer"
+	_labels_layer.z_index = 2
+	tree_graph.add_child(_labels_layer)
+
 	tree_renderer = TreeRenderer.new()
 	tree_renderer.name = "EditorTreeRenderer"
 	tree_graph.add_child(tree_renderer)
-	tree_renderer.setup_containers(%EdgesLayer, %NodesLayer, %LabelsLayer, %DexImagesLayer)
+	tree_renderer.setup_containers(_edges_layer, _nodes_layer, _labels_layer, _dex_images_layer)
 	print("[TreeController] Editor TreeRenderer initialized")
 
 
@@ -117,8 +153,19 @@ func _on_scene_ready() -> void:
 	scene_name = "TreeController"
 	print("[TreeController] Scene ready (radial layout)")
 
+	# Initialize node references using explicit paths (web export unique name workaround)
+	_paper_camera = $PaperCameraScene
+	back_button = $UILayer/Control/VBoxContainer/Header/BackButton
+	search_bar = $UILayer/Control/VBoxContainer/Header/SearchBar
+	mode_dropdown = $UILayer/Control/VBoxContainer/Header/ModeDropdown
+	zoom_in_button = $UILayer/Control/VBoxContainer/Header/ZoomControls/ZoomInButton
+	zoom_out_button = $UILayer/Control/VBoxContainer/Header/ZoomControls/ZoomOutButton
+	zoom_reset_button = $UILayer/Control/VBoxContainer/Header/ZoomControls/ZoomResetButton
+	center_button = $UILayer/Control/VBoxContainer/Header/ZoomControls/CenterButton
+	loading_label = $UILayer/Control/VBoxContainer/LoadingLabel
+	stats_label = $UILayer/Control/VBoxContainer/StatsLabel
+
 	# Wire up back button
-	back_button = %BackButton
 	if back_button and not back_button.pressed.is_connected(_on_back_pressed):
 		back_button.pressed.connect(_on_back_pressed)
 
@@ -173,7 +220,10 @@ func _setup_paper_camera() -> void:
 	# Get initial state for culling calculations
 	_scroll_offset = _paper_camera.get_camera_position()
 	_current_scale = _paper_camera.get_zoom()
-	_viewport_center = get_viewport_rect().size / 2.0
+	if is_inside_tree():
+		_viewport_center = get_viewport_rect().size / 2.0
+	else:
+		_viewport_center = Vector2(640, 360)  # Default fallback
 
 	print("[TreeController] PaperCameraScene connected (initial scale: %.1f)" % _current_scale)
 
@@ -188,13 +238,39 @@ func _setup_mode_dropdown() -> void:
 
 
 func _setup_renderer() -> void:
-	"""Setup TreeRenderer for visualization."""
+	"""Setup TreeRenderer for visualization.
+	Creates TreeGraph and layers programmatically to avoid web export bug (GitHub #101975)."""
+	# Create TreeGraph and layers dynamically (can't be in .tscn as children of instanced scene)
+	tree_graph = Node2D.new()
+	tree_graph.name = "TreeGraph"
+	_paper_camera.content_container.add_child(tree_graph)
+
+	_edges_layer = Node2D.new()
+	_edges_layer.name = "EdgesLayer"
+	_edges_layer.z_index = -1
+	tree_graph.add_child(_edges_layer)
+
+	_nodes_layer = Node2D.new()
+	_nodes_layer.name = "NodesLayer"
+	tree_graph.add_child(_nodes_layer)
+
+	_dex_images_layer = Node2D.new()
+	_dex_images_layer.name = "DexImagesLayer"
+	_dex_images_layer.z_index = 1
+	tree_graph.add_child(_dex_images_layer)
+
+	_labels_layer = Node2D.new()
+	_labels_layer.name = "LabelsLayer"
+	_labels_layer.z_index = 2
+	tree_graph.add_child(_labels_layer)
+
+	# Create and setup TreeRenderer
 	tree_renderer = TreeRenderer.new()
 	tree_renderer.name = "TreeRenderer"
 	tree_graph.add_child(tree_renderer)
 
-	# Pass node containers to renderer (including DexImagesLayer for dex record images)
-	tree_renderer.setup_containers(%EdgesLayer, %NodesLayer, %LabelsLayer, %DexImagesLayer)
+	# Pass node containers to renderer
+	tree_renderer.setup_containers(_edges_layer, _nodes_layer, _labels_layer, _dex_images_layer)
 
 	# Connect renderer signals
 	tree_renderer.node_selected.connect(_on_node_selected)

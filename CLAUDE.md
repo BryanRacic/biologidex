@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-11)
+## Status (2025-12-12)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -21,6 +21,13 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ DexRecordImage reusable component with unified API for image display/loading
 - ✅ Dex feed vertical carousel with snap-to-item and pooled DexRecordImage rendering
 - ✅ Social scene with lab book styling, touch scrolling, and copyable friend codes
+- ✅ **Web export fixes**: Multiple workarounds for Godot 4.5 web export issues:
+  - Instanced scene children bug (GitHub #101975) - UI as sibling CanvasLayer
+  - Unique name lookups - use explicit paths instead of `%NodeName`
+  - World content in instanced scenes - create programmatically
+  - Control.size unreliable - pass dimensions explicitly
+  - get_viewport_rect() timing - guard with `is_inside_tree()`
+  - CORS for media files - nginx headers added
 
 ---
 
@@ -111,30 +118,55 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - TokenManager: Use `is_logged_in()` not `has_valid_token()`
 - Services handle auth injection automatically
 
-**Web Export**:
+**Web Export (Updated 2025-12-12)**:
 - Single-threaded mode (best compatibility)
 - `HTTPRequest.accept_gzip = false` - avoid double decompression
 - **High DPI fix**: Custom HTML shell at `export_templates/custom_html_shell.html`
   - `canvas_resize_policy=1` (Project) prevents double-scaling
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
+- **CRITICAL - Instanced Scene Children Bug** (GitHub #101975):
+  - Nodes added as children of instanced scenes in .tscn files DON'T LOAD on web export
+  - Symptom: UI works in editor/desktop but nodes are null/missing on web
+  - ❌ BROKEN: Adding children to `InstancedScene/InternalNode/` in parent .tscn
+  - ✅ FIX: Add UI as SIBLING to instanced scene with separate CanvasLayer
+  - Pattern: Create `{Scene}UILayer` (CanvasLayer, layer=10) as sibling to PaperCameraScene
+  - All scenes using PaperCameraScene must follow this pattern
+- **Unique Name Lookups Can Fail** on web export even for sibling nodes:
+  - Symptom: `%NodeName` returns null on web but works in editor/desktop
+  - ✅ FIX: Use explicit paths (`$UILayer/Control/VBoxContainer/Header/BackButton`) instead of `%BackButton`
+  - Initialize node references in `_on_scene_ready()` or `_ready()`, not with `@onready`
+  - Tree scene uses this pattern for all UI nodes
+- **World Content in Instanced Scenes** must be created programmatically:
+  - ❌ BROKEN: Adding nodes to `PaperCameraScene/WorldContent/ContentContainer/` in .tscn
+  - ✅ FIX: Create in code using `_paper_camera.content_container.add_child(node)`
+  - Tree scene creates TreeGraph and all layers (EdgesLayer, NodesLayer, etc.) in `_setup_renderer()`
+- **Control.size unreliable** on web - dynamically created Controls may report incorrect `size`:
+  - ✅ FIX: Pass dimensions explicitly via `setup(width, height)` and store them
+  - FeedCarouselRenderer uses `_container_width`/`_container_height` instead of `size`
+- **get_viewport_rect() timing** - async callbacks can fire before node is in tree:
+  - ✅ FIX: Guard with `if not is_inside_tree(): return` before calling `get_viewport_rect()`
+  - Added to: `tree_renderer.gd:update_view()`, `paper_camera_scene.gd:get_view_rect()`
+- **CORS for media files**: Nginx must add CORS headers for `/media/` location (see `nginx.conf`)
 
-**PaperCameraScene Component (Updated 2025-12-11)**:
+**PaperCameraScene Component (Updated 2025-12-12)**:
 - **Location**: `features/camera_system/` - Unified pan/zoom/scroll component
 - **Files**:
-  - `paper_camera_scene.tscn`: Instancable scene with background + touch controller
-  - `paper_camera_scene.gd`: `class_name PaperCameraScene` - orchestrates background + controller
+  - `paper_camera_scene.tscn`: Instancable scene with background + camera + touch controller
+  - `paper_camera_scene.gd`: `class_name PaperCameraScene` - orchestrates camera + controller
   - `camera_touch_controller.gd`: `class_name CameraTouchController` - gesture handling
-- **Architecture**: 3-layer structure for all scenes:
+- **Architecture**: PaperCameraScene provides background/camera only; UI is SIBLING (due to web export bug):
   ```
-  PaperCameraScene (Node2D)
-  ├── BackgroundLayer (CanvasLayer, layer=-1)
-  │   └── Background (ColorRect + paper.gdshader)
-  ├── TouchInputLayer (CanvasLayer, layer=0)
-  │   └── TouchInputArea (Control + CameraTouchController)
-  └── UILayer (CanvasLayer, layer=1)
-      └── UIContainer (Control) ← Add your UI here
+  {Scene} (Node2D)
+  ├── PaperCameraScene (instance) - background + camera + touch handling
+  │   ├── Camera2D
+  │   ├── WorldContent/ContentContainer (for world-space content like tree nodes)
+  │   └── UILayer/UIContainer (UNUSED - don't add children here!)
+  └── {Scene}UILayer (CanvasLayer, layer=10) - YOUR UI GOES HERE
+      └── Control (anchors full rect)
+          └── ... your UI nodes
   ```
+- **CRITICAL**: Due to GitHub #101975, NEVER add children to `PaperCameraScene/UILayer/UIContainer/` in parent scene files. Always create a separate sibling CanvasLayer for UI.
 - **Export Variables** (configurable in editor):
   - `min_zoom`/`max_zoom`/`zoom_step`/`initial_zoom`: Zoom configuration
   - `scroll_limits_enabled`: Enable bounded scrolling (feeds, social)
@@ -147,7 +179,10 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `gesture_started`, `gesture_ended`: For state machine integration
 - **Public API**:
   ```gdscript
-  @onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
+  # Initialize in _on_scene_ready() using explicit path (web export workaround)
+  var _paper_camera: PaperCameraScene = null
+  func _on_scene_ready():
+      _paper_camera = $PaperCameraScene
 
   # Scroll/zoom control
   _paper_camera.scroll_to(position, animated)  # Center on world position
@@ -160,15 +195,20 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 
   # Configure limits at runtime
   _paper_camera.set_scroll_limits(min_vec, max_vec)
+
+  # Add world content programmatically (NOT in .tscn)
+  var my_content = Node2D.new()
+  _paper_camera.content_container.add_child(my_content)
   ```
-- **Scene Integration Pattern**:
-  1. Instance `PaperCameraScene` as child of root
-  2. Add UI content under `PaperCameraScene/UILayer/UIContainer/`
-  3. Connect `view_changed` signal for scroll-driven content (feeds, tree)
-  4. UI containers: `mouse_filter = 2` (IGNORE); buttons keep default STOP
+- **Scene Integration Pattern** (web-compatible):
+  1. Instance `PaperCameraScene` as child of scene root (for background/camera)
+  2. Create `{Scene}UILayer` (CanvasLayer, layer=10) as SIBLING to PaperCameraScene
+  3. Add all UI content under `{Scene}UILayer/Control/...`
+  4. Connect `view_changed` signal for scroll-driven content (feeds, tree)
+  5. UI containers: `mouse_filter = 2` (IGNORE); buttons keep default STOP
 - **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social, tree
 
-**Taxonomic Tree Visualization (Updated 2025-12-10)**:
+**Taxonomic Tree Visualization (Updated 2025-12-12)**:
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
   - `scroll_offset`: World-space position that appears at viewport center
   - When `scroll_offset = (0,0)`, world origin is at viewport center
@@ -203,8 +243,12 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `IMAGES_PER_FRAME`: Max new loads started per frame (default: 1)
   - `MAX_CONCURRENT_LOADS`: Max simultaneous HTTP requests (default: 4)
 - **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data), `tree_dex_image.gd` (pooled image wrapper)
+- **Web Export Pattern** (tree_controller.gd):
+  - TreeGraph and layers created programmatically in `_setup_renderer()` (not in .tscn)
+  - UI nodes initialized with explicit paths (`$UILayer/Control/...`) in `_on_scene_ready()`
+  - All `@onready` vars replaced with regular vars + manual initialization
 
-**Dex Feed Carousel (Updated 2025-12-11)**:
+**Dex Feed Carousel (Updated 2025-12-12)**:
 - **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization
 - **Location**: `features/dex_feed/` (FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
 - **Key Design**: Pool of 5 DexRecordImage instances, recycled as user scrolls for memory efficiency
@@ -230,8 +274,9 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `_active_assignments: Dictionary = {}` tracks {pool_index: data_index}
   - Visibility buffer: scroll_offset ± 0.5-1.5× viewport height
 - **Signals**: FeedCarouselRenderer emits `item_pressed`, `image_ready`, `layout_calculated`
+- **Web Export Fix**: `FeedCarouselRenderer` stores container dimensions via `setup(width, height)` instead of using `size` property (unreliable on web)
 
-**Social Scene (Updated 2025-12-11)**:
+**Social Scene (Updated 2025-12-12)**:
 - **Architecture**: Lab book "table of contents" style with PaperCameraScene scrolling
 - **Location**: `scenes/social/` (social.gd/tscn), `scenes/social/components/` (friend_list_item, pending_request_item)
 - **Features**:
@@ -376,6 +421,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - 37MB WASM → 9MB gzipped
 - Custom HTML shell: `export_templates/custom_html_shell.html` (high DPI fix)
 - `scripts/export-to-prod.sh` handles export, gzip, backup, deployment
+- **CRITICAL BUG (GitHub #101975)**: Children added to instanced scenes in .tscn files don't load on web export. See "Web Export" section in Critical Patterns & Gotchas for workaround.
 
 ## Commands
 

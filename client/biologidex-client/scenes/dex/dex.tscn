@@ -1,19 +1,21 @@
 [gd_scene load_steps=4 format=3 uid="uid://b1ddhtmmke34x"]
 
 [ext_resource type="Script" uid="uid://cyn8bfc0bs6sh" path="res://scenes/dex/dex.gd" id="1_dex_script"]
-[ext_resource type="PackedScene" uid="uid://paper_camera_scene_001" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
+[ext_resource type="PackedScene" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
 [ext_resource type="PackedScene" uid="uid://cbieexmnrqvew" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_6jk22"]
 [ext_resource type="Theme" uid="uid://dj81j7tgoh3qp" path="res://theme.tres" id="4_ugod7"]
 
 [node name="Dex" type="Node2D" node_paths=PackedStringArray("back_button")]
 script = ExtResource("1_dex_script")
-back_button = NodePath("PaperCameraScene/UILayer/UIContainer/Control/MainVBox/Header/BackButton")
+back_button = NodePath("DexUILayer/Control/MainVBox/Header/BackButton")
 
 [node name="PaperCameraScene" parent="." instance=ExtResource("2_paper_camera")]
-unique_name_in_owner = true
 
-[node name="Control" type="Control" parent="PaperCameraScene/UILayer/UIContainer"]
-layout_mode = 1
+[node name="DexUILayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="Control" type="Control" parent="DexUILayer"]
+layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -22,7 +24,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("4_ugod7")
 
-[node name="MainVBox" type="VBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control"]
+[node name="MainVBox" type="VBoxContainer" parent="DexUILayer/Control"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -31,24 +33,24 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Header" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox"]
+[node name="Header" type="HBoxContainer" parent="DexUILayer/Control/MainVBox"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="BackButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/Header"]
+[node name="BackButton" type="Button" parent="DexUILayer/Control/MainVBox/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 124
 text = "<<"
 
-[node name="Spacer" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/Header"]
+[node name="Spacer" type="Control" parent="DexUILayer/Control/MainVBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
-[node name="ContentMargin" type="MarginContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox"]
+[node name="ContentMargin" type="MarginContainer" parent="DexUILayer/Control/MainVBox"]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -57,53 +59,53 @@ theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 40
 theme_override_constants/margin_bottom = 20
 
-[node name="ContentVBox" type="VBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin"]
+[node name="ContentVBox" type="VBoxContainer" parent="DexUILayer/Control/MainVBox/ContentMargin"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="Dex Number" type="Label" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="Dex Number" type="Label" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="RecordImage" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox" instance=ExtResource("3_6jk22")]
+[node name="RecordImage" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox" instance=ExtResource("3_6jk22")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="NavControls" type="HBoxContainer" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox"]
+[node name="NavControls" type="HBoxContainer" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox"]
 layout_mode = 2
 mouse_filter = 2
 alignment = 1
 
-[node name="PreviousButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+[node name="PreviousButton" type="Button" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 text = "Prev"
 
-[node name="Spacer" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+[node name="Spacer" type="Control" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="NextButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+[node name="NextButton" type="Button" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 text = "Next"
 
-[node name="Spacer2" type="Control" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+[node name="Spacer2" type="Control" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="EditButton" type="Button" parent="PaperCameraScene/UILayer/UIContainer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
+[node name="EditButton" type="Button" parent="DexUILayer/Control/MainVBox/ContentMargin/ContentVBox/NavControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2

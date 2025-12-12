@@ -17,24 +17,6 @@ initial_zoom = 2.0
 zoom_enabled = true
 inertia_enabled = true
 
-[node name="TreeGraph" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer"]
-unique_name_in_owner = true
-
-[node name="EdgesLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
-unique_name_in_owner = true
-z_index = -1
-
-[node name="NodesLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
-unique_name_in_owner = true
-
-[node name="DexImagesLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
-unique_name_in_owner = true
-z_index = 1
-
-[node name="LabelsLayer" type="Node2D" parent="PaperCameraScene/WorldContent/ContentContainer/TreeGraph"]
-unique_name_in_owner = true
-z_index = 2
-
 [node name="UILayer" type="CanvasLayer" parent="."]
 layer = 10
 

@@ -311,6 +311,10 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 	"""Update view parameters (called when transform changes).
 	Uses dirty flag to throttle visibility recalculation."""
+	# Guard against being called before node is in scene tree (web export timing issue)
+	if not is_inside_tree():
+		return
+
 	var old_scale = _current_scale
 	_scroll_offset = scroll
 	_current_scale = scale

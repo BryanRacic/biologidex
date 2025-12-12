@@ -45,9 +45,7 @@ func _on_scene_ready() -> void:
 	scene_name = "Social"
 	print("[Social] Scene ready (lab book style)")
 
-	# Wire up back button and status label (inherited from BaseSceneNode)
-	back_button = get_node("%BackButton")
-	back_button.pressed.connect(_on_back_pressed)
+	# Wire up status label (back_button is already connected by BaseSceneNode via @export)
 	status_label = get_node("%StatusLabel")
 
 	_setup_ui()
