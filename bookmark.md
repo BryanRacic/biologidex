@@ -11,6 +11,13 @@
   - chunked/resumable uploads
   - Look at Cloudflare R2
 
+
+### Design updates
+- Login page is composition notebook front cover
+- Create account is filling out (if found return to) in composition book
+- Home screen has lineage tree background
+- Dex page & feed pan across screen (horizontal for page, vertical for feed)
+
 ### Essentials
 - dex entries should contain `username` & `catch date`
    - catch_date should be exclusively server side
@@ -22,7 +29,6 @@
     - ideally runnable on the admin interface
       - this should run anytime an animal record is deleted
       - prevent animal record creation unless confirmed by a user
-- remove/delete dex entry
 - retry failed dex entry
 
 ### Optimization
@@ -37,10 +43,7 @@
 - include additional data from COL export
   - VernacularName (now have NameRelation, need CommonName import)
   - SpeciesEstimate, TypeMaterial (locality)
-- evaluate server implementation
-  - Remove unused code, outdated features
-  - Identify inefficiant or non-optimal solutions/algorithmns
-  - Identify potential security/privacy issues
+- server_audit.md
 
 
 ### Polish

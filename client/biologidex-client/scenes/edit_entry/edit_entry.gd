@@ -533,6 +533,8 @@ func _on_rotate_image_pressed() -> void:
 		pending_image_texture = ImageTexture.create_from_image(image)
 		record_image.set_simple_texture(pending_image_texture)
 		record_image.show_simple()
+		# Clear any existing conversion_id since the rotated image needs to be re-uploaded
+		pending_image_conversion_id = ""
 		has_unsaved_changes = true
 
 
@@ -554,17 +556,56 @@ func _create_new_entry() -> void:
 		show_error("No Animal", "Please select an animal first")
 		return
 
+	# Check if we need to upload the image first
+	if pending_image_conversion_id.is_empty():
+		# We need an image - check if we have one to upload
+		if pending_image_texture == null:
+			show_error("No Image", "Please select an image first")
+			return
+
+		# Upload the image to get a conversion_id
+		_set_state(State.UPLOADING_IMAGE)
+		show_loading("Uploading image...")
+
+		# Convert texture to PNG bytes
+		var image: Image = pending_image_texture.get_image()
+		var png_data: PackedByteArray = image.save_png_to_buffer()
+
+		APIManager.images.convert_image(png_data, "manual_entry.png", "image/png", _on_create_image_converted)
+		return
+
+	# We already have a conversion_id, proceed to create entry
+	_finalize_create_entry()
+
+
+func _on_create_image_converted(response: Dictionary, code: int) -> void:
+	"""Handle image conversion during entry creation"""
+	if code != 200 and code != 201:
+		hide_loading()
+		show_error("Upload Failed", response.get("error", "Image upload failed"))
+		_set_state(State.IDLE)
+		return
+
+	pending_image_conversion_id = str(response.get("id", ""))
+	print("[EditEntry] Image converted, conversion_id: %s" % pending_image_conversion_id)
+
+	# Now create the entry
+	_finalize_create_entry()
+
+
+func _finalize_create_entry() -> void:
+	"""Finalize entry creation after image is ready"""
 	_set_state(State.SAVING)
 	show_loading("Creating entry...")
 
-	# Use dex service to create entry
-	# Note: For manual entry, we pass empty vision_job_id
+	# Use dex service to create entry with source_conversion
 	APIManager.dex.create_entry(
 		pending_animal_id,
 		"",  # No vision job
 		"",  # No notes
 		"friends",
-		_on_entry_created
+		_on_entry_created,
+		pending_image_conversion_id  # source_conversion for manual entry
 	)
 
 
@@ -589,6 +630,39 @@ func _update_existing_entry() -> void:
 		_navigate_back()
 		return
 
+	# Check if we have a modified image that needs to be uploaded first
+	if pending_image_texture != null and pending_image_conversion_id.is_empty():
+		# Upload the modified image to get a conversion_id
+		_set_state(State.UPLOADING_IMAGE)
+		show_loading("Uploading image...")
+
+		var image: Image = pending_image_texture.get_image()
+		var png_data: PackedByteArray = image.save_png_to_buffer()
+
+		APIManager.images.convert_image(png_data, "updated_entry.png", "image/png", _on_update_image_converted)
+		return
+
+	# Proceed to finalize the update
+	_finalize_update_entry()
+
+
+func _on_update_image_converted(response: Dictionary, code: int) -> void:
+	"""Handle image conversion during entry update"""
+	if code != 200 and code != 201:
+		hide_loading()
+		show_error("Upload Failed", response.get("error", "Image upload failed"))
+		_set_state(State.IDLE)
+		return
+
+	pending_image_conversion_id = str(response.get("id", ""))
+	print("[EditEntry] Image converted for update, conversion_id: %s" % pending_image_conversion_id)
+
+	# Now finalize the update
+	_finalize_update_entry()
+
+
+func _finalize_update_entry() -> void:
+	"""Finalize entry update after any image upload is complete"""
 	_set_state(State.SAVING)
 	show_loading("Saving changes...")
 

@@ -108,6 +108,36 @@ func put(
 		error_callback
 	)
 
+## Make authenticated PATCH request with JSON body (for partial updates)
+func patch(
+	endpoint: String,
+	data: Dictionary,
+	success_callback: Callable,
+	error_callback: Callable,
+	req_config: APITypes.RequestConfig = null
+) -> void:
+	if req_config == null:
+		req_config = APITypes.RequestConfig.new()
+
+	var url = config.build_url(endpoint)
+	var headers = ["Content-Type: application/json"]
+
+	# Add auth header if required
+	if req_config.requires_auth:
+		var token = TokenManager.get_access_token()
+		if token:
+			headers.append("Authorization: Bearer %s" % token)
+
+	_queue_json_request(
+		HTTPClient.METHOD_PATCH,
+		url,
+		data,
+		PackedStringArray(headers),
+		req_config,
+		success_callback,
+		error_callback
+	)
+
 ## Make authenticated DELETE request
 func delete(
 	endpoint: String,

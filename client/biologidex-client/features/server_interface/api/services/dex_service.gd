@@ -36,7 +36,8 @@ func create_entry(
 	vision_job_id: String = "",
 	notes: String = "",
 	visibility: String = "friends",
-	callback: Callable = Callable()
+	callback: Callable = Callable(),
+	source_conversion_id: String = ""
 ) -> void:
 	_log("Creating dex entry for animal: %s" % animal_id)
 
@@ -47,6 +48,9 @@ func create_entry(
 
 	if not vision_job_id.is_empty():
 		data["source_vision_job"] = vision_job_id
+
+	if not source_conversion_id.is_empty():
+		data["source_conversion"] = source_conversion_id
 
 	if not notes.is_empty():
 		data["notes"] = notes
@@ -163,6 +167,7 @@ func _on_toggle_favorite_error(error: APITypes.APIError, context: Dictionary) ->
 		context.callback.call({"error": error.message}, error.code)
 
 ## Update a dex entry (e.g., change animal, notes, visibility)
+## Uses PATCH for partial updates - only sends changed fields
 func update_entry(
 	entry_id: String,
 	update_data: Dictionary,
@@ -174,7 +179,7 @@ func update_entry(
 	var req_config = _create_request_config()
 	var context = {"entry_id": entry_id, "callback": callback}
 
-	api_client.put(
+	api_client.patch(
 		endpoint,
 		update_data,
 		_on_update_entry_success.bind(context),
