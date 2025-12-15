@@ -59,3 +59,4 @@
   - New window with each dex entry
     - Each entry displays the username of the original author
 - Allow download/export of dex record image
+- Overlapping label detection/fix logic

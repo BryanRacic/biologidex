@@ -251,8 +251,12 @@ func _populate_from_record(record: Dictionary) -> void:
 	# Update UI
 	_update_animal_display()
 	record_image.set_entry_data(record, "self")
+
+	# Connect to image_loaded signal to show simple mode after loading
+	if not record_image.image_loaded.is_connected(_on_record_image_loaded):
+		record_image.image_loaded.connect(_on_record_image_loaded)
+
 	record_image.load_image_from_entry()
-	record_image.show_bordered()
 	record_image.visible = true
 
 
@@ -280,8 +284,12 @@ func _populate_from_server_entry(entry: Dictionary) -> void:
 	}
 
 	record_image.set_entry_data(entry_data, "self")
+
+	# Connect to image_loaded signal to show simple mode after loading
+	if not record_image.image_loaded.is_connected(_on_record_image_loaded):
+		record_image.image_loaded.connect(_on_record_image_loaded)
+
 	record_image.load_image_from_entry()
-	record_image.show_bordered()
 	record_image.visible = true
 
 
@@ -518,6 +526,20 @@ func _on_file_load_error(error: String) -> void:
 	show_error("File Error", error)
 
 
+func _on_record_image_loaded(success: bool) -> void:
+	"""Handle when the record image finishes loading - show simple mode for editing."""
+	if success:
+		# DexRecordImage loads into bordered texture, copy it to simple for edit mode
+		var bordered_img = record_image.get_bordered_image()
+		if bordered_img and bordered_img.texture:
+			record_image.set_simple_texture(bordered_img.texture)
+			record_image.show_simple()
+		else:
+			record_image.show_bordered()
+	else:
+		record_image.show_simple()
+
+
 func _on_rotate_image_pressed() -> void:
 	"""Rotate the current image 90 degrees clockwise"""
 	var texture_to_rotate: Texture2D = null
@@ -525,17 +547,26 @@ func _on_rotate_image_pressed() -> void:
 	if pending_image_texture != null:
 		texture_to_rotate = pending_image_texture
 	else:
+		# Try simple texture first (for create mode)
 		texture_to_rotate = record_image.get_simple_texture()
+		# Fall back to bordered texture (for edit mode with existing entry)
+		if texture_to_rotate == null:
+			var bordered_image = record_image.get_bordered_image()
+			if bordered_image:
+				texture_to_rotate = bordered_image.texture
 
-	if texture_to_rotate:
-		var image = texture_to_rotate.get_image()
-		image.rotate_90(CLOCKWISE)
-		pending_image_texture = ImageTexture.create_from_image(image)
-		record_image.set_simple_texture(pending_image_texture)
-		record_image.show_simple()
-		# Clear any existing conversion_id since the rotated image needs to be re-uploaded
-		pending_image_conversion_id = ""
-		has_unsaved_changes = true
+	if texture_to_rotate == null:
+		print("[EditEntry] No texture available to rotate")
+		return
+
+	var image = texture_to_rotate.get_image()
+	image.rotate_90(CLOCKWISE)
+	pending_image_texture = ImageTexture.create_from_image(image)
+	record_image.set_simple_texture(pending_image_texture)
+	record_image.show_simple()
+	# Clear any existing conversion_id since the rotated image needs to be re-uploaded
+	pending_image_conversion_id = ""
+	has_unsaved_changes = true
 
 
 # ============================================================================

@@ -22,6 +22,7 @@ var current_index: int = -1
 var current_user_id: String = "self"
 var is_syncing: bool = false
 var available_users: Dictionary = {}
+var _pending_navigation_index: int = -1  # Target index to navigate to after sync
 
 # ============================================================================
 # Initialization
@@ -53,15 +54,21 @@ func _on_scene_ready() -> void:
 	# Handle navigation context (friend's dex from feed)
 	var target_index: int = _handle_navigation_context()
 
-	# Initialize users and sync
-	_populate_user_list()
-	_check_and_sync_if_needed()
+	# Store pending navigation target - this persists across sync completions
+	_pending_navigation_index = target_index
 
-	# Load record
+	# Initialize users
+	_populate_user_list()
+
+	# Load record BEFORE triggering sync so current_index is set
+	# This prevents sync completion from calling _load_first_record()
 	if target_index >= 0:
 		_navigate_to_record(target_index)
 	else:
 		_load_first_record()
+
+	# Now trigger sync - completion will refresh current entry
+	_check_and_sync_if_needed()
 
 
 func _handle_navigation_context() -> int:
@@ -69,13 +76,16 @@ func _handle_navigation_context() -> int:
 		return -1
 
 	var context: Dictionary = NavigationManager.get_context()
+
 	if context.has("user_id"):
 		current_user_id = context.get("user_id")
 		available_users[current_user_id] = context.get("username", "Friend")
-		print("[Dex] Loading %s's dex" % available_users[current_user_id])
+
+	# Cast to int for web export (JSON may parse as float)
+	var creation_index: int = int(context.get("creation_index", -1))
 
 	NavigationManager.clear_context()
-	return context.get("creation_index", -1)
+	return creation_index
 
 
 func _populate_user_list() -> void:
@@ -323,27 +333,37 @@ func _on_sync_completed(user_id: String, entries_updated: int) -> void:
 	is_syncing = false
 	hide_loading()
 
+	# Determine which index to display - prefer pending navigation target
+	var target_index: int = _pending_navigation_index if _pending_navigation_index >= 0 else current_index
+
 	if entries_updated == 0:
 		_clean_corrupted_records()
-		return
 
-	if current_index < 0 and entries_updated > 0:
+	# Navigate to target if we have one and the record exists
+	if target_index >= 0 and DexDatabase.has_record_for_user(target_index, current_user_id):
+		_display_record(target_index)
+		_pending_navigation_index = -1  # Clear pending after successful navigation
+	elif current_index < 0:
+		# No current index and no valid target - load first record
 		_load_first_record()
-	elif current_index >= 0 and not DexDatabase.has_record_for_user(current_index, current_user_id):
-		_load_first_record()
+		_pending_navigation_index = -1
 
 
 func _clean_corrupted_records() -> void:
-	var cleaned = 0
+	var current_record_cleaned := false
 	for index in DexDatabase.get_sorted_indices_for_user(current_user_id):
 		var record = DexDatabase.get_record_for_user(index, current_user_id)
 		var path: String = record.get("cached_image_path", "")
 		if path.is_empty() or not FileAccess.file_exists(path):
 			DexDatabase.remove_record(index, current_user_id)
-			cleaned += 1
+			if index == current_index:
+				current_record_cleaned = true
 
-	if cleaned > 0:
+	# Only navigate away if the current record was cleaned
+	if current_record_cleaned:
 		_load_first_record()
+	elif current_index >= 0:
+		_update_navigation_buttons()
 
 
 func _on_sync_failed(user_id: String, error_message: String) -> void:
