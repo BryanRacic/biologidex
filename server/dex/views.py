@@ -1,6 +1,7 @@
 """
 Views for dex app.
 """
+import logging
 from rest_framework import viewsets, filters, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16,6 +17,8 @@ from .serializers import (
     DexEntryUpdateSerializer,
     DexEntrySyncSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 ## Cache helper functions
@@ -144,6 +147,56 @@ class DexEntryViewSet(viewsets.ModelViewSet):
 
         # Invalidate cache on update
         invalidate_user_dex_cache(str(serializer.instance.owner.id))
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete dex entry with animal ownership transfer if needed.
+
+        When the user who originally discovered an animal deletes their dex entry:
+        1. Find next earliest dex entry for same animal by another user
+        2. Transfer animal.created_by to that user
+        3. If no other entries exist, set animal.created_by to NULL
+
+        Returns:
+            Response with 204 No Content on success
+        """
+        instance = self.get_object()
+        animal = instance.animal
+        user = request.user
+
+        # Check if this user is the animal's original discoverer
+        if animal.created_by == user:
+            # Find next earliest dex entry for this animal by another user
+            next_entry = DexEntry.objects.filter(
+                animal=animal
+            ).exclude(
+                owner=user
+            ).order_by('created_at').first()
+
+            if next_entry:
+                # Transfer ownership to next discoverer
+                animal.created_by = next_entry.owner
+                animal.save(update_fields=['created_by'])
+                logger.info(
+                    f"Transferred animal {animal.id} ownership from {user.username} "
+                    f"to {next_entry.owner.username}"
+                )
+            else:
+                # No other discoverers - clear created_by
+                animal.created_by = None
+                animal.save(update_fields=['created_by'])
+                logger.info(
+                    f"Animal {animal.id} has no remaining discoverers, "
+                    f"cleared created_by field"
+                )
+
+        # Invalidate cache before deletion
+        invalidate_user_dex_cache(str(user.id))
+
+        # Perform the deletion (signals handle tree cache invalidation)
+        self.perform_destroy(instance)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'])
     def my_entries(self, request):

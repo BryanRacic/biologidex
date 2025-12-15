@@ -26,6 +26,10 @@ signal friends_overview_failed(error: APITypes.APIError)
 signal entry_updated(entry_data: Dictionary)
 signal entry_update_failed(error: APITypes.APIError)
 
+## Entry deletion signals
+signal entry_deleted(entry_id: String)
+signal entry_deletion_failed(error: APITypes.APIError)
+
 ## Create a new dex entry
 func create_entry(
 	animal_id: String,
@@ -187,6 +191,37 @@ func _on_update_entry_success(response: Dictionary, context: Dictionary) -> void
 func _on_update_entry_error(error: APITypes.APIError, context: Dictionary) -> void:
 	_handle_error(error, "update_entry")
 	entry_update_failed.emit(error)
+	if context.callback and context.callback.is_valid():
+		context.callback.call({"error": error.message}, error.code)
+
+## Delete a dex entry
+func delete_entry(
+	entry_id: String,
+	callback: Callable = Callable()
+) -> void:
+	_log("Deleting dex entry: %s" % entry_id)
+
+	var endpoint = config.ENDPOINTS_DEX["entries"] + entry_id + "/"
+	var req_config = _create_request_config()
+	var context = {"entry_id": entry_id, "callback": callback}
+
+	api_client.delete(
+		endpoint,
+		_on_delete_entry_success.bind(context),
+		_on_delete_entry_error.bind(context),
+		req_config
+	)
+
+func _on_delete_entry_success(_response: Dictionary, context: Dictionary) -> void:
+	_log("Dex entry deleted successfully: %s" % context.entry_id)
+	entry_deleted.emit(context.entry_id)
+	if context.callback and context.callback.is_valid():
+		# DELETE returns 204 No Content on success
+		context.callback.call({}, 204)
+
+func _on_delete_entry_error(error: APITypes.APIError, context: Dictionary) -> void:
+	_handle_error(error, "delete_entry")
+	entry_deletion_failed.emit(error)
 	if context.callback and context.callback.is_valid():
 		context.callback.call({"error": error.message}, error.code)
 

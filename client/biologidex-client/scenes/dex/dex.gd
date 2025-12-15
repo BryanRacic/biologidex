@@ -22,7 +22,6 @@ var current_index: int = -1
 var current_user_id: String = "self"
 var is_syncing: bool = false
 var available_users: Dictionary = {}
-var pending_edit_dex_entry_id: String = ""
 
 # ============================================================================
 # Initialization
@@ -230,20 +229,35 @@ func _on_edit_pressed() -> void:
 		show_error("Record not found", "Could not find record")
 		return
 
-	_get_entry_id_for_edit(record)
+	_navigate_to_edit_entry(record)
 
 # ============================================================================
-# Edit Workflow
+# Edit Navigation
 # ============================================================================
 
-func _get_entry_id_for_edit(record: Dictionary) -> void:
+func _navigate_to_edit_entry(record: Dictionary) -> void:
+	"""Navigate to edit_entry scene with entry data"""
 	var entry_id = record.get("dex_entry_id", "")
-	if not entry_id.is_empty():
-		_open_manual_entry_popup(entry_id, record)
+
+	# If we don't have the entry_id, try to fetch it first
+	if entry_id.is_empty():
+		show_loading("Loading entry...")
+		APIManager.dex.get_my_entries(_on_my_entries_for_edit.bind(record))
 		return
 
-	show_loading("Loading entry...")
-	APIManager.dex.get_my_entries(_on_my_entries_for_edit.bind(record))
+	# Navigate to edit_entry scene
+	NavigationManager.set_context({
+		"mode": "edit",
+		"dex_entry_id": entry_id,
+		"creation_index": current_index,
+		"return_scene": "res://scenes/dex/dex.tscn",
+		"return_context": {
+			"creation_index": current_index,
+			"user_id": "self"
+		}
+	})
+
+	NavigationManager.navigate_to("res://scenes/edit_entry/edit_entry.tscn")
 
 
 func _on_my_entries_for_edit(response: Dictionary, code: int, record: Dictionary) -> void:
@@ -263,41 +277,12 @@ func _on_my_entries_for_edit(response: Dictionary, code: int, record: Dictionary
 		show_error("Entry not found", "Could not find this entry on server", code)
 		return
 
+	# Update local record with entry_id
 	record["dex_entry_id"] = entry_id
 	DexDatabase.add_record_from_dict(record, current_user_id)
-	_open_manual_entry_popup(entry_id, record)
 
-
-func _open_manual_entry_popup(entry_id: String, record: Dictionary) -> void:
-	var popup_scene = load("res://features/ui/components/manual_entry_popup/manual_entry_popup.tscn")
-	if not popup_scene:
-		show_error("Failed to load popup", "Could not load popup scene")
-		return
-
-	var popup = popup_scene.instantiate()
-	popup.prefill_data = {
-		"genus": record.get("genus", ""),
-		"species": record.get("species", ""),
-		"common_name": record.get("common_name", "")
-	}
-	popup.current_dex_entry_id = entry_id
-	popup.entry_updated.connect(_on_entry_updated)
-	popup.popup_closed.connect(_on_popup_closed)
-
-	add_child(popup)
-	# Show with dynamic sizing (80% of screen, centered)
-	popup.show_popup()
-
-
-func _on_entry_updated(_taxonomy: Dictionary) -> void:
-	var record = DexDatabase.get_record_for_user(current_index, current_user_id)
-	pending_edit_dex_entry_id = record.get("dex_entry_id", "")
-	show_loading("Syncing...")
-	trigger_sync()
-
-
-func _on_popup_closed() -> void:
-	print("[Dex] Popup closed")
+	# Now navigate with the entry_id
+	_navigate_to_edit_entry(record)
 
 # ============================================================================
 # Signal Handlers
@@ -342,10 +327,6 @@ func _on_sync_completed(user_id: String, entries_updated: int) -> void:
 		_clean_corrupted_records()
 		return
 
-	if not pending_edit_dex_entry_id.is_empty():
-		_navigate_to_edited_entry()
-		return
-
 	if current_index < 0 and entries_updated > 0:
 		_load_first_record()
 	elif current_index >= 0 and not DexDatabase.has_record_for_user(current_index, current_user_id):
@@ -363,18 +344,6 @@ func _clean_corrupted_records() -> void:
 
 	if cleaned > 0:
 		_load_first_record()
-
-
-func _navigate_to_edited_entry() -> void:
-	for index in DexDatabase.get_sorted_indices_for_user(current_user_id):
-		var record = DexDatabase.get_record_for_user(index, current_user_id)
-		if record.get("dex_entry_id", "") == pending_edit_dex_entry_id:
-			current_index = index
-			_display_record(current_index)
-			pending_edit_dex_entry_id = ""
-			return
-
-	pending_edit_dex_entry_id = ""
 
 
 func _on_sync_failed(user_id: String, error_message: String) -> void:

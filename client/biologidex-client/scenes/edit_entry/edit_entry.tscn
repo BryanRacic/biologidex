@@ -1,0 +1,320 @@
+[gd_scene load_steps=4 format=3 uid="uid://c2m8kp7wlvfj3"]
+
+[ext_resource type="Script" path="res://scenes/edit_entry/edit_entry.gd" id="1_edit_entry"]
+[ext_resource type="PackedScene" path="res://features/camera_system/paper_camera_scene.tscn" id="2_paper_camera"]
+[ext_resource type="PackedScene" path="res://features/ui/components/dex_record_image/dex_record_image.tscn" id="3_dex_record_image"]
+
+[node name="EditEntry" type="Node2D" node_paths=PackedStringArray("back_button")]
+script = ExtResource("1_edit_entry")
+back_button = NodePath("EditEntryUILayer/UIContainer/VBoxContainer/Header/BackButton")
+
+[node name="PaperCameraScene" parent="." instance=ExtResource("2_paper_camera")]
+unique_name_in_owner = true
+scroll_limits_enabled = false
+zoom_enabled = false
+inertia_enabled = true
+
+[node name="EditEntryUILayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="UIContainer" type="Control" parent="EditEntryUILayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="EditEntryUILayer/UIContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Header" type="HBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="BackButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "<<"
+
+[node name="TitleLabel" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 72
+text = "Edit Entry"
+vertical_alignment = 1
+
+[node name="ContentArea" type="Control" parent="EditEntryUILayer/UIContainer/VBoxContainer"]
+clip_contents = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="ScrollContent" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.05
+anchor_right = 0.95
+offset_bottom = 1500.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_constants/separation = 30
+
+[node name="TopMargin" type="Control" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ImageSection" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="RecordImage" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/ImageSection" instance=ExtResource("3_dex_record_image")]
+custom_minimum_size = Vector2(300, 300)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="ButtonsHBox" type="HBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/ImageSection"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="ReplaceImageButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/ImageSection/ButtonsHBox"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "Replace Image"
+
+[node name="RotateImageButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/ImageSection/ButtonsHBox"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "Rotate"
+
+[node name="Separator1" type="ColorRect" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.3)
+
+[node name="AnimalSection" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="AnimalHeader" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Animal Identification"
+
+[node name="CurrentAnimalLabel" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 44
+text = "Loading..."
+autowrap_mode = 2
+
+[node name="ChangeAnimalButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 40
+text = "Change Animal"
+
+[node name="TaxonomySearchPanel" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="SearchInputs" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="GenusLabel" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Genus:"
+
+[node name="GenusInput" type="LineEdit" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+placeholder_text = "e.g. Canis"
+
+[node name="SpeciesLabel" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Species:"
+
+[node name="SpeciesInput" type="LineEdit" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+placeholder_text = "e.g. lupus"
+
+[node name="CommonNameLabel" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Common Name:"
+
+[node name="CommonNameInput" type="LineEdit" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+placeholder_text = "e.g. Gray Wolf"
+
+[node name="SearchButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchInputs"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 40
+text = "Search"
+
+[node name="SearchResultsScroll" type="ScrollContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel"]
+visible = false
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SearchResultsList" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel/SearchResultsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="SelectAnimalButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/AnimalSection/TaxonomySearchPanel"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 40
+disabled = true
+text = "Select Animal"
+
+[node name="Separator2" type="ColorRect" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.3)
+
+[node name="ActionButtons" type="HBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="SaveButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/ActionButtons"]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Save Changes"
+
+[node name="CancelButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/ActionButtons"]
+custom_minimum_size = Vector2(150, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Cancel"
+
+[node name="Separator3" type="ColorRect" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
+
+[node name="DangerZone" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="DangerHeader" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.2, 0.2, 1)
+theme_override_font_sizes/font_size = 40
+text = "Danger Zone"
+
+[node name="DeleteButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 40
+text = "Delete Entry"
+
+[node name="DeleteConfirmationPanel" type="VBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="ConfirmLabel" type="Label" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone/DeleteConfirmationPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.2, 0.2, 1)
+theme_override_font_sizes/font_size = 40
+text = "Are you sure? This cannot be undone."
+autowrap_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone/DeleteConfirmationPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="CancelDeleteButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone/DeleteConfirmationPanel/ButtonRow"]
+custom_minimum_size = Vector2(120, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "Cancel"
+
+[node name="ConfirmDeleteButton" type="Button" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent/DangerZone/DeleteConfirmationPanel/ButtonRow"]
+custom_minimum_size = Vector2(180, 50)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 40
+text = "Delete Forever"
+
+[node name="BottomMargin" type="Control" parent="EditEntryUILayer/UIContainer/VBoxContainer/ContentArea/ScrollContent"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="LoadingOverlay" type="ColorRect" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="LoadingLabel" type="Label" parent="LoadingOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -100.0
+offset_top = -25.0
+offset_right = 100.0
+offset_bottom = 25.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 64
+text = "Loading..."
+horizontal_alignment = 1
+vertical_alignment = 1

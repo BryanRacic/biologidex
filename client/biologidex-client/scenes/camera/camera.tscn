@@ -89,6 +89,15 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 124
 text = "Rotate Image"
 
+[node name="SkipAnalysisButton" type="Button" parent="CameraUILayer/Control/MainVBox/ContentMargin/ContentVBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 96
+text = "Skip Analysis (Manual Entry)"
+
 [node name="SelectPhotoButton" type="Button" parent="CameraUILayer/Control/MainVBox/ContentMargin/ContentVBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 60)

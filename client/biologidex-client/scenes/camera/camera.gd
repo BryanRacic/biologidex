@@ -17,6 +17,7 @@ extends BaseSceneNode
 @onready var retry_button: Button = get_node("%RetryButton")
 @onready var manual_entry_button: Button = get_node("%ManualEntryButton")
 @onready var rotate_image_button: Button = get_node("%RotateImageButton")
+@onready var skip_analysis_button: Button = get_node("%SkipAnalysisButton")
 @onready var instruction_label: Label = get_node("%InstructionLabel")
 @onready var result_label: Label = get_node("%ResultLabel")
 
@@ -67,6 +68,7 @@ func _on_scene_ready() -> void:
 	retry_button.pressed.connect(_on_retry_pressed)
 	rotate_image_button.pressed.connect(_on_rotate_pressed)
 	manual_entry_button.pressed.connect(_on_manual_entry_pressed)
+	skip_analysis_button.pressed.connect(_on_skip_analysis_pressed)
 
 	# Initialize UI state
 	_reset_ui()
@@ -90,6 +92,7 @@ func _reset_ui() -> void:
 	retry_button.visible = false
 	rotate_image_button.visible = false
 	manual_entry_button.visible = false
+	skip_analysis_button.visible = false
 	select_photo_button.visible = true
 	instruction_label.visible = true
 
@@ -164,6 +167,7 @@ func _on_file_selected(file_name: String, file_type: String, file_data: PackedBy
 		select_photo_button.visible = false
 		instruction_label.visible = false
 		rotate_image_button.visible = true
+		skip_analysis_button.visible = true
 	else:
 		status_label.text = "⚠️ Cannot preview, but you can still upload"
 		status_label.add_theme_color_override("font_color", Color.YELLOW)
@@ -588,6 +592,35 @@ func _on_manual_entry_updated(taxonomy_data: Dictionary) -> void:
 func _on_manual_entry_closed() -> void:
 	"""Handle manual entry popup closed"""
 	print("[Camera] Manual entry popup closed")
+
+
+# ============================================================================
+# Skip Analysis (Manual Entry via Edit Scene)
+# ============================================================================
+
+func _on_skip_analysis_pressed() -> void:
+	"""Skip CV analysis and navigate to edit_entry in create mode"""
+	print("[Camera] Skip analysis pressed - navigating to manual entry")
+
+	if selected_file_data.is_empty():
+		show_error("No Image", "Please select an image first")
+		return
+
+	# Get current preview image (may be rotated)
+	var simple_texture = record_image.get_simple_texture()
+	var image: Image = null
+
+	if simple_texture:
+		image = simple_texture.get_image()
+
+	# Navigate to edit_entry scene in create mode
+	NavigationManager.set_context({
+		"mode": "create",
+		"converted_image": image,
+		"return_scene": "res://scenes/camera/camera.tscn"
+	})
+
+	NavigationManager.navigate_to("res://scenes/edit_entry/edit_entry.tscn")
 
 
 # ============================================================================

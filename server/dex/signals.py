@@ -2,11 +2,66 @@
 Signal handlers for dex app.
 """
 import logging
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_delete
 from django.dispatch import receiver
 from .models import DexEntry
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Image Cleanup on DexEntry Deletion
+# =============================================================================
+
+@receiver(pre_delete, sender=DexEntry)
+def cleanup_dex_entry_images(sender, instance, **kwargs):
+    """
+    Delete image files when DexEntry is deleted.
+    Only deletes if no other entries reference the same file.
+
+    Handles:
+    - original_image: Direct upload field on DexEntry
+    - processed_image: Processed version field on DexEntry
+
+    Note: Images stored in source_vision_job are NOT deleted here since they
+    may be referenced by other entries or needed for audit purposes.
+    """
+    # Clean up original_image if it exists and isn't shared
+    if instance.original_image:
+        # Check if other entries use this exact image file path
+        other_refs = DexEntry.objects.filter(
+            original_image=instance.original_image.name
+        ).exclude(id=instance.id).exists()
+
+        if not other_refs:
+            try:
+                instance.original_image.delete(save=False)
+                logger.info(
+                    f"Deleted orphaned original_image for entry {instance.id}: "
+                    f"{instance.original_image.name}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete original_image for entry {instance.id}: {e}"
+                )
+
+    # Clean up processed_image if it exists and isn't shared
+    if instance.processed_image:
+        other_refs = DexEntry.objects.filter(
+            processed_image=instance.processed_image.name
+        ).exclude(id=instance.id).exists()
+
+        if not other_refs:
+            try:
+                instance.processed_image.delete(save=False)
+                logger.info(
+                    f"Deleted orphaned processed_image for entry {instance.id}: "
+                    f"{instance.processed_image.name}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete processed_image for entry {instance.id}: {e}"
+                )
 
 
 @receiver(post_save, sender=DexEntry)

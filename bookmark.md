@@ -1,6 +1,15 @@
 ## TODO
-Fix duplicate touch controllers (tree & dex_feed)
-
+- Update modify dex entry scenes
+- Update dex scene
+  - Scrolling up/down automatically moves & recenters the next/prev entry w/in the screen
+- Update dex to display full/half page w/ additional context from COL
+- Add lineage tree as background of home screen
+- Reduce dex compatible image size (for faster loading)
+- Implement basic CDN for faster image retrieval
+  - Dedicated file upload service
+  - Direct uploads to cloud storage
+  - chunked/resumable uploads
+  - Look at Cloudflare R2
 
 ### Essentials
 - dex entries should contain `username` & `catch date`
@@ -28,7 +37,6 @@ Fix duplicate touch controllers (tree & dex_feed)
 - include additional data from COL export
   - VernacularName (now have NameRelation, need CommonName import)
   - SpeciesEstimate, TypeMaterial (locality)
-- display dex entry on taxonomic tree
 - evaluate server implementation
   - Remove unused code, outdated features
   - Identify inefficiant or non-optimal solutions/algorithmns
@@ -37,7 +45,6 @@ Fix duplicate touch controllers (tree & dex_feed)
 
 ### Polish
 - add loading ux when downloading dex entries
-- taxonomy db in admin panel gives 500 error
 - update col_importer job to run multithreaded
 - remove friend from friendlist
 - retry Image ID if innaccurate
@@ -48,3 +55,4 @@ Fix duplicate touch controllers (tree & dex_feed)
 - If multiple dex entries on same node
   - New window with each dex entry
     - Each entry displays the username of the original author
+- Allow download/export of dex record image
