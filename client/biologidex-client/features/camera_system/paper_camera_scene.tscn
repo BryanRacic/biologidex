@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3 uid="uid://sgl6jsx8vbgw"]
 
 [ext_resource type="Script" uid="uid://bis24dj6ppoys" path="res://features/camera_system/paper_camera_scene.gd" id="1_scene"]
 [ext_resource type="Script" uid="uid://bqrb4ik2tmopn" path="res://features/camera_system/camera_touch_controller.gd" id="2_controller"]
@@ -7,21 +7,28 @@
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_paper"]
 resource_local_to_scene = true
 shader = ExtResource("3_shader")
-shader_parameter/grid_scale = 22.0
-shader_parameter/line_px = 0.5
+shader_parameter/grid_scale = 24.0
+shader_parameter/line_px = 1.0
 shader_parameter/line_color = Vector4(0.55, 0.53, 0.5, 1)
-shader_parameter/line_alpha = 0.07
-shader_parameter/paper_color = Vector4(0.85, 0.82, 0.78, 1)
+shader_parameter/line_alpha = 0.2
+shader_parameter/paper_color = Vector4(0.96, 0.94, 0.9, 1)
 shader_parameter/paper_noise_amount = 0.05
 shader_parameter/paper_noise_scale = 0.35
-shader_parameter/speckle_amount = 0.064
-shader_parameter/speckle_density = 1.68
-shader_parameter/speckle_scale = 6.0
-shader_parameter/fiber_amount = 0.111
-shader_parameter/fiber_scale = 0.57
+shader_parameter/speckle_amount = 0.1
+shader_parameter/speckle_density = 1.0
+shader_parameter/speckle_scale = 2.0
+shader_parameter/fiber_amount = 0.06
+shader_parameter/fiber_scale = 1.3
 
 [node name="PaperCameraScene" type="Node2D"]
 script = ExtResource("1_scene")
+initial_zoom = 5.324
+grid_line_px = 0.30000000000000004
+grid_line_alpha = 0.25
+speckle_amount = 0.16
+speckle_density = 1.21
+fiber_amount = 0.01
+fiber_scale = 2.0
 
 [node name="Camera2D" type="Camera2D" parent="."]
 unique_name_in_owner = true
@@ -37,7 +44,7 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 z_index = -100
 material = SubResource("ShaderMaterial_paper")
-polygon = PackedVector2Array(-25000, -25000, 25000, -25000, 25000, 25000, -25000, 25000)
+polygon = PackedVector2Array(-4000, -4000, 4000, -4000, 4000, 4000, -4000, 4000)
 
 [node name="ContentContainer" type="Node2D" parent="WorldContent"]
 unique_name_in_owner = true

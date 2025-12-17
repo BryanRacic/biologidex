@@ -364,6 +364,7 @@ func _stop_inertia() -> void:
 
 
 func _emit_view_changed() -> void:
+	print("Zoom level: ", camera.zoom.x)
 	view_changed.emit(camera.position, camera.zoom.x)
 
 
@@ -394,8 +395,8 @@ func get_view_rect() -> Rect2:
 	return Rect2(camera.position - half_size, half_size * 2.0)
 
 
-func reset() -> void:
-	camera.position = Vector2.ZERO
-	camera.zoom = Vector2(1.0, 1.0)
+func stop_motion() -> void:
+	"""Stop any ongoing inertia or velocity. Called by parent scene during reset."""
 	_velocity = Vector2.ZERO
-	_emit_view_changed()
+	_last_positions.clear()
+	_last_times.clear()

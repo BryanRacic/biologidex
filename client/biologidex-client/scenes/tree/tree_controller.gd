@@ -219,7 +219,7 @@ func _setup_paper_camera() -> void:
 
 	# Get initial state for culling calculations
 	_scroll_offset = _paper_camera.get_camera_position()
-	_current_scale = _paper_camera.get_zoom()
+	_current_scale = _paper_camera.get_current_zoom()
 	if is_inside_tree():
 		_viewport_center = get_viewport_rect().size / 2.0
 	else:
@@ -456,7 +456,7 @@ func _render_tree() -> void:
 	# Initialize renderer with current view state (Camera2D handles transform)
 	_viewport_center = get_viewport_rect().size / 2.0
 	_scroll_offset = _paper_camera.get_camera_position()
-	_current_scale = _paper_camera.get_zoom()
+	_current_scale = _paper_camera.get_current_zoom()
 	tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
 
 	print("[TreeController] Rendering complete")

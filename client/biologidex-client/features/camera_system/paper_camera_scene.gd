@@ -59,7 +59,7 @@ extends Node2D
 		grid_scale = value
 		_update_shader_param("grid_scale", value)
 
-@export_range(0.5, 3.0, 0.1) var grid_line_px: float = 0.5:
+@export_range(0.1, 3.0, 0.1) var grid_line_px: float = 0.5:
 	set(value):
 		grid_line_px = value
 		_update_shader_param("line_px", value)
@@ -179,6 +179,9 @@ func _on_view_changed(pos: Vector2, zoom: float) -> void:
 
 
 func _on_tap_detected(screen_pos: Vector2) -> void:
+	# Guard against callback firing when not in tree (web export edge case)
+	if not is_inside_tree():
+		return
 	# Convert screen position to world position
 	var viewport_center := get_viewport_rect().size / 2.0
 	var world_pos := (screen_pos - viewport_center) / camera.zoom.x + camera.position
@@ -241,10 +244,6 @@ func get_current_zoom() -> float:
 	return camera.zoom.x
 
 
-func get_zoom() -> float:
-	return camera.zoom.x
-
-
 func get_camera_position() -> Vector2:
 	return camera.position
 
@@ -264,6 +263,7 @@ func scroll_to(offset: Vector2, animated: bool = false) -> void:
 func reset() -> void:
 	camera.position = Vector2.ZERO
 	camera.zoom = Vector2(initial_zoom, initial_zoom)
+	camera_controller.stop_motion()
 	view_changed.emit(camera.position, camera.zoom.x)
 
 
