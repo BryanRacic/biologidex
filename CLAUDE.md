@@ -331,6 +331,8 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Export Vars** (editable in inspector):
   - `tree_scale`: Scale of tree visualization (0.5-10.0)
   - `menu_scale`: Scale factor for radial menu - affects all button sizes and spacing (0.5-3.0)
+  - `diff_circle`: Enable circular boundary around radial menu that clips tree edges (default: true)
+  - `diff_circle_radius`: Explicit radius in world units (0 = auto-calculate from menu dimensions)
   - Tree appearance: `tree_node_size`, `tree_node_opacity`, `tree_edge_width`, `tree_edge_opacity`, etc.
 - **PaperCameraScene Config**: min_zoom=0.5, max_zoom=4.0, initial_zoom=1.5, pan/zoom/inertia enabled
 - **RadialMenuCircles Config**: Transparent icon-only buttons (no background, no border), black icons using Kenny board-game-icons SVGs
@@ -340,6 +342,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Menu/Tree Alignment**: Both menu and tree root (Animalia) are at world origin (0,0). Menu uses `center_at_position(Vector2.ZERO)` to center over the tree root.
 - **Scaling gotcha**: Set menu properties BEFORE adding to tree (so `_ready()` uses correct values), then call `center_at_position()`. For runtime scale changes, use `await get_tree().process_frame` before recentering.
 - **Recenter**: Button appears when panned >100 world units from origin, scrolls back to (0,0)
+- **Diff Circle**: Circular boundary that prevents tree edges from overlapping radial menu buttons
+  - Inherits edge settings (color, width, opacity) for consistent visual style
+  - Auto-calculates radius from menu dimensions: `ring_distance + ring_button_radius + 40px padding`
+  - Clips tree edges at circle boundary using line-circle intersection math
+  - Edges entirely inside circle are not drawn; edges crossing are truncated at boundary
 
 **Taxonomic Tree Visualization (Updated 2025-12-18)**:
 - **Root Node Centering**: Server promotes single kingdom (Animalia) to tree root at depth 0, positioned at origin (0,0). This ensures the visible root aligns with UI elements at world origin.

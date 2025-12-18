@@ -3,6 +3,9 @@
   - use (bullet journal style) tabs
 - Overlay nav arrows on tree edges
   - Click to auto scroll to the next node in the path
+- Update camera scene
+  - Manual entry (notepad & pencil icon)
+  - Research assistant (Research/magnifying glass icon)
 - Update dex scene
   - Scrolling up/down automatically moves & recenters the next/prev entry w/in the screen
 - Update dex to display full/half page w/ additional context from COL

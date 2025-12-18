@@ -37,6 +37,19 @@ extends Node2D
 		if _radial_menu:
 			_radial_menu.placeholder_button = value
 
+@export_group("Diff Circle")
+## Enable a circular boundary around the radial menu that clips tree edges
+@export var diff_circle: bool = true:
+	set(value):
+		diff_circle = value
+		if _tree_visualization:
+			_tree_visualization.diff_circle_enabled = value
+## Radius of the diff circle in world units (auto-calculated from menu if 0)
+@export var diff_circle_radius: float = 0.0:
+	set(value):
+		diff_circle_radius = value
+		_update_diff_circle_radius()
+
 @export_group("Tree Background Appearance")
 ## Hide the root node (Kingdom) circle
 @export var hide_root_node: bool = false
@@ -156,6 +169,10 @@ func _setup_tree_visualization() -> void:
 	_tree_visualization.label_font_size = tree_label_font_size
 	_tree_visualization.label_opacity = tree_label_opacity
 
+	# Apply diff circle settings
+	_tree_visualization.diff_circle_enabled = diff_circle
+	_tree_visualization.diff_circle_center = Vector2.ZERO  # Centered on menu/tree root
+
 	_paper_camera.content_container.add_child(_tree_visualization)
 	_tree_visualization.setup(_paper_camera)
 
@@ -244,6 +261,9 @@ func _build_radial_menu() -> void:
 	_radial_menu.center_pressed.connect(_on_camera_pressed)
 	_radial_menu.button_pressed.connect(_on_radial_button_pressed)
 
+	# Update diff circle radius now that menu is built
+	_update_diff_circle_radius()
+
 	print("[Home] RadialMenuCircles created at world origin with scale: ", menu_scale)
 
 
@@ -263,9 +283,32 @@ func _apply_menu_scale() -> void:
 	_radial_menu.center_icon_size = Vector2(center_icon, center_icon)
 	_radial_menu.ring_icon_size = Vector2(ring_icon, ring_icon)
 
+	# Update diff circle radius when menu scale changes
+	_update_diff_circle_radius()
+
 	# Wait for layout update then center - layout updates happen in _process(),
 	# so we need to wait for a full frame to pass
 	_center_menu_after_layout()
+
+
+# Padding between outermost ring button edge and the diff circle
+const DIFF_CIRCLE_PADDING := 40.0
+
+
+func _update_diff_circle_radius() -> void:
+	"""Update diff circle radius based on menu scale or explicit value."""
+	if not _tree_visualization:
+		return
+
+	var radius: float
+	if diff_circle_radius > 0.0:
+		# Use explicit radius if set
+		radius = diff_circle_radius
+	else:
+		# Auto-calculate from menu dimensions: ring_distance + ring_button_radius + padding
+		radius = (MENU_BASE_RING_DISTANCE + MENU_BASE_RING_BUTTON_RADIUS + DIFF_CIRCLE_PADDING) * menu_scale
+
+	_tree_visualization.diff_circle_radius = radius
 
 
 func _center_menu_after_layout() -> void:

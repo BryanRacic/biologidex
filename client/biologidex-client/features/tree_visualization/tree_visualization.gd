@@ -77,6 +77,26 @@ signal loading_finished()
 ## Opacity of labels (0.0 - 1.0)
 @export_range(0.0, 1.0, 0.05) var label_opacity: float = 1.0
 
+@export_group("Diff Circle")
+## Enable a circular boundary that clips tree edges (for home scene menu)
+@export var diff_circle_enabled: bool = false:
+	set(value):
+		diff_circle_enabled = value
+		if tree_renderer:
+			tree_renderer.diff_circle_enabled = value
+## Radius of the diff circle in world units (tree-local space)
+@export var diff_circle_radius: float = 330.0:
+	set(value):
+		diff_circle_radius = value
+		if tree_renderer:
+			tree_renderer.diff_circle_radius = value
+## Center position of the diff circle in tree-local coordinates
+@export var diff_circle_center: Vector2 = Vector2.ZERO:
+	set(value):
+		diff_circle_center = value
+		if tree_renderer:
+			tree_renderer.diff_circle_center = value
+
 # =============================================================================
 # Internal State
 # =============================================================================
@@ -291,6 +311,11 @@ func _configure_renderer() -> void:
 	tree_renderer.dex_image_size = dex_image_size
 	tree_renderer.branch_extension_enabled = branch_extension_enabled
 	tree_renderer.min_zoom_for_labels = min_zoom_for_labels
+
+	# Diff circle settings
+	tree_renderer.diff_circle_enabled = diff_circle_enabled
+	tree_renderer.diff_circle_radius = diff_circle_radius
+	tree_renderer.diff_circle_center = diff_circle_center
 
 
 func _setup_camera_connection() -> void:

@@ -78,6 +78,11 @@ const COLOR_UNCAPTURED: Color = Color(0, 0, 0, 1)
 const COLOR_SELECTED: Color = Color(0, 0, 0, 1)
 const COLOR_EDGE: Color = Color(0, 0, 0, 1)
 
+# Diff circle settings (clips edges and draws circle around center)
+var diff_circle_enabled: bool = false
+var diff_circle_radius: float = 330.0  # Radius in tree-local units
+var diff_circle_center: Vector2 = Vector2.ZERO  # Center in tree-local coordinates
+
 # Performance settings (keep as const)
 const MAX_VISIBLE_NODES: int = 50000
 const CULL_MARGIN_SCREEN: float = 200.0  # Screen-space pixels outside viewport for culling buffer
@@ -937,10 +942,14 @@ func _render_radial_edges() -> void:
 			if rendered >= max_edges:
 				break
 
+	# Draw diff circle after edges so it appears on top
+	_render_diff_circle()
+
 
 func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
 	"""Draw a straight edge between nodes.
-	For animal nodes with dex images, extends the edge to their extended position."""
+	For animal nodes with dex images, extends the edge to their extended position.
+	Clips edges at diff circle boundary if enabled."""
 	var source_node = tree_data.get_node_by_id(edge.source)
 	var target_node = tree_data.get_node_by_id(edge.target)
 
@@ -948,19 +957,32 @@ func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
 		return
 
 	# Determine target position - use extended position if target has a dex image
+	var source_position: Vector2 = source_node.position
 	var target_position: Vector2 = target_node.position
 	if extended_positions.has(target_node.id):
 		target_position = extended_positions[target_node.id]
 
-	var line = Line2D.new()
-	line.add_point(source_node.position)
-	line.add_point(target_position)
+	# Get line segments to draw (handles diff circle clipping)
+	var segments: Array
+	if diff_circle_enabled:
+		segments = _clip_line_to_circle(source_position, target_position, diff_circle_center, diff_circle_radius)
+		if segments.is_empty():
+			return  # Edge entirely inside circle, don't draw
+	else:
+		segments = [[source_position, target_position]]
 
-	line.antialiased = true
-	line.width = _get_edge_width(source_node, target_node)
-	line.default_color = _get_edge_color(source_node, target_node)
+	# Draw each segment
+	var edge_width := _get_edge_width(source_node, target_node)
+	var edge_color := _get_edge_color(source_node, target_node)
 
-	edges_container.add_child(line)
+	for segment in segments:
+		var line = Line2D.new()
+		line.add_point(segment[0])
+		line.add_point(segment[1])
+		line.antialiased = true
+		line.width = edge_width
+		line.default_color = edge_color
+		edges_container.add_child(line)
 
 
 func _get_edge_width(_source: TreeDataModels.TaxonomicNode, _target: TreeDataModels.TaxonomicNode) -> float:
@@ -980,6 +1002,110 @@ func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModel
 	# Apply configurable opacity
 	base_color.a = edge_opacity
 	return base_color
+
+
+# =============================================================================
+# Diff Circle Rendering
+# =============================================================================
+
+func _render_diff_circle() -> void:
+	"""Render the diff circle using edge settings (inherits edge color, width, opacity)."""
+	if not diff_circle_enabled or not edges_container:
+		return
+
+	# Create a circle using Line2D with many segments
+	var circle := Line2D.new()
+	circle.name = "DiffCircle"
+
+	const SEGMENTS := 64
+	for i in range(SEGMENTS + 1):
+		var angle := (float(i) / SEGMENTS) * TAU
+		var point := diff_circle_center + Vector2(cos(angle), sin(angle)) * diff_circle_radius
+		circle.add_point(point)
+
+	# Use edge settings for consistent appearance
+	circle.width = edge_width_base
+	circle.default_color = Color(0.15, 0.15, 0.15, edge_opacity)
+	circle.antialiased = true
+	circle.closed = true
+
+	edges_container.add_child(circle)
+
+
+func _clip_line_to_circle(start: Vector2, end: Vector2, center: Vector2, radius: float) -> Array:
+	"""Clip a line segment at circle boundary.
+	Returns array of line segments to draw: [[start1, end1], [start2, end2], ...]
+	Returns empty array if line should not be drawn.
+
+	Cases:
+	- Both inside: return [] (don't draw)
+	- Start inside, end outside: return [[intersection, end]]
+	- Start outside, end inside: return [[start, intersection]]
+	- Both outside, passes through: return [[start, intersect1], [intersect2, end]]
+	- Both outside, misses circle: return [[start, end]]"""
+
+	var start_inside := start.distance_to(center) < radius
+	var end_inside := end.distance_to(center) < radius
+
+	# Both inside: don't draw at all
+	if start_inside and end_inside:
+		return []
+
+	# Find intersection points using parametric line equation
+	var d := end - start  # Direction vector
+	var f := start - center  # Vector from circle center to line start
+
+	# Quadratic equation: |start + t*d - center|^2 = radius^2
+	# t^2(d·d) + 2t(f·d) + (f·f - r^2) = 0
+	var a := d.dot(d)
+	var b := 2.0 * f.dot(d)
+	var c := f.dot(f) - radius * radius
+
+	var discriminant := b * b - 4.0 * a * c
+
+	# No intersection with circle - draw full line if both outside
+	if discriminant < 0:
+		if not start_inside and not end_inside:
+			return [[start, end]]
+		return []
+
+	var sqrt_disc := sqrt(discriminant)
+	var t1 := (-b - sqrt_disc) / (2.0 * a)
+	var t2 := (-b + sqrt_disc) / (2.0 * a)
+
+	# Ensure t1 < t2
+	if t1 > t2:
+		var temp := t1
+		t1 = t2
+		t2 = temp
+
+	# Both outside: check if line passes through circle
+	if not start_inside and not end_inside:
+		# Line passes through if both t values are in [0, 1]
+		if t1 >= 0.0 and t1 <= 1.0 and t2 >= 0.0 and t2 <= 1.0:
+			# Split into two segments around the circle
+			var intersect1 := start + d * t1
+			var intersect2 := start + d * t2
+			return [[start, intersect1], [intersect2, end]]
+		else:
+			# Line misses circle entirely
+			return [[start, end]]
+
+	# One inside, one outside
+	if start_inside:
+		# Find exit point (use t2, the farther intersection when starting inside)
+		var t := t2 if t2 >= 0.0 and t2 <= 1.0 else t1
+		if t >= 0.0 and t <= 1.0:
+			var clipped_start := start + d * t
+			return [[clipped_start, end]]
+		return [[start, end]]  # Fallback
+	else:
+		# End is inside, find entry point (use t1, the closer intersection)
+		var t := t1 if t1 >= 0.0 and t1 <= 1.0 else t2
+		if t >= 0.0 and t <= 1.0:
+			var clipped_end := start + d * t
+			return [[start, clipped_end]]
+		return [[start, end]]  # Fallback
 
 
 # =============================================================================
