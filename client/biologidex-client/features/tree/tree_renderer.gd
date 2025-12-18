@@ -31,6 +31,8 @@ var node_size_friend: float = 20.0  # Size for friend-captured nodes
 var node_size_discoverer_bonus: float = 4.0  # Extra size for discoverer nodes
 var taxonomy_node_size: float = 20.0  # Size for taxonomy nodes
 var node_opacity: float = 1.0  # Opacity of nodes (0.0 - 1.0)
+var hide_root_node: bool = false  # Hide the root node (Kingdom) circle
+var hide_root_label: bool = false  # Hide the root node (Kingdom) label
 
 # Visual settings - Edge appearance
 var edge_width_base: float = 5.0  # Width of edges in world units
@@ -190,12 +192,13 @@ func _setup_multimesh() -> void:
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	multimesh.use_colors = true
 	multimesh.use_custom_data = false
-	multimesh.mesh = _create_circle_mesh(node_size_base)
+	# Use unit circle (radius 1.0) - actual size controlled by instance scale
+	multimesh.mesh = _create_circle_mesh(1.0)
 
 	nodes_multimesh.multimesh = multimesh
 	nodes_multimesh.z_index = 1
 
-	print("[TreeRenderer] MultiMesh setup complete")
+	print("[TreeRenderer] MultiMesh setup complete with unit circle mesh")
 
 
 func _setup_dex_image_pool() -> void:
@@ -432,6 +435,11 @@ func _update_visible_nodes() -> void:
 	var view_rect = _get_view_rect()
 
 	for render_data in render_nodes:
+		# Skip root node if hide_root_node is enabled
+		if hide_root_node and _is_root_node(render_data.node):
+			render_data.is_visible = false
+			continue
+
 		if view_rect.has_point(render_data.position):
 			render_data.is_visible = true
 			visible_nodes.append(render_data)
@@ -440,6 +448,11 @@ func _update_visible_nodes() -> void:
 
 		if visible_nodes.size() >= MAX_VISIBLE_NODES:
 			break
+
+
+func _is_root_node(node: TreeDataModels.TaxonomicNode) -> bool:
+	"""Check if a node is the root node (Kingdom rank at depth 0)."""
+	return node.rank == TreeDataModels.TaxonomicRank.KINGDOM or node.rank == TreeDataModels.TaxonomicRank.ROOT
 
 
 func _get_view_rect() -> Rect2:
@@ -453,6 +466,33 @@ func _get_view_rect() -> Rect2:
 	var combined_scale = _current_scale * _tree_scale
 	var margin_local = CULL_MARGIN_SCREEN / combined_scale
 	var half_size = (_viewport_size / 2.0) / combined_scale + Vector2(margin_local, margin_local)
+	# Convert scroll_offset from world space to tree-local space
+	var center = _scroll_offset / _tree_scale
+
+	return Rect2(center - half_size, half_size * 2)
+
+
+func _get_dex_image_view_rect() -> Rect2:
+	"""Get expanded view rectangle for dex image culling.
+	Includes extra margin for:
+	- Dex image size (images are large, ~1000 world units)
+	- Branch extension (images render away from node center, up to ~650 units)
+
+	This ensures images remain visible when centered on screen even though
+	their node position may be outside the standard view rect."""
+	# Combined scale: camera zoom * tree scale
+	var combined_scale = _current_scale * _tree_scale
+
+	# Standard screen margin converted to tree-local
+	var margin_local = CULL_MARGIN_SCREEN / combined_scale
+
+	# Extra margin for dex images: half image size + max branch extension
+	var max_extension = dex_image_size * (BRANCH_EXTENSION_BASE_RATIO + BRANCH_EXTENSION_ALT_RATIO)
+	var dex_margin = (dex_image_size / 2.0) + max_extension
+
+	var total_margin = margin_local + dex_margin
+	var half_size = (_viewport_size / 2.0) / combined_scale + Vector2(total_margin, total_margin)
+
 	# Convert scroll_offset from world space to tree-local space
 	var center = _scroll_offset / _tree_scale
 
@@ -582,21 +622,43 @@ func _should_label_be_above(node: TreeDataModels.TaxonomicNode) -> bool:
 
 func _update_dex_images() -> void:
 	"""Update dex images for visible animal nodes captured by user or friends.
-	Queues image loads instead of loading immediately for better performance."""
+	Queues image loads instead of loading immediately for better performance.
+
+	Note: Uses extended positions for visibility checking, not just node positions,
+	since images render at extended positions which can be far from the node center."""
 	if not dex_images_container:
 		return
+
+	# Get view rect with extra margin for dex images (they're large and may be extended)
+	var view_rect = _get_dex_image_view_rect()
 
 	# Collect all visible captures (user and friends)
 	# Each capture is keyed by "user_id:creation_index" to allow multiple captures per animal
 	var visible_captures: Dictionary = {}  # {image_key: {render_data, user_id, creation_index, capture_info}}
 
-	for render_data in visible_nodes:
+	# Check ALL render nodes (not just visible_nodes) since dex images may be visible
+	# even when their node center is outside the standard view rect
+	for render_data in render_nodes:
 		var node = render_data.node
 		if not node.is_animal():
 			continue
 
+		# Check if this node has any captures
+		var has_user_capture: bool = node.captured_by_user and node.creation_index > 0
+		var has_friend_capture: bool = node.captured_by_friends.size() > 0 and not node.captured_by_user
+
+		if not has_user_capture and not has_friend_capture:
+			continue
+
+		# Use extended position for visibility check (where image actually renders)
+		var image_position: Vector2 = _get_extended_position(node)
+
+		# Check if image position is within the expanded view rect
+		if not view_rect.has_point(image_position):
+			continue
+
 		# User's own capture
-		if node.captured_by_user and node.creation_index > 0:
+		if has_user_capture:
 			var image_key := "self:%d" % node.creation_index
 			visible_captures[image_key] = {
 				"render_data": render_data,
@@ -606,7 +668,7 @@ func _update_dex_images() -> void:
 			}
 
 		# Friend captures - only show first friend's capture per animal to avoid overlap
-		if node.captured_by_friends.size() > 0 and not node.captured_by_user:
+		if has_friend_capture:
 			var friend_capture: Dictionary = node.captured_by_friends[0]
 			var friend_id: String = friend_capture.get("user_id", "")
 			if not friend_id.is_empty():
@@ -946,6 +1008,9 @@ func _render_taxonomy_labels() -> void:
 		var should_show_label = false
 
 		if render_data.node.is_taxonomic():
+			# Skip root label if hide_root_label is enabled
+			if hide_root_label and _is_root_node(render_data.node):
+				continue
 			# Only show taxonomy labels for higher ranks at lower zoom levels
 			if _should_show_taxonomy_label_at_zoom(render_data.node):
 				label_text = render_data.node.name
@@ -979,8 +1044,9 @@ func _render_taxonomy_labels() -> void:
 		var label_above: bool = _should_label_be_above(render_data.node)
 
 		# Calculate screen position of label center for overlap detection
-		var node_size = node_size_base * render_data.scale
-		var label_offset_y: float = node_size + LABEL_OFFSET_WORLD if not label_above else -(node_size + LABEL_OFFSET_WORLD)
+		# With unit circle mesh, render_data.scale IS the world-unit radius
+		var node_radius: float = render_data.scale
+		var label_offset_y: float = node_radius + LABEL_OFFSET_WORLD if not label_above else -(node_radius + LABEL_OFFSET_WORLD)
 		var label_screen_pos = _world_to_screen(render_data.position + Vector2(0, label_offset_y))
 
 		# Check for overlap with already placed labels
@@ -1011,10 +1077,10 @@ func _render_taxonomy_labels() -> void:
 		var offset: Vector2
 		if label_above:
 			# Position above: negative Y offset, accounting for label height
-			offset = Vector2(-label_size.x / 2.0, -(node_size + LABEL_OFFSET_WORLD + label_size.y))
+			offset = Vector2(-label_size.x / 2.0, -(node_radius + LABEL_OFFSET_WORLD + label_size.y))
 		else:
 			# Position below: positive Y offset
-			offset = Vector2(-label_size.x / 2.0, node_size + LABEL_OFFSET_WORLD)
+			offset = Vector2(-label_size.x / 2.0, node_radius + LABEL_OFFSET_WORLD)
 		label.position = render_data.position + offset
 
 		taxonomy_labels[render_data.node.id] = label
@@ -1102,23 +1168,20 @@ func _get_node_color(node: TreeDataModels.TaxonomicNode) -> Color:
 
 
 func _get_node_scale(node: TreeDataModels.TaxonomicNode) -> float:
-	"""Get scale for a node based on type, rank, capture status and importance."""
+	"""Get scale for a node based on type, rank, capture status and importance.
+	With unit circle mesh, scale directly equals the desired world-unit size."""
 	if node.is_taxonomic():
-		var base = taxonomy_node_size
-		var multiplier = RANK_SIZE_MULTIPLIERS.get(node.rank, 1.0)
-		return (base * multiplier) / node_size_base
+		var multiplier: float = RANK_SIZE_MULTIPLIERS.get(node.rank, 1.0)
+		return node_size_base * multiplier
 
-	var base_size = node_size_base
+	# Animal nodes: start with base size
+	var final_size: float = node_size_base
 
-	if node.captured_by_user:
-		base_size = node_size_user
-	elif node.captured_by_friends.size() > 0:
-		base_size = node_size_friend
-
+	# Discoverer bonus (additive, scales with node_size_base)
 	if node.discoverer.get("is_self", false) or node.discoverer.get("is_friend", false):
-		base_size += node_size_discoverer_bonus
+		final_size += node_size_discoverer_bonus
 
-	return base_size / node_size_base
+	return final_size
 
 
 # =============================================================================
@@ -1193,7 +1256,8 @@ func get_node_at_position(world_pos: Vector2, radius: float = 20.0) -> TreeDataM
 					if nodes_with_dex_images.has(render_data.node.id):
 						node_radius = dex_image_size / 2.0  # Half the dex image size
 					else:
-						node_radius = node_size_base * render_data.scale
+						# With unit circle mesh, scale IS the world-unit radius
+						node_radius = render_data.scale
 
 					if dist <= node_radius + search_radius:
 						return render_data.node

@@ -60,6 +60,10 @@ signal loading_finished()
 @export var node_size: float = 20.0
 ## Opacity of taxonomy/uncaptured nodes (0.0 - 1.0)
 @export_range(0.0, 1.0, 0.05) var node_opacity: float = 1.0
+## Hide the root node (Kingdom) circle
+@export var hide_root_node: bool = false
+## Hide the root node (Kingdom) label
+@export var hide_root_label: bool = false
 
 @export_group("Edge Appearance")
 ## Width of edges in world units
@@ -183,9 +187,11 @@ func set_selected_friends(friend_ids: Array) -> void:
 	_selected_friend_ids = friend_ids
 
 
-## Get the root position (center of radial layout)
+## Get the root position (center of radial layout).
+## For radial layouts, the root is always at world origin by design.
 func get_root_position() -> Vector2:
-	return Vector2.ZERO  # Radial layout is centered at origin
+	# Radial layout algorithm centers the tree at origin
+	return Vector2.ZERO
 
 
 ## Get current tree data
@@ -270,6 +276,8 @@ func _configure_renderer() -> void:
 	# Node appearance
 	tree_renderer.node_size_base = node_size
 	tree_renderer.node_opacity = node_opacity
+	tree_renderer.hide_root_node = hide_root_node
+	tree_renderer.hide_root_label = hide_root_label
 
 	# Edge appearance
 	tree_renderer.edge_width_base = edge_width
@@ -361,8 +369,9 @@ func _on_friends_sync_failed(_error: String) -> void:
 
 
 func _try_render_tree() -> void:
-	"""Render tree only when both tree and friends are ready."""
-	if not _tree_loaded or not _friends_synced:
+	"""Render tree when tree data is ready.
+	Friend sync runs in background but doesn't block tree rendering."""
+	if not _tree_loaded:
 		return
 
 	if not _pending_tree_data:

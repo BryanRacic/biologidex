@@ -21,9 +21,29 @@ extends Node2D
 		if _tree_visualization:
 			_tree_visualization.tree_scale = value
 
+@export_group("Radial Menu")
+## Scale factor for the radial menu (affects all button sizes and spacing)
+@export_range(0.5, 3.0, 0.1) var menu_scale: float = 1.0:
+	set(value):
+		menu_scale = value
+		if _radial_menu:
+			_apply_menu_scale()
+
+## If enabled, adds an invisible placeholder at the top position,
+## offsetting visible buttons to form a triangle below the center button.
+@export var menu_placeholder_button: bool = false:
+	set(value):
+		menu_placeholder_button = value
+		if _radial_menu:
+			_radial_menu.placeholder_button = value
+
 @export_group("Tree Background Appearance")
-## Base size of tree nodes (smaller = subtler background)
-@export_range(5.0, 50.0, 1.0) var tree_node_size: float = 15.0
+## Hide the root node (Kingdom) circle
+@export var hide_root_node: bool = false
+## Hide the root node (Kingdom) label
+@export var hide_root_label: bool = false
+## Base size of tree nodes in world units (larger = bigger nodes)
+@export_range(5.0, 100.0, 1.0) var tree_node_size: float = 15.0
 ## Opacity of tree nodes (lower = more subtle)
 @export_range(0.0, 1.0, 0.05) var tree_node_opacity: float = 0.6
 ## Width of tree edges/branches
@@ -32,6 +52,8 @@ extends Node2D
 @export_range(0.0, 1.0, 0.05) var tree_edge_opacity: float = 0.4
 ## Size of dex images on tree (smaller = less prominent)
 @export_range(200.0, 2000.0, 50.0) var tree_dex_image_size: float = 800.0
+## Font size of tree labels in world units (larger = bigger text)
+@export_range(20, 200, 5) var tree_label_font_size: int = 90
 ## Opacity of tree labels
 @export_range(0.0, 1.0, 0.05) var tree_label_opacity: float = 0.7
 
@@ -52,16 +74,10 @@ var _home_ui: WorldSpaceUI = null
 var _recenter_button: RecenterButton = null
 
 # =============================================================================
-# UI References (world-space buttons)
+# UI References (world-space)
 # =============================================================================
 
-var camera_button: Button = null
-var dex_button: Button = null
-var feed_button: Button = null
-var social_button: Button = null
-var menu_button: Button = null
-var title_label: Label = null
-
+var _radial_menu: RadialMenuCircles = null
 
 func _ready() -> void:
 	# Skip runtime logic in editor (tool script only for export var visibility)
@@ -132,123 +148,147 @@ func _setup_tree_visualization() -> void:
 	# Apply home-specific visual settings (subtler background appearance)
 	_tree_visualization.node_size = tree_node_size
 	_tree_visualization.node_opacity = tree_node_opacity
+	_tree_visualization.hide_root_node = hide_root_node
+	_tree_visualization.hide_root_label = hide_root_label
 	_tree_visualization.edge_width = tree_edge_width
 	_tree_visualization.edge_opacity = tree_edge_opacity
 	_tree_visualization.dex_image_size = tree_dex_image_size
+	_tree_visualization.label_font_size = tree_label_font_size
 	_tree_visualization.label_opacity = tree_label_opacity
 
 	_paper_camera.content_container.add_child(_tree_visualization)
 	_tree_visualization.setup(_paper_camera)
 
+	# Connect to tree_loaded to re-center menu when tree data arrives
+	_tree_visualization.tree_loaded.connect(_on_tree_loaded)
+
 	print("[Home] TreeVisualization initialized with background styling")
 
 
 func _setup_world_space_ui() -> void:
-	"""Create world-space UI container with buttons."""
+	"""Create world-space UI container with radial menu."""
 	_home_ui = WorldSpaceUI.new()
 	_home_ui.name = "HomeUI"
 	_home_ui.anchor_position = Vector2.ZERO  # Centered at origin
 	_paper_camera.content_container.add_child(_home_ui)
 
-	# Build UI structure
-	_build_home_buttons()
+	# Build radial menu UI
+	_build_radial_menu()
 
-	print("[Home] World-space UI created")
-
-
-func _build_home_buttons() -> void:
-	"""Build the home screen buttons in world-space."""
-	# Create a CenterContainer to center the VBox at world origin
-	var center_container = CenterContainer.new()
-	center_container.name = "CenterContainer"
-	# Size large enough to contain the menu (1600x1200 to fit 1400px separator + padding)
-	center_container.custom_minimum_size = Vector2(1600, 1200)
-	center_container.size = Vector2(1600, 1200)
-	center_container.position = Vector2(-800, -600)  # Center the container at origin
-	center_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_home_ui.add_child(center_container)
-
-	# Create VBoxContainer for buttons (will be auto-centered by CenterContainer)
-	var vbox = VBoxContainer.new()
-	vbox.name = "VBoxContainer"
-	vbox.add_theme_constant_override("separation", 30)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center_container.add_child(vbox)
-
-	# Create title label with proper font styling (matching original)
-	title_label = Label.new()
-	title_label.name = "TitleLabel"
-	title_label.text = "BiologiDex"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-
-	# Load the Fraunces font and create LabelSettings (matching original home.tscn)
-	var font = load("res://resources/fonts/Fraunces/Fraunces-VariableFont_SOFT,WONK,opsz,wght.ttf") as Font
-	var label_settings = LabelSettings.new()
-	label_settings.font = font
-	label_settings.font_size = 246
-	label_settings.font_color = Color.BLACK
-	title_label.label_settings = label_settings
-
-	vbox.add_child(title_label)
-
-	# Separator (matching original 1400px width, 3px height)
-	var separator = ColorRect.new()
-	separator.name = "Separator"
-	separator.custom_minimum_size = Vector2(1400, 3)
-	separator.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	separator.color = Color(0, 0, 0, 0.6)
-	separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(separator)
-
-	# Spacer
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 30)
-	spacer1.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(spacer1)
-
-	# Second spacer (matching original)
-	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 30)
-	spacer2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(spacer2)
-
-	# Load theme for buttons
-	var theme = load("res://theme.tres") as Theme
-
-	# Create navigation buttons
-	camera_button = _create_nav_button("Upload Image", theme)
-	camera_button.pressed.connect(_on_camera_pressed)
-	vbox.add_child(camera_button)
-
-	feed_button = _create_nav_button("Dex Feed", theme)
-	feed_button.pressed.connect(_on_feed_pressed)
-	vbox.add_child(feed_button)
-
-	dex_button = _create_nav_button("View Dex", theme)
-	dex_button.pressed.connect(_on_dex_pressed)
-	vbox.add_child(dex_button)
-
-	social_button = _create_nav_button("Friends", theme)
-	social_button.pressed.connect(_on_social_pressed)
-	vbox.add_child(social_button)
-
-	# Menu button (hidden for now)
-	menu_button = _create_nav_button("Menu", theme)
-	menu_button.visible = false
-	menu_button.pressed.connect(_on_menu_pressed)
-	vbox.add_child(menu_button)
+	print("[Home] World-space UI created with radial menu")
 
 
-func _create_nav_button(text: String, theme: Theme) -> Button:
-	"""Create a styled navigation button."""
-	var button = Button.new()
-	button.text = text
-	button.theme = theme
-	button.custom_minimum_size = Vector2(80, 44)
-	button.add_theme_font_size_override("font_size", 124)
-	return button
+# Base values for menu dimensions (before scaling)
+const MENU_BASE_CENTER_RADIUS := 120.0
+const MENU_BASE_RING_DISTANCE := 220.0
+const MENU_BASE_RING_BUTTON_RADIUS := 70.0
+const MENU_BASE_CENTER_ICON_SIZE := 200.0
+const MENU_BASE_RING_ICON_SIZE := 120.0
+
+
+func _build_radial_menu() -> void:
+	"""Build the radial menu for home navigation."""
+
+	# Create RadialMenuCircles programmatically (web export compatible)
+	_radial_menu = RadialMenuCircles.new()
+	_radial_menu.name = "RadialMenu"
+
+	# Make buttons transparent (icon-only style)
+	_radial_menu.center_normal_color = Color.TRANSPARENT
+	_radial_menu.center_hover_color = Color(0, 0, 0, 0.1)
+	_radial_menu.center_pressed_color = Color(0, 0, 0, 0.2)
+	_radial_menu.center_border_width = 0.0
+	_radial_menu.ring_normal_color = Color.TRANSPARENT
+	_radial_menu.ring_hover_color = Color(0, 0, 0, 0.1)
+	_radial_menu.ring_pressed_color = Color(0, 0, 0, 0.2)
+	_radial_menu.ring_border_width = 0.0
+
+	# Configure icon colors
+	_radial_menu.center_icon_color = Color.BLACK
+	_radial_menu.ring_icon_color = Color.BLACK
+
+	# Load icons
+	var icon_camera: Texture2D = load("res://resources/icons/kenny_board-game-icons/card_add.svg")
+	var icon_friends: Texture2D = load("res://resources/icons/kenny_board-game-icons/pawns.svg")
+	var icon_dex: Texture2D = load("res://resources/icons/kenny_board-game-icons/book_closed.svg")
+
+	# Apply scaled dimensions BEFORE adding to tree (so _ready() uses correct values)
+	_radial_menu.center_radius = MENU_BASE_CENTER_RADIUS * menu_scale
+	_radial_menu.ring_distance = MENU_BASE_RING_DISTANCE * menu_scale
+	_radial_menu.ring_button_radius = MENU_BASE_RING_BUTTON_RADIUS * menu_scale
+	_radial_menu.placeholder_button = menu_placeholder_button
+	# Position ring buttons at top (-PI/2) so placeholder is at top, visible buttons below
+	_radial_menu.start_angle = -PI / 2
+	var center_icon := MENU_BASE_CENTER_ICON_SIZE * menu_scale
+	var ring_icon := MENU_BASE_RING_ICON_SIZE * menu_scale
+	_radial_menu.center_icon_size = Vector2(center_icon, center_icon)
+	_radial_menu.ring_icon_size = Vector2(ring_icon, ring_icon)
+
+	# Add to world-space UI (triggers _ready() which sets up sizing with our values)
+	_home_ui.add_child(_radial_menu)
+
+	# Center at origin immediately (size is now correct from _ready())
+	_radial_menu.center_at_position(Vector2.ZERO)
+
+	# Configure center button with icon (primary action)
+	_radial_menu.set_center_button("camera", "", icon_camera)
+
+	# Configure ring buttons with icons (navigation - evenly distributed around center)
+	# NOTE: Feed and Settings temporarily disabled for troubleshooting
+	#_radial_menu.add_ring_button("feed", "Feed")
+	_radial_menu.add_ring_button("dex", "", icon_dex)
+	_radial_menu.add_ring_button("social", "", icon_friends)
+	#_radial_menu.add_ring_button("settings", "Settings")
+
+	# Connect signals
+	_radial_menu.center_pressed.connect(_on_camera_pressed)
+	_radial_menu.button_pressed.connect(_on_radial_button_pressed)
+
+	print("[Home] RadialMenuCircles created at world origin with scale: ", menu_scale)
+
+
+func _apply_menu_scale() -> void:
+	"""Apply menu_scale to all radial menu dimensions (called when scale changes at runtime)."""
+	if not _radial_menu:
+		return
+
+	# Apply scaled layout dimensions
+	_radial_menu.center_radius = MENU_BASE_CENTER_RADIUS * menu_scale
+	_radial_menu.ring_distance = MENU_BASE_RING_DISTANCE * menu_scale
+	_radial_menu.ring_button_radius = MENU_BASE_RING_BUTTON_RADIUS * menu_scale
+
+	# Apply scaled icon sizes
+	var center_icon := MENU_BASE_CENTER_ICON_SIZE * menu_scale
+	var ring_icon := MENU_BASE_RING_ICON_SIZE * menu_scale
+	_radial_menu.center_icon_size = Vector2(center_icon, center_icon)
+	_radial_menu.ring_icon_size = Vector2(ring_icon, ring_icon)
+
+	# Wait for layout update then center - layout updates happen in _process(),
+	# so we need to wait for a full frame to pass
+	_center_menu_after_layout()
+
+
+func _center_menu_after_layout() -> void:
+	"""Wait for layout update to complete, then center the menu."""
+	if not _radial_menu or not is_inside_tree():
+		return
+	# Wait for next frame (after _process runs and updates layout)
+	await get_tree().process_frame
+	if _radial_menu:
+		_radial_menu.center_at_position(Vector2.ZERO)
+
+
+func _on_radial_button_pressed(button_id: String) -> void:
+	"""Handle radial menu ring button press."""
+	match button_id:
+		"feed":
+			_on_feed_pressed()
+		"dex":
+			_on_dex_pressed()
+		"social":
+			_on_social_pressed()
+		"settings":
+			_on_menu_pressed()
 
 
 func _setup_recenter_button() -> void:
@@ -267,9 +307,28 @@ func _setup_recenter_button() -> void:
 
 
 func _on_recenter_requested() -> void:
-	"""Handle recenter button press."""
-	print("[Home] Recentering view")
+	"""Handle recenter button press - return to world origin where menu and tree root are."""
+	print("[Home] Recentering view to origin")
 	_paper_camera.scroll_to(Vector2.ZERO, true)
+
+
+func _on_tree_loaded(tree_data) -> void:
+	"""Handle tree data loaded - verify root is at origin for debugging."""
+	# Find root node (should be Kingdom rank at depth 0 after server fix)
+	var root_node = null
+	for node in tree_data.nodes:
+		if node.rank == TreeDataModels.TaxonomicRank.KINGDOM:
+			root_node = node
+			break
+
+	if root_node:
+		var world_pos: Vector2 = root_node.position * tree_scale
+		print("[Home] Tree loaded - Root '", root_node.name, "' at world: ", world_pos)
+
+		if world_pos.length() > 10:
+			push_warning("[Home] Tree root not at origin! Clear server cache and reload.")
+	else:
+		print("[Home] Tree loaded - ", tree_data.nodes.size(), " nodes")
 
 
 # =============================================================================

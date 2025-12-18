@@ -3,7 +3,6 @@ Enhanced services for dynamic user-specific taxonomic trees.
 """
 import logging
 import math
-from typing import Dict, List, Set, Optional
 from django.core.cache import cache
 from django.conf import settings
 from django.db.models import Count, Q, Prefetch
@@ -244,11 +243,17 @@ class DynamicTaxonomicTreeService:
         """
         Build true taxonomic hierarchy from animals.
         Creates virtual nodes for missing taxonomic ranks.
+
+        Note: We build into a temporary root first, then promote the single kingdom
+        to be the actual root if there's only one. This ensures the layout algorithm
+        places the visible root (e.g., Animalia) at the center (0, 0) rather than
+        having an invisible phantom root at center.
         """
-        hierarchy = {
-            'id': 'root',
-            'name': 'Life',
-            'rank': 'root',
+        # Build into temporary container first
+        temp_root = {
+            'id': '_temp_root',
+            'name': '_temp',
+            'rank': '_temp',
             'children': {},
             'animal_count': 0
         }
@@ -256,7 +261,7 @@ class DynamicTaxonomicTreeService:
         ranks = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
 
         for animal in animals:
-            current_node = hierarchy
+            current_node = temp_root
             path = []
 
             # Traverse/create path through taxonomy
@@ -291,6 +296,24 @@ class DynamicTaxonomicTreeService:
 
             # Add animal as leaf node
             current_node['animals'].append(animal)
+
+        # Promote single kingdom to root (most common case: all animals are in Animalia)
+        # This ensures the visible root is at layout center (0, 0) instead of a phantom node
+        kingdoms = list(temp_root['children'].values())
+        if len(kingdoms) == 1:
+            # Single kingdom - promote it to be the root
+            hierarchy = kingdoms[0]
+            logger.debug(f"Promoted single kingdom '{hierarchy['name']}' to root")
+        else:
+            # Multiple kingdoms (rare) - keep Life as explicit root
+            hierarchy = {
+                'id': 'root',
+                'name': 'Life',
+                'rank': 'root',
+                'children': temp_root['children'],
+                'animal_count': temp_root['animal_count']
+            }
+            logger.debug(f"Multiple kingdoms found, using 'Life' as root")
 
         return hierarchy
 
@@ -348,13 +371,13 @@ class DynamicTaxonomicTreeService:
             node_id = node['id']
             node_path = f"{parent_path}/{node['name']}" if parent_path else node['name']
 
-            # Skip if already processed or if this is the root node
-            if node_path in processed_taxonomy_nodes or node_id == 'root':
+            # Skip if already processed
+            if node_path in processed_taxonomy_nodes:
                 return
 
             processed_taxonomy_nodes.add(node_path)
 
-            # Create taxonomy node for ALL non-root nodes
+            # Create taxonomy node for all hierarchy nodes including root
             # (Animal nodes are added separately in the loop below)
             taxonomy_node = {
                 'id': node_id,
@@ -376,9 +399,9 @@ class DynamicTaxonomicTreeService:
             for child in node.get('children', {}).values():
                 add_taxonomy_nodes(child, node_path)
 
-        # Add taxonomy nodes starting from root's children
-        for child in hierarchy.get('children', {}).values():
-            add_taxonomy_nodes(child)
+        # Add taxonomy nodes starting from hierarchy root itself
+        # (hierarchy is now the visible root - either single kingdom or 'Life' for multi-kingdom)
+        add_taxonomy_nodes(hierarchy)
 
         # Then add animal nodes (existing code)
         for animal in animals:

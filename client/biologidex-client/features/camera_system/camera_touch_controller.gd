@@ -364,7 +364,6 @@ func _stop_inertia() -> void:
 
 
 func _emit_view_changed() -> void:
-	print("Zoom level: ", camera.zoom.x)
 	view_changed.emit(camera.position, camera.zoom.x)
 
 

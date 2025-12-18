@@ -1,9 +1,11 @@
 ## TODO
-- Update modify dex entry scenes
+- Merge friends & dex feed scenes
+  - use (bullet journal style) tabs
+- Overlay nav arrows on tree edges
+  - Click to auto scroll to the next node in the path
 - Update dex scene
   - Scrolling up/down automatically moves & recenters the next/prev entry w/in the screen
 - Update dex to display full/half page w/ additional context from COL
-- Add lineage tree as background of home screen
 - Reduce dex compatible image size (for faster loading)
 - Implement basic CDN for faster image retrieval
   - Dedicated file upload service

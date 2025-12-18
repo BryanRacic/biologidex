@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-17)
+## Status (2025-12-18)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -24,6 +24,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ **TreeVisualization component**: Reusable tree rendering (composition pattern)
 - ✅ **Home + Tree integration**: Tree as interactive background with world-space UI
 - ✅ **RecenterButton component**: Appears when camera off-center with fade animation
+- ✅ **RadialMenu component**: Radial menus with two variants (RadialMenuRing + RadialMenuCircles)
 - ✅ **Web export fixes**: Multiple workarounds for Godot 4.5 web export issues:
   - Instanced scene children bug (GitHub #101975) - UI as sibling CanvasLayer
   - Unique name lookups - use explicit paths instead of `%NodeName`
@@ -250,29 +251,98 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Export Vars**: `center_threshold`, `center_position`, `fade_duration`
 - **Signals**: `recenter_requested`
 
+**RadialMenu Component (Updated 2025-12-18)**:
+- **Location**: `features/ui/components/radial_menu/`
+- **Purpose**: Radial navigation menus with two layout variants
+- **Architecture**: Inheritance hierarchy with shared base classes (DRY principle):
+  ```
+  Button Layer:
+  RadialButtonBase (shared circular button behavior)
+  ├── RadialCenterButton (center button with larger defaults)
+  └── RadialButtonCircle (ring button with angle positioning)
+
+  Menu Layer:
+  RadialMenuBase (shared menu orchestration, signals, animation)
+  ├── RadialMenuRing (arc-segment ring buttons)
+  │   └── RadialMenu (compatibility alias)
+  └── RadialMenuCircles (all circular buttons)
+  ```
+- **Files**:
+  - `radial_button_base.gd`: Base circular button (hit detection, drawing, states)
+  - `radial_center_button.gd`: Center button (extends base)
+  - `radial_button_circle.gd`: Ring circular button (extends base)
+  - `radial_button_ring.gd`: Arc-segment ring (unchanged)
+  - `radial_menu_base.gd`: Base menu (config storage, signals, animation)
+  - `radial_menu_ring.gd`: Arc-segment variant (extends base)
+  - `radial_menu_circles.gd`: All-circles variant (extends base)
+  - `radial_menu.gd`: Compatibility alias for RadialMenuRing
+- **Usage (RadialMenuRing - original design)**:
+  ```gdscript
+  var menu := RadialMenuRing.new()  # or RadialMenu.new() for compatibility
+  parent.add_child(menu)
+  menu.set_center_button("camera", "Upload\nImage")
+  menu.add_ring_button("feed", "Dex Feed")
+  menu.center_pressed.connect(_on_upload)
+  menu.button_pressed.connect(_on_nav)
+  ```
+- **Usage (RadialMenuCircles - new variant)**:
+  ```gdscript
+  var menu := RadialMenuCircles.new()
+  parent.add_child(menu)
+  menu.ring_button_radius = 50.0  # Size of ring buttons
+  menu.ring_distance = 180.0      # Distance from center
+  menu.set_center_button("camera", "Upload\nImage")
+  menu.add_ring_button("feed", "Dex Feed")
+  menu.center_pressed.connect(_on_upload)
+  menu.button_pressed.connect(_on_nav)
+  ```
+- **Key Export Vars (RadialMenuBase)**: `center_radius`, `ring_distance`, `start_angle`, colors, font settings, `center_icon_color`, `center_icon_size`, `ring_icon_color`, `ring_icon_size`
+- **Key Export Vars (RadialMenuRing)**: `ring_inner_radius`, `ring_outer_radius`, `ring_gap_angle`
+- **Key Export Vars (RadialMenuCircles)**: `ring_button_radius`, `ring_button_spacing`
+- **Icon-only buttons**: Set `*_normal_color = Color.TRANSPARENT` and `*_border_width = 0.0` for transparent buttons showing only icons
+- **Signals**: `center_pressed`, `button_pressed(button_id)`, `button_hovered(button_id)`, `button_unhovered`
+- **Positioning API (RadialMenuBase)**:
+  ```gdscript
+  menu.center_at_position(world_pos)  # Center menu at world position
+  var center := menu.get_menu_center()  # Get current center position
+  ```
+- **Touch Targets**: Both variants maintain 44px minimum touch targets
+- **Gotcha**: Dictionary value access needs explicit types (`var seg_start: float = seg.start`)
+
 **WorldSpaceUI Component (NEW 2025-12-17)**:
 - **Location**: `features/ui/components/world_space_ui/`
 - **Purpose**: Container for UI elements that pan with the world (tree background)
 - **File**: `world_space_ui.gd` (`class_name WorldSpaceUI`)
 - **Usage**: Add to `paper_camera.content_container`, set `anchor_position`
 
-**Home Scene with Tree Background (Updated 2025-12-17)**:
-- **Architecture**: Tree as background + world-space UI buttons + screen-space recenter overlay
+**Home Scene with Tree Background (Updated 2025-12-18)**:
+- **Architecture**: Tree as background + RadialMenuCircles in world-space + screen-space recenter overlay
 - **Structure**:
   ```
   Home (Node2D)
   ├── PaperCameraScene (configured for tree pan/zoom)
   │   └── WorldContent/ContentContainer
   │       ├── TreeVisualization (created programmatically)
-  │       └── HomeUI (WorldSpaceUI) - buttons pan with tree
+  │       └── HomeUI (WorldSpaceUI)
+  │           └── RadialMenuCircles (center: Upload, ring: Dex/Friends)
   └── HomeOverlayLayer (CanvasLayer, layer=10)
       └── Control → TopRightContainer → RecenterButton
   ```
+- **Export Vars** (editable in inspector):
+  - `tree_scale`: Scale of tree visualization (0.5-10.0)
+  - `menu_scale`: Scale factor for radial menu - affects all button sizes and spacing (0.5-3.0)
+  - Tree appearance: `tree_node_size`, `tree_node_opacity`, `tree_edge_width`, `tree_edge_opacity`, etc.
 - **PaperCameraScene Config**: min_zoom=0.5, max_zoom=4.0, initial_zoom=1.5, pan/zoom/inertia enabled
-- **Navigation**: "Lineage Tree" button removed (tree is now the background)
-- **Recenter**: Button appears when panned >100 world units from origin
+- **RadialMenuCircles Config**: Transparent icon-only buttons (no background, no border), black icons using Kenny board-game-icons SVGs
+  - Center: `card_add.svg` (200×200 icon at scale 1.0)
+  - Ring: `book_closed.svg` (Dex), `pawns.svg` (Friends) - 120×120 icons at scale 1.0
+  - Base dimensions: center_radius=120, ring_distance=220, ring_button_radius=70 (all scaled by `menu_scale`)
+- **Menu/Tree Alignment**: Both menu and tree root (Animalia) are at world origin (0,0). Menu uses `center_at_position(Vector2.ZERO)` to center over the tree root.
+- **Scaling gotcha**: Set menu properties BEFORE adding to tree (so `_ready()` uses correct values), then call `center_at_position()`. For runtime scale changes, use `await get_tree().process_frame` before recentering.
+- **Recenter**: Button appears when panned >100 world units from origin, scrolls back to (0,0)
 
-**Taxonomic Tree Visualization (Updated 2025-12-17)**:
+**Taxonomic Tree Visualization (Updated 2025-12-18)**:
+- **Root Node Centering**: Server promotes single kingdom (Animalia) to tree root at depth 0, positioned at origin (0,0). This ensures the visible root aligns with UI elements at world origin.
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
   - `scroll_offset`: World-space position that appears at viewport center
   - When `scroll_offset = (0,0)`, world origin is at viewport center
@@ -518,14 +588,16 @@ docker-compose -f docker-compose.production.yml logs -f
 
 ## Planned Features
 
-**Taxonomic Tree** (✅ implemented 2025-11-18, radial overhaul 2025-12-03):
+**Taxonomic Tree** (✅ implemented 2025-11-18, radial overhaul 2025-12-03, root centering fix 2025-12-18):
 - **Radial layout**: Eades algorithm with angular wedge allocation (guaranteed no overlaps)
 - **Vertical layout**: Walker-Buchheim O(n) for rectangular trees
+- **Root centering**: Single kingdom (Animalia) promoted to root at depth 0, centered at origin (0,0). Multi-kingdom case uses "Life" as explicit root.
 - Spatial chunking (2048x2048) for progressive loading
 - Dynamic tree generation with modes: personal, friends, selected, global
 - 5-minute server cache, dual-layer client cache (memory + disk)
 - Endpoints: `/api/v1/graph/tree/`, `/tree/chunk/{x}/{y}/`, `/tree/search/`
 - Layout files: `eades_radial.py` (radial), `reingold_tilford.py` (vertical)
+- Service: `services_dynamic.py:DynamicTaxonomicTreeService` - hierarchy building, layout, caching
 
 **Future** (post-MVP):
 - Phase 6: Multiple images per entry, image history
