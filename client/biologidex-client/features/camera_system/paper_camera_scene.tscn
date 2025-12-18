@@ -22,8 +22,9 @@ shader_parameter/fiber_scale = 1.3
 
 [node name="PaperCameraScene" type="Node2D"]
 script = ExtResource("1_scene")
-initial_zoom = 5.324
-grid_line_px = 0.30000000000000004
+initial_zoom = 2.0
+grid_scale = 60.0
+grid_line_px = 1.0
 grid_line_alpha = 0.25
 speckle_amount = 0.16
 speckle_density = 1.21
@@ -44,7 +45,7 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 z_index = -100
 material = SubResource("ShaderMaterial_paper")
-polygon = PackedVector2Array(-4000, -4000, 4000, -4000, 4000, 4000, -4000, 4000)
+polygon = PackedVector2Array(-25000, -25000, 25000, -25000, 25000, 25000, -25000, 25000)
 
 [node name="ContentContainer" type="Node2D" parent="WorldContent"]
 unique_name_in_owner = true

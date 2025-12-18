@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://ctreevis001"]
+
+[ext_resource type="Script" path="res://features/tree_visualization/tree_visualization.gd" id="1_script"]
+
+[node name="TreeVisualization" type="Node2D"]
+script = ExtResource("1_script")
+auto_load_on_ready = true
+initial_mode = 1
+use_cache = true

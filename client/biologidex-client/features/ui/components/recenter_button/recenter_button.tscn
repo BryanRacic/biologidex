@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3 uid="uid://crcntrbtn001"]
+
+[ext_resource type="Script" path="res://features/ui/components/recenter_button/recenter_button.gd" id="1_script"]
+
+[node name="RecenterButton" type="Button"]
+custom_minimum_size = Vector2(120, 60)
+offset_right = 120.0
+offset_bottom = 60.0
+text = "Home"
+script = ExtResource("1_script")
+center_threshold = 100.0
+fade_duration = 0.15

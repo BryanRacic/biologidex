@@ -60,3 +60,10 @@
     - Each entry displays the username of the original author
 - Allow download/export of dex record image
 - Overlapping label detection/fix logic
+- Support 1:1 aspect ratio selection/crop of images as part of dex entry
+  - Replace images on tree w/ circular cutouts
+  - More fun table of contents w/ pfp of each animal
+
+### Future Features
+- Take a picture of placards/info at the zoo/aquarium and extract text into dex entry
+  - Location, facts, etc.

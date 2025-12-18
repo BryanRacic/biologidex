@@ -9,7 +9,7 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-12)
+## Status (2025-12-17)
 - ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
 - ✅ Incremental sync, image deduplication, HTTP caching, retry logic
 - ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
@@ -21,6 +21,9 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - ✅ DexRecordImage reusable component with unified API for image display/loading
 - ✅ Dex feed vertical carousel with snap-to-item and pooled DexRecordImage rendering
 - ✅ Social scene with lab book styling, touch scrolling, and copyable friend codes
+- ✅ **TreeVisualization component**: Reusable tree rendering (composition pattern)
+- ✅ **Home + Tree integration**: Tree as interactive background with world-space UI
+- ✅ **RecenterButton component**: Appears when camera off-center with fade animation
 - ✅ **Web export fixes**: Multiple workarounds for Godot 4.5 web export issues:
   - Instanced scene children bug (GitHub #101975) - UI as sibling CanvasLayer
   - Unique name lookups - use explicit paths instead of `%NodeName`
@@ -208,7 +211,68 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   5. UI containers: `mouse_filter = 2` (IGNORE); buttons keep default STOP
 - **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social, tree
 
-**Taxonomic Tree Visualization (Updated 2025-12-12)**:
+**TreeVisualization Component (NEW 2025-12-17)**:
+- **Location**: `features/tree_visualization/`
+- **Purpose**: Reusable component encapsulating all tree rendering logic (composition pattern)
+- **Files**: `tree_visualization.gd` (`class_name TreeVisualization`), `tree_visualization.tscn`
+- **Usage**:
+  ```gdscript
+  # Create dynamically (web export compatible)
+  var tree_vis = TreeVisualization.new()
+  paper_camera.content_container.add_child(tree_vis)
+  tree_vis.setup(paper_camera)  # Must call after adding to tree
+
+  # Configure before setup
+  tree_vis.auto_load_on_ready = true  # Auto-load tree data
+  tree_vis.initial_mode = APITypes.TreeMode.FRIENDS
+  tree_vis.use_cache = true
+
+  # Listen for events
+  tree_vis.tree_loaded.connect(_on_tree_loaded)
+  tree_vis.node_selected.connect(_on_node_selected)
+  ```
+- **Signals**: `tree_loaded`, `tree_load_failed`, `node_selected`, `node_hovered`, `node_unhovered`, `loading_started`, `loading_finished`
+- **Key Methods**: `setup()`, `load_tree()`, `reload_tree()`, `set_mode()`, `get_root_position()`, `clear()`
+- **Internally Creates**: TreeGraph, TreeRenderer, all layer nodes (EdgesLayer, NodesLayer, DexImagesLayer, LabelsLayer)
+- **Used by**: `tree_controller.gd`, `home.gd`
+
+**RecenterButton Component (NEW 2025-12-17)**:
+- **Location**: `features/ui/components/recenter_button/`
+- **Purpose**: Button that appears when camera is off-center (fade animation)
+- **Files**: `recenter_button.gd` (`class_name RecenterButton`), `recenter_button.tscn`
+- **Usage**:
+  ```gdscript
+  recenter_button.connect_to_camera(paper_camera)
+  recenter_button.center_position = Vector2.ZERO
+  recenter_button.center_threshold = 100.0  # Show when >100 world units away
+  recenter_button.recenter_requested.connect(_on_recenter)
+  ```
+- **Export Vars**: `center_threshold`, `center_position`, `fade_duration`
+- **Signals**: `recenter_requested`
+
+**WorldSpaceUI Component (NEW 2025-12-17)**:
+- **Location**: `features/ui/components/world_space_ui/`
+- **Purpose**: Container for UI elements that pan with the world (tree background)
+- **File**: `world_space_ui.gd` (`class_name WorldSpaceUI`)
+- **Usage**: Add to `paper_camera.content_container`, set `anchor_position`
+
+**Home Scene with Tree Background (Updated 2025-12-17)**:
+- **Architecture**: Tree as background + world-space UI buttons + screen-space recenter overlay
+- **Structure**:
+  ```
+  Home (Node2D)
+  ├── PaperCameraScene (configured for tree pan/zoom)
+  │   └── WorldContent/ContentContainer
+  │       ├── TreeVisualization (created programmatically)
+  │       └── HomeUI (WorldSpaceUI) - buttons pan with tree
+  └── HomeOverlayLayer (CanvasLayer, layer=10)
+      └── Control → TopRightContainer → RecenterButton
+  ```
+- **PaperCameraScene Config**: min_zoom=0.5, max_zoom=4.0, initial_zoom=1.5, pan/zoom/inertia enabled
+- **Navigation**: "Lineage Tree" button removed (tree is now the background)
+- **Recenter**: Button appears when panned >100 world units from origin
+
+**Taxonomic Tree Visualization (Updated 2025-12-17)**:
 - **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
   - `scroll_offset`: World-space position that appears at viewport center
   - When `scroll_offset = (0,0)`, world origin is at viewport center
@@ -242,11 +306,11 @@ Pokedex-style social network for wildlife observations. Users photograph animals
   - `_loading_in_progress`: Tracks concurrent HTTP requests
   - `IMAGES_PER_FRAME`: Max new loads started per frame (default: 1)
   - `MAX_CONCURRENT_LOADS`: Max simultaneous HTTP requests (default: 4)
-- **Files**: `tree_controller.gd` (orchestration), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data), `tree_dex_image.gd` (pooled image wrapper)
-- **Web Export Pattern** (tree_controller.gd):
-  - TreeGraph and layers created programmatically in `_setup_renderer()` (not in .tscn)
-  - UI nodes initialized with explicit paths (`$UILayer/Control/...`) in `_on_scene_ready()`
-  - All `@onready` vars replaced with regular vars + manual initialization
+- **Files**: `tree_visualization.gd` (reusable component), `tree_controller.gd` (tree scene), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data), `tree_dex_image.gd` (pooled image wrapper)
+- **Web Export Pattern** (composition pattern):
+  - TreeVisualization created programmatically in parent scene
+  - Internally creates TreeGraph and layers in `_setup_renderer()` (not in .tscn)
+  - UI nodes initialized with explicit paths in `_on_scene_ready()`
 
 **Dex Feed Carousel (Updated 2025-12-12)**:
 - **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization

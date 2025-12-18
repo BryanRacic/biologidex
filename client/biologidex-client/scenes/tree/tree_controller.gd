@@ -1,13 +1,12 @@
 @tool
 """
 TreeController - Orchestrates radial taxonomic tree visualization.
-Uses PaperCameraScene for pan/zoom gestures.
-Refactored to remove SubViewport and use direct Node2D transforms.
+Uses PaperCameraScene for pan/zoom gestures and TreeVisualization component for rendering.
+Refactored to use composition pattern for tree rendering.
 """
 extends BaseSceneNode
 
 const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
-const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
 
 # Editor preview: Load tree from cached JSON file for UI development
 const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
@@ -16,13 +15,6 @@ const EDITOR_PREVIEW_PATH: String = "res://resources/tree.json"
 		editor_preview = value
 		if Engine.is_editor_hint() and value:
 			_load_editor_preview()
-
-# Node references (TreeGraph created dynamically to avoid web export bug GitHub #101975)
-var tree_graph: Node2D = null
-var _edges_layer: Node2D = null
-var _nodes_layer: Node2D = null
-var _labels_layer: Node2D = null
-var _dex_images_layer: Node2D = null
 
 # UI node references - using explicit paths to work around web export unique name issues
 var _paper_camera: PaperCameraScene = null
@@ -35,24 +27,15 @@ var center_button: Button = null
 var loading_label: Label = null
 var stats_label: Label = null
 
-# Tree data
-var current_tree_data: TreeDataModels.TreeData = null
+# TreeVisualization component (replaces inline tree logic)
+var _tree_visualization: TreeVisualization = null
+
+# Mode state
 var current_mode: APITypes.TreeMode = APITypes.TreeMode.FRIENDS
 var selected_friend_ids: Array = []
 
-# Renderer
-var tree_renderer: TreeRenderer = null
-
 # State
 var is_initialized: bool = false
-var _friends_synced: bool = false
-var _tree_loaded: bool = false
-var _pending_tree_data: TreeDataModels.TreeData = null
-
-# View state (for TreeRenderer culling - Camera2D handles actual transform)
-var _scroll_offset: Vector2 = Vector2.ZERO
-var _current_scale: float = 1.0
-var _viewport_center: Vector2 = Vector2.ZERO
 
 
 # =============================================================================
@@ -94,51 +77,28 @@ func _load_editor_preview() -> void:
 		response.get("edges", []).size()
 	])
 
-	current_tree_data = TreeDataModels.TreeData.new(response)
+	# For editor preview, create a minimal TreeVisualization
+	if not _tree_visualization:
+		_setup_tree_visualization_for_editor()
 
-	if not tree_renderer:
-		_setup_renderer_for_editor()
+	var tree_data = TreeDataModels.TreeData.new(response)
+	if _tree_visualization and _tree_visualization.tree_renderer:
+		_tree_visualization.tree_renderer.render_tree(tree_data)
 
-	_render_tree()
 
-
-func _setup_renderer_for_editor() -> void:
-	"""Setup renderer in editor mode (also creates TreeGraph dynamically)."""
-	# Create TreeGraph and layers for editor preview
+func _setup_tree_visualization_for_editor() -> void:
+	"""Setup TreeVisualization in editor mode."""
 	if not _paper_camera:
 		_paper_camera = get_node_or_null("PaperCameraScene")
 	if not _paper_camera or not _paper_camera.content_container:
 		push_warning("[TreeController] Cannot setup editor preview: PaperCameraScene not ready")
 		return
 
-	tree_graph = Node2D.new()
-	tree_graph.name = "EditorTreeGraph"
-	_paper_camera.content_container.add_child(tree_graph)
-
-	_edges_layer = Node2D.new()
-	_edges_layer.name = "EdgesLayer"
-	_edges_layer.z_index = -1
-	tree_graph.add_child(_edges_layer)
-
-	_nodes_layer = Node2D.new()
-	_nodes_layer.name = "NodesLayer"
-	tree_graph.add_child(_nodes_layer)
-
-	_dex_images_layer = Node2D.new()
-	_dex_images_layer.name = "DexImagesLayer"
-	_dex_images_layer.z_index = 1
-	tree_graph.add_child(_dex_images_layer)
-
-	_labels_layer = Node2D.new()
-	_labels_layer.name = "LabelsLayer"
-	_labels_layer.z_index = 2
-	tree_graph.add_child(_labels_layer)
-
-	tree_renderer = TreeRenderer.new()
-	tree_renderer.name = "EditorTreeRenderer"
-	tree_graph.add_child(tree_renderer)
-	tree_renderer.setup_containers(_edges_layer, _nodes_layer, _labels_layer, _dex_images_layer)
-	print("[TreeController] Editor TreeRenderer initialized")
+	_tree_visualization = TreeVisualization.new()
+	_tree_visualization.name = "EditorTreeVisualization"
+	_tree_visualization.auto_load_on_ready = false  # Don't auto-load in editor
+	_paper_camera.content_container.add_child(_tree_visualization)
+	_tree_visualization.setup(_paper_camera)
 
 
 # =============================================================================
@@ -177,15 +137,6 @@ func _on_scene_ready() -> void:
 	zoom_reset_button.pressed.connect(_on_zoom_reset)
 	center_button.pressed.connect(_on_center_on_root)
 
-	# Setup PaperCameraScene integration
-	_setup_paper_camera()
-
-	# Connect API signals
-	APIManager.tree.tree_loaded.connect(_on_tree_loaded)
-	APIManager.tree.tree_load_failed.connect(_on_tree_load_failed)
-	APIManager.tree.search_results_received.connect(_on_search_results)
-	APIManager.tree.search_failed.connect(_on_search_failed)
-
 	# Check for friend context from navigation
 	if NavigationManager.has_context():
 		var context: Dictionary = NavigationManager.get_context()
@@ -197,35 +148,12 @@ func _on_scene_ready() -> void:
 	# Setup mode dropdown
 	_setup_mode_dropdown()
 
-	# Setup renderer
-	_setup_renderer()
+	# Setup TreeVisualization component
+	_setup_tree_visualization()
 
-	# Connect friend sync signals
-	FriendDexSyncService.sync_completed.connect(_on_friends_sync_completed)
-	FriendDexSyncService.sync_failed.connect(_on_friends_sync_failed)
-
-	# Start friend sync and tree load in parallel
-	_start_parallel_load()
-
-
-func _setup_paper_camera() -> void:
-	"""Connect to PaperCameraScene signals."""
-	if not _paper_camera:
-		push_error("[TreeController] PaperCameraScene not found")
-		return
-
-	# Connect to view_changed signal
-	_paper_camera.view_changed.connect(_on_view_changed)
-
-	# Get initial state for culling calculations
-	_scroll_offset = _paper_camera.get_camera_position()
-	_current_scale = _paper_camera.get_current_zoom()
-	if is_inside_tree():
-		_viewport_center = get_viewport_rect().size / 2.0
-	else:
-		_viewport_center = Vector2(640, 360)  # Default fallback
-
-	print("[TreeController] PaperCameraScene connected (initial scale: %.1f)" % _current_scale)
+	# Connect search signals
+	APIManager.tree.search_results_received.connect(_on_search_results)
+	APIManager.tree.search_failed.connect(_on_search_failed)
 
 
 func _setup_mode_dropdown() -> void:
@@ -237,85 +165,52 @@ func _setup_mode_dropdown() -> void:
 	mode_dropdown.select(APITypes.TreeMode.FRIENDS)
 
 
-func _setup_renderer() -> void:
-	"""Setup TreeRenderer for visualization.
-	Creates TreeGraph and layers programmatically to avoid web export bug (GitHub #101975)."""
-	# Create TreeGraph and layers dynamically (can't be in .tscn as children of instanced scene)
-	tree_graph = Node2D.new()
-	tree_graph.name = "TreeGraph"
-	_paper_camera.content_container.add_child(tree_graph)
+func _setup_tree_visualization() -> void:
+	"""Setup TreeVisualization component (composition pattern)."""
+	# Create TreeVisualization dynamically (web export compatibility)
+	_tree_visualization = TreeVisualization.new()
+	_tree_visualization.name = "TreeVisualization"
+	_tree_visualization.initial_mode = current_mode
+	_tree_visualization.auto_load_on_ready = true
+	_paper_camera.content_container.add_child(_tree_visualization)
 
-	_edges_layer = Node2D.new()
-	_edges_layer.name = "EdgesLayer"
-	_edges_layer.z_index = -1
-	tree_graph.add_child(_edges_layer)
+	# Set selected friends if in SELECTED mode
+	if selected_friend_ids.size() > 0:
+		_tree_visualization.set_selected_friends(selected_friend_ids)
 
-	_nodes_layer = Node2D.new()
-	_nodes_layer.name = "NodesLayer"
-	tree_graph.add_child(_nodes_layer)
+	# Setup with paper camera
+	_tree_visualization.setup(_paper_camera)
 
-	_dex_images_layer = Node2D.new()
-	_dex_images_layer.name = "DexImagesLayer"
-	_dex_images_layer.z_index = 1
-	tree_graph.add_child(_dex_images_layer)
+	# Connect TreeVisualization signals
+	_tree_visualization.tree_loaded.connect(_on_tree_loaded)
+	_tree_visualization.tree_load_failed.connect(_on_tree_load_failed)
+	_tree_visualization.node_selected.connect(_on_node_selected)
+	_tree_visualization.node_hovered.connect(_on_node_hovered)
+	_tree_visualization.node_unhovered.connect(_on_node_unhovered)
+	_tree_visualization.loading_started.connect(func(): _show_loading(true))
+	_tree_visualization.loading_finished.connect(func(): _show_loading(false))
 
-	_labels_layer = Node2D.new()
-	_labels_layer.name = "LabelsLayer"
-	_labels_layer.z_index = 2
-	tree_graph.add_child(_labels_layer)
-
-	# Create and setup TreeRenderer
-	tree_renderer = TreeRenderer.new()
-	tree_renderer.name = "TreeRenderer"
-	tree_graph.add_child(tree_renderer)
-
-	# Pass node containers to renderer
-	tree_renderer.setup_containers(_edges_layer, _nodes_layer, _labels_layer, _dex_images_layer)
-
-	# Connect renderer signals
-	tree_renderer.node_selected.connect(_on_node_selected)
-	tree_renderer.node_hovered.connect(_on_node_hovered)
-	tree_renderer.node_unhovered.connect(_on_node_unhovered)
-
-	print("[TreeController] TreeRenderer initialized")
+	print("[TreeController] TreeVisualization initialized")
 
 
 # =============================================================================
-# View Change Handling (Camera2D handles transform, we just update culling state)
-# =============================================================================
-#
-# COORDINATE SPACE CONVENTIONS:
-# - Camera2D.position: The world-space position at viewport center
-# - Camera2D.zoom: Scale factor (higher = zoomed in)
-# - TreeGraph is a child of PaperCameraScene/WorldContent/ContentContainer
-#   so it automatically transforms with the camera
-# - TreeRenderer needs scroll_offset and scale for culling calculations
-#
+# Tree Events
 # =============================================================================
 
-func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
-	"""Handle view changes from PaperCameraScene.
-	Camera2D handles the actual transform - we just update renderer for culling."""
-	_scroll_offset = cam_position
-	_current_scale = zoom
-	_viewport_center = get_viewport_rect().size / 2.0
+func _on_tree_loaded(tree_data: TreeDataModels.TreeData) -> void:
+	"""Handle successful tree load."""
+	is_initialized = true
+	_update_stats_display(tree_data)
 
-	# Update renderer for culling/labels (no transform needed - Camera2D does it)
-	if tree_renderer:
-		tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
+	# Center on root after loading
+	_on_center_on_root()
 
 
-func _process(_delta: float) -> void:
-	"""Update viewport center on resize."""
-	if Engine.is_editor_hint():
-		return
-
-	var new_center = get_viewport_rect().size / 2.0
-	if new_center != _viewport_center:
-		_viewport_center = new_center
-		# Trigger renderer update with current view state
-		if tree_renderer:
-			tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
+func _on_tree_load_failed(error: APITypes.APIError) -> void:
+	"""Handle tree load failure."""
+	push_error("[TreeController] Failed to load tree: ", error.message)
+	stats_label.text = "Error: " + error.message
+	stats_label.add_theme_color_override("font_color", Color.RED)
 
 
 # =============================================================================
@@ -325,14 +220,16 @@ func _process(_delta: float) -> void:
 func _on_zoom_in() -> void:
 	"""Zoom in via button."""
 	if _paper_camera:
-		var new_zoom = clampf(_current_scale * 1.2, _paper_camera.min_zoom, _paper_camera.max_zoom)
+		var current_zoom = _paper_camera.get_current_zoom()
+		var new_zoom = clampf(current_zoom * 1.2, _paper_camera.min_zoom, _paper_camera.max_zoom)
 		_paper_camera.set_zoom(new_zoom)
 
 
 func _on_zoom_out() -> void:
 	"""Zoom out via button."""
 	if _paper_camera:
-		var new_zoom = clampf(_current_scale / 1.2, _paper_camera.min_zoom, _paper_camera.max_zoom)
+		var current_zoom = _paper_camera.get_current_zoom()
+		var new_zoom = clampf(current_zoom / 1.2, _paper_camera.min_zoom, _paper_camera.max_zoom)
 		_paper_camera.set_zoom(new_zoom)
 
 
@@ -347,119 +244,6 @@ func _on_center_on_root() -> void:
 	if _paper_camera:
 		# Reset scroll to center (root is at 0,0 in radial layout)
 		_paper_camera.scroll_to(Vector2.ZERO, false)
-
-
-# =============================================================================
-# Tree Loading
-# =============================================================================
-
-func _start_parallel_load() -> void:
-	"""Start friend sync and tree load in parallel."""
-	_friends_synced = false
-	_tree_loaded = false
-	_pending_tree_data = null
-
-	_show_loading(true)
-
-	# Start friend sync (will use cached data if already synced)
-	FriendDexSyncService.sync_friends()
-
-	# Load tree
-	load_tree()
-
-
-func load_tree(use_cache: bool = true) -> void:
-	"""Load tree data from API."""
-	if is_loading:
-		return
-
-	is_loading = true
-	_show_loading(true)
-
-	# Request radial layout from server
-	APIManager.tree.fetch_tree(current_mode, selected_friend_ids, use_cache, "radial")
-
-
-func _on_tree_loaded(tree_data: TreeDataModels.TreeData) -> void:
-	"""Handle successful tree load."""
-	_tree_loaded = true
-	_pending_tree_data = tree_data
-	is_loading = false
-
-	_try_render_tree()
-
-
-func _on_friends_sync_completed(_friends_data: Dictionary) -> void:
-	"""Handle friend sync completion."""
-	_friends_synced = true
-	_try_render_tree()
-
-
-func _on_friends_sync_failed(_error: String) -> void:
-	"""Handle friend sync failure - still allow rendering with cached data."""
-	_friends_synced = true  # Continue anyway with cached data
-	_try_render_tree()
-
-
-func _try_render_tree() -> void:
-	"""Render tree only when both tree and friends are ready."""
-	if not _tree_loaded or not _friends_synced:
-		return
-
-	if not _pending_tree_data:
-		return
-
-	current_tree_data = _pending_tree_data
-	_pending_tree_data = null
-	is_initialized = true
-
-	_show_loading(false)
-	_update_stats_display()
-	_render_tree()
-
-	# Center on root after loading
-	_on_center_on_root()
-
-
-func _on_tree_load_failed(error: APITypes.APIError) -> void:
-	"""Handle tree load failure."""
-	push_error("[TreeController] Failed to load tree: ", error.message)
-	is_loading = false
-	_show_loading(false)
-
-	stats_label.text = "Error: " + error.message
-	stats_label.add_theme_color_override("font_color", Color.RED)
-
-
-func reload_tree() -> void:
-	"""Reload tree from server (bypass cache)."""
-	load_tree(false)
-
-
-# =============================================================================
-# Rendering
-# =============================================================================
-
-func _render_tree() -> void:
-	"""Render the tree visualization."""
-	if not current_tree_data:
-		push_error("[TreeController] No tree data to render")
-		return
-
-	if not tree_renderer:
-		push_error("[TreeController] TreeRenderer not initialized")
-		return
-
-	print("[TreeController] Rendering tree...")
-	tree_renderer.render_tree(current_tree_data)
-
-	# Initialize renderer with current view state (Camera2D handles transform)
-	_viewport_center = get_viewport_rect().size / 2.0
-	_scroll_offset = _paper_camera.get_camera_position()
-	_current_scale = _paper_camera.get_current_zoom()
-	tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
-
-	print("[TreeController] Rendering complete")
 
 
 # =============================================================================
@@ -478,13 +262,15 @@ func _on_mode_selected(index: int) -> void:
 	if current_mode == APITypes.TreeMode.SELECTED:
 		_show_friend_selection()
 	else:
-		load_tree()
+		_tree_visualization.set_mode(current_mode, false)
+		_tree_visualization.load_tree()
 
 
 func _show_friend_selection() -> void:
 	"""Show friend selection UI for SELECTED mode."""
 	print("[TreeController] Friend selection UI not yet implemented, using all friends")
-	load_tree()
+	_tree_visualization.set_mode(current_mode, false)
+	_tree_visualization.load_tree()
 
 
 func _on_search_submitted(query: String) -> void:
@@ -524,7 +310,7 @@ func _on_search_failed(error: APITypes.APIError) -> void:
 
 
 func _on_node_selected(node: TreeDataModels.TaxonomicNode) -> void:
-	"""Handle node selection from renderer."""
+	"""Handle node selection from TreeVisualization."""
 	if node.is_taxonomic():
 		print("[TreeController] Taxonomy node selected: %s (rank: %s)" % [node.name, _get_rank_name(node.rank)])
 		var info = "%s (Rank: %s)" % [node.name, _get_rank_name(node.rank)]
@@ -562,12 +348,12 @@ func _get_rank_name(rank: int) -> String:
 
 
 func _on_node_hovered(_node: TreeDataModels.TaxonomicNode) -> void:
-	"""Handle node hover from renderer."""
+	"""Handle node hover from TreeVisualization."""
 	pass
 
 
 func _on_node_unhovered() -> void:
-	"""Handle node unhover from renderer."""
+	"""Handle node unhover from TreeVisualization."""
 	pass
 
 
@@ -581,13 +367,13 @@ func _show_loading(should_show: bool) -> void:
 		loading_label.visible = should_show
 
 
-func _update_stats_display() -> void:
+func _update_stats_display(tree_data: TreeDataModels.TreeData) -> void:
 	"""Update stats label with current tree info."""
-	if not current_tree_data or not stats_label:
+	if not tree_data or not stats_label:
 		return
 
-	var stats = current_tree_data.stats
-	var metadata = current_tree_data.metadata
+	var stats = tree_data.stats
+	var metadata = tree_data.metadata
 
 	var stats_text = "Mode: %s | Animals: %d | Nodes: %d" % [
 		metadata.mode.capitalize(),
@@ -612,24 +398,16 @@ func _update_stats_display() -> void:
 func _exit_tree() -> void:
 	"""Cleanup when exiting tree view."""
 	if Engine.is_editor_hint():
-		if tree_renderer:
-			tree_renderer.clear()
-			tree_renderer.queue_free()
-			tree_renderer = null
+		if _tree_visualization:
+			_tree_visualization.queue_free()
+			_tree_visualization = null
 		return
 
 	print("[TreeController] Cleaning up")
 
-	if tree_renderer:
-		tree_renderer.clear()
-		tree_renderer.queue_free()
-		tree_renderer = null
+	# TreeVisualization handles its own cleanup in _exit_tree()
 
-	if APIManager.tree.tree_loaded.is_connected(_on_tree_loaded):
-		APIManager.tree.tree_loaded.disconnect(_on_tree_loaded)
-	if APIManager.tree.tree_load_failed.is_connected(_on_tree_load_failed):
-		APIManager.tree.tree_load_failed.disconnect(_on_tree_load_failed)
-	if FriendDexSyncService.sync_completed.is_connected(_on_friends_sync_completed):
-		FriendDexSyncService.sync_completed.disconnect(_on_friends_sync_completed)
-	if FriendDexSyncService.sync_failed.is_connected(_on_friends_sync_failed):
-		FriendDexSyncService.sync_failed.disconnect(_on_friends_sync_failed)
+	if APIManager.tree.search_results_received.is_connected(_on_search_results):
+		APIManager.tree.search_results_received.disconnect(_on_search_results)
+	if APIManager.tree.search_failed.is_connected(_on_search_failed):
+		APIManager.tree.search_failed.disconnect(_on_search_failed)

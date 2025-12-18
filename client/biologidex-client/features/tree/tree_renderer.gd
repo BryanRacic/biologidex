@@ -21,31 +21,37 @@ signal node_hovered(node: TreeDataModels.TaxonomicNode)
 signal node_unhovered()
 
 # =============================================================================
-# Configuration
+# Configuration (Configurable - set via TreeVisualization)
 # =============================================================================
 
-# Visual settings - Animal nodes (world units - scale with zoom like dex images)
-const NODE_SIZE_BASE: float = 20.0
-const NODE_SIZE_USER: float = 20.0
-const NODE_SIZE_FRIEND: float = 20.0
-const NODE_SIZE_DISCOVERER_BONUS: float = 4.0
+# Visual settings - Node sizes (world units)
+var node_size_base: float = 20.0  # Base size for nodes
+var node_size_user: float = 20.0  # Size for user-captured nodes
+var node_size_friend: float = 20.0  # Size for friend-captured nodes
+var node_size_discoverer_bonus: float = 4.0  # Extra size for discoverer nodes
+var taxonomy_node_size: float = 20.0  # Size for taxonomy nodes
+var node_opacity: float = 1.0  # Opacity of nodes (0.0 - 1.0)
 
-# Visual settings - Taxonomy nodes (world units)
-const TAXONOMY_NODE_SIZE: float = 20.0
-const COLOR_TAXONOMY: Color = Color(0, 0, 0, 1)
-const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
+# Visual settings - Edge appearance
+var edge_width_base: float = 5.0  # Width of edges in world units
+var edge_opacity: float = 0.85  # Opacity of edges (0.0 - 1.0)
+
+# Visual settings - Labels
+var label_font_size: int = 90  # Font size in world units
+var label_opacity: float = 1.0  # Opacity of labels (0.0 - 1.0)
+var min_zoom_for_labels: float = 0.3  # Minimum zoom to show labels
 
 # Visual settings - Dex images
-const DEX_IMAGE_SIZE: float = 1000.0  # Base size in world units (easily modifiable)
-const DEX_IMAGE_POOL_SIZE: int = 100  # Maximum pooled image nodes
+var dex_image_size: float = 1000.0  # Base size in world units
+const DEX_IMAGE_POOL_SIZE: int = 100  # Maximum pooled image nodes (keep as const)
 
 # Branch extension settings (reduces image overlap by extending branches beyond taxonomy nodes)
-# All extension values are RATIOS of DEX_IMAGE_SIZE for consistent proportions at any scale
-const BRANCH_EXTENSION_ENABLED: bool = true
-const BRANCH_EXTENSION_BASE_RATIO: float = 0.4  # Base extension (0.6 = 60% of image size)
-const BRANCH_EXTENSION_ALT_RATIO: float = 0.25   # Additional extension for alternating siblings
+# All extension values are RATIOS of dex_image_size for consistent proportions at any scale
+var branch_extension_enabled: bool = true
+const BRANCH_EXTENSION_BASE_RATIO: float = 0.4  # Base extension (0.4 = 40% of image size)
+const BRANCH_EXTENSION_ALT_RATIO: float = 0.25  # Additional extension for alternating siblings
 
-# Rank-specific size multipliers
+# Rank-specific size multipliers (keep as const - structural, not visual tuning)
 const RANK_SIZE_MULTIPLIERS = {
 	TreeDataModels.TaxonomicRank.ROOT: 1.5,
 	TreeDataModels.TaxonomicRank.KINGDOM: 1.4,
@@ -58,7 +64,11 @@ const RANK_SIZE_MULTIPLIERS = {
 	TreeDataModels.TaxonomicRank.SPECIES: 0.8
 }
 
-# Colors - Animal nodes
+# Colors - Taxonomy nodes (keep as const for now, can be made configurable later)
+const COLOR_TAXONOMY: Color = Color(0, 0, 0, 1)
+const COLOR_TAXONOMY_HOVER: Color = Color(0.7, 0.7, 0.7, 0.9)
+
+# Colors - Animal nodes (keep as const for now)
 const COLOR_USER_CAPTURED: Color = Color(0.13, 0.59, 0.95, 1.0)
 const COLOR_FRIEND_CAPTURED: Color = Color(0.30, 0.69, 0.31, 1.0)
 const COLOR_BOTH_CAPTURED: Color = Color(0.48, 0.12, 0.64, 1.0)
@@ -66,7 +76,7 @@ const COLOR_UNCAPTURED: Color = Color(0, 0, 0, 1)
 const COLOR_SELECTED: Color = Color(0, 0, 0, 1)
 const COLOR_EDGE: Color = Color(0, 0, 0, 1)
 
-# Performance settings
+# Performance settings (keep as const)
 const MAX_VISIBLE_NODES: int = 50000
 const CULL_MARGIN_SCREEN: float = 200.0  # Screen-space pixels outside viewport for culling buffer
 
@@ -116,6 +126,7 @@ var _scroll_offset: Vector2 = Vector2.ZERO
 var _current_scale: float = 1.0
 var _viewport_center: Vector2 = Vector2.ZERO
 var _viewport_size: Vector2 = Vector2(1280, 720)
+var _tree_scale: float = 1.0  # Parent TreeVisualization scale factor
 
 # Visibility throttling
 var _visibility_dirty: bool = false
@@ -135,10 +146,8 @@ var nodes_by_position: Dictionary = {}
 
 # Label management
 var taxonomy_labels: Dictionary = {}
-const MIN_ZOOM_FOR_LABELS: float = 0.3  # Show labels at most zoom levels
-const MAX_LABELS: int = 100  # Maximum labels to render at once
+const MAX_LABELS: int = 100  # Maximum labels to render at once (keep as const)
 const MIN_LABEL_SPACING_SCREEN: float = 60.0  # Minimum screen pixels between label centers
-const LABEL_FONT_SIZE_WORLD: int = 90  # Large font size for crisp rendering at all zoom levels
 const LABEL_OFFSET_WORLD: float = 1.0  # Offset from node in world units
 
 # Label position alternation (reduces overlap on same branch)
@@ -181,7 +190,7 @@ func _setup_multimesh() -> void:
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	multimesh.use_colors = true
 	multimesh.use_custom_data = false
-	multimesh.mesh = _create_circle_mesh(NODE_SIZE_BASE)
+	multimesh.mesh = _create_circle_mesh(node_size_base)
 
 	nodes_multimesh.multimesh = multimesh
 	nodes_multimesh.z_index = 1
@@ -308,7 +317,15 @@ func render_tree(data: TreeDataModels.TreeData) -> void:
 	print("[TreeRenderer] Tree rendering complete, %d images queued" % _pending_loads.size())
 
 
-func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
+func set_tree_scale(new_scale: float) -> void:
+	"""Set the parent tree scale factor (TreeVisualization.tree_scale).
+	This affects coordinate conversions between tree-local and world space."""
+	if abs(_tree_scale - new_scale) > 0.001:
+		_tree_scale = new_scale
+		_visibility_dirty = true
+
+
+func update_view(scroll: Vector2, zoom: float, center: Vector2) -> void:
 	"""Update view parameters (called when transform changes).
 	Uses dirty flag to throttle visibility recalculation."""
 	# Guard against being called before node is in scene tree (web export timing issue)
@@ -317,7 +334,7 @@ func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 
 	var old_scale = _current_scale
 	_scroll_offset = scroll
-	_current_scale = scale
+	_current_scale = zoom
 	_viewport_center = center
 	_viewport_size = get_viewport_rect().size
 
@@ -327,7 +344,7 @@ func update_view(scroll: Vector2, scale: float, center: Vector2) -> void:
 	var new_rect := _get_view_rect()
 
 	# Check if view changed enough to warrant update
-	var scale_changed: bool = abs(scale - old_scale) > 0.01
+	var scale_changed: bool = abs(zoom - old_scale) > 0.01
 	var position_changed: bool = _rect_moved_significantly(new_rect, _last_view_rect)
 
 	if scale_changed or position_changed:
@@ -426,16 +443,18 @@ func _update_visible_nodes() -> void:
 
 
 func _get_view_rect() -> Rect2:
-	"""Get current view rectangle in world coordinates.
-	Culling margin is defined in screen-space and converted to world-space
-	so it remains consistent regardless of zoom level.
+	"""Get current view rectangle in TREE-LOCAL coordinates for culling.
+	Culling margin is defined in screen-space and converted to tree-local space.
 
-	Note: scroll_offset represents the world position at viewport center
-	(matches transform convention in tree_controller.gd)."""
-	var margin_world = CULL_MARGIN_SCREEN / _current_scale
-	var half_size = (_viewport_size / 2.0) / _current_scale + Vector2(margin_world, margin_world)
-	# scroll_offset IS the world center (not divided by scale)
-	var center = _scroll_offset
+	Note: scroll_offset is in world-space (camera position).
+	Positions in render_nodes are in tree-local space (before tree_graph.scale).
+	We need to convert world-space view bounds to tree-local space for culling."""
+	# Combined scale: camera zoom * tree scale
+	var combined_scale = _current_scale * _tree_scale
+	var margin_local = CULL_MARGIN_SCREEN / combined_scale
+	var half_size = (_viewport_size / 2.0) / combined_scale + Vector2(margin_local, margin_local)
+	# Convert scroll_offset from world space to tree-local space
+	var center = _scroll_offset / _tree_scale
 
 	return Rect2(center - half_size, half_size * 2)
 
@@ -449,12 +468,12 @@ func _calculate_extended_positions() -> void:
 	Uses alternating extension lengths based on sibling index to reduce overlap."""
 	extended_positions.clear()
 
-	if not BRANCH_EXTENSION_ENABLED or not tree_data:
+	if not branch_extension_enabled or not tree_data:
 		return
 
-	# Calculate extension distances based on DEX_IMAGE_SIZE
-	var base_extension: float = DEX_IMAGE_SIZE * BRANCH_EXTENSION_BASE_RATIO
-	var alt_extension: float = DEX_IMAGE_SIZE * BRANCH_EXTENSION_ALT_RATIO
+	# Calculate extension distances based on dex_image_size
+	var base_extension: float = dex_image_size * BRANCH_EXTENSION_BASE_RATIO
+	var alt_extension: float = dex_image_size * BRANCH_EXTENSION_ALT_RATIO
 
 	# Group animal nodes by their parent for sibling index calculation
 	var siblings_by_parent: Dictionary = {}  # {parent_id: [node_ids]}
@@ -647,7 +666,7 @@ func _update_dex_images() -> void:
 				continue
 
 			# Activate WITHOUT loading
-			img.activate(image_position, creation_index, user_id, entry_data, DEX_IMAGE_SIZE)
+			img.activate(image_position, creation_index, user_id, entry_data, dex_image_size)
 			active_dex_images[image_key] = img
 
 			# Queue for loading (if not already queued or loading)
@@ -706,14 +725,15 @@ func _queue_images_by_priority(image_keys: Array[String], capture_data: Dictiona
 
 	# Calculate priority scores (lower = higher priority)
 	var scored_keys: Array = []
-	var viewport_center := _scroll_offset  # World position at center of view
+	# Convert scroll_offset to tree-local space for distance comparison with render_data.position
+	var viewport_center_local := _scroll_offset / _tree_scale
 
 	for key in image_keys:
 		if not capture_data.has(key):
 			continue
 		var data: Dictionary = capture_data[key]
 		var render_data = data.render_data
-		var distance: float = render_data.position.distance_to(viewport_center)
+		var distance: float = render_data.position.distance_to(viewport_center_local)
 		scored_keys.append({"key": key, "distance": distance})
 
 	# Sort by distance (closest first)
@@ -881,22 +901,23 @@ func _draw_radial_edge(edge: TreeDataModels.TreeEdge) -> void:
 	edges_container.add_child(line)
 
 
-func _get_edge_width(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> float:
+func _get_edge_width(_source: TreeDataModels.TaxonomicNode, _target: TreeDataModels.TaxonomicNode) -> float:
 	"""Get edge width based on node types. Fixed world-space width scales naturally with zoom."""
-	# World-space widths (scales realistically with zoom like dex images)
-	if source.is_taxonomic() and target.is_taxonomic():
-		return 5.0  # Thick lines for taxonomy-to-taxonomy
-	elif source.is_taxonomic() and target.is_animal():
-		return 5.0  # Medium lines for taxonomy-to-animal
-	else:
-		return 5.0  # Thinner lines for other connections
+	# Use configurable edge width (same for all edge types for now)
+	return edge_width_base
 
 
 func _get_edge_color(source: TreeDataModels.TaxonomicNode, target: TreeDataModels.TaxonomicNode) -> Color:
-	"""Get edge color based on node types."""
+	"""Get edge color based on node types. Uses configurable edge_opacity."""
+	var base_color: Color
 	if source.is_taxonomic() and target.is_taxonomic():
-		return Color(0.15, 0.15, 0.15, 0.85)
-	return Color(0.2, 0.2, 0.2, 0.8)
+		base_color = Color(0.15, 0.15, 0.15, 1.0)
+	else:
+		base_color = Color(0.2, 0.2, 0.2, 1.0)
+
+	# Apply configurable opacity
+	base_color.a = edge_opacity
+	return base_color
 
 
 # =============================================================================
@@ -915,7 +936,7 @@ func _render_taxonomy_labels() -> void:
 		return
 
 	# Only show labels when zoomed in enough
-	if _current_scale < MIN_ZOOM_FOR_LABELS:
+	if _current_scale < min_zoom_for_labels:
 		return
 
 	# Collect label candidates with their priority
@@ -958,7 +979,7 @@ func _render_taxonomy_labels() -> void:
 		var label_above: bool = _should_label_be_above(render_data.node)
 
 		# Calculate screen position of label center for overlap detection
-		var node_size = NODE_SIZE_BASE * render_data.scale
+		var node_size = node_size_base * render_data.scale
 		var label_offset_y: float = node_size + LABEL_OFFSET_WORLD if not label_above else -(node_size + LABEL_OFFSET_WORLD)
 		var label_screen_pos = _world_to_screen(render_data.position + Vector2(0, label_offset_y))
 
@@ -977,7 +998,11 @@ func _render_taxonomy_labels() -> void:
 		label.text = candidate.label_text
 		label.theme = _theme
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", LABEL_FONT_SIZE_WORLD)
+		label.add_theme_font_size_override("font_size", label_font_size)
+
+		# Apply label opacity
+		if label_opacity < 1.0:
+			label.modulate.a = label_opacity
 
 		labels_container.add_child(label)
 
@@ -1040,9 +1065,13 @@ func _get_label_priority(render_data: NodeRenderData) -> float:
 	return priority
 
 
-func _world_to_screen(world_pos: Vector2) -> Vector2:
-	"""Convert world position to screen coordinates.
-	Matches transform: screen = (world - scroll_offset) * scale + viewport_center"""
+func _world_to_screen(local_pos: Vector2) -> Vector2:
+	"""Convert tree-local position to screen coordinates.
+	local_pos is in tree-local space (before tree_graph.scale).
+	Transform: local -> world -> screen
+	  world = local * tree_scale
+	  screen = (world - scroll_offset) * camera_scale + viewport_center"""
+	var world_pos = local_pos * _tree_scale
 	return (world_pos - _scroll_offset) * _current_scale + _viewport_center
 
 
@@ -1051,38 +1080,45 @@ func _world_to_screen(world_pos: Vector2) -> Vector2:
 # =============================================================================
 
 func _get_node_color(node: TreeDataModels.TaxonomicNode) -> Color:
-	"""Get color for a node based on type and capture status."""
-	if node.is_taxonomic():
-		return COLOR_TAXONOMY
+	"""Get color for a node based on type and capture status. Applies node_opacity."""
+	var base_color: Color
 
-	if node.captured_by_user and node.captured_by_friends.size() > 0:
-		return COLOR_BOTH_CAPTURED
+	if node.is_taxonomic():
+		base_color = COLOR_TAXONOMY
+	elif node.captured_by_user and node.captured_by_friends.size() > 0:
+		base_color = COLOR_BOTH_CAPTURED
 	elif node.captured_by_user:
-		return COLOR_USER_CAPTURED
+		base_color = COLOR_USER_CAPTURED
 	elif node.captured_by_friends.size() > 0:
-		return COLOR_FRIEND_CAPTURED
+		base_color = COLOR_FRIEND_CAPTURED
 	else:
-		return COLOR_UNCAPTURED
+		base_color = COLOR_UNCAPTURED
+
+	# Apply configurable opacity
+	if node_opacity < 1.0:
+		base_color.a = node_opacity
+
+	return base_color
 
 
 func _get_node_scale(node: TreeDataModels.TaxonomicNode) -> float:
 	"""Get scale for a node based on type, rank, capture status and importance."""
 	if node.is_taxonomic():
-		var base = TAXONOMY_NODE_SIZE
+		var base = taxonomy_node_size
 		var multiplier = RANK_SIZE_MULTIPLIERS.get(node.rank, 1.0)
-		return (base * multiplier) / NODE_SIZE_BASE
+		return (base * multiplier) / node_size_base
 
-	var base_size = NODE_SIZE_BASE
+	var base_size = node_size_base
 
 	if node.captured_by_user:
-		base_size = NODE_SIZE_USER
+		base_size = node_size_user
 	elif node.captured_by_friends.size() > 0:
-		base_size = NODE_SIZE_FRIEND
+		base_size = node_size_friend
 
 	if node.discoverer.get("is_self", false) or node.discoverer.get("is_friend", false):
-		base_size += NODE_SIZE_DISCOVERER_BONUS
+		base_size += node_size_discoverer_bonus
 
-	return base_size / NODE_SIZE_BASE
+	return base_size / node_size_base
 
 
 # =============================================================================
@@ -1122,9 +1158,12 @@ func _handle_mouse_motion(screen_pos: Vector2) -> void:
 
 
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
-	"""Convert screen position to world coordinates.
-	Inverse of transform: screen = (world - scroll_offset) * scale + viewport_center"""
-	return (screen_pos - _viewport_center) / _current_scale + _scroll_offset
+	"""Convert screen position to tree-local coordinates.
+	Transform: screen -> world -> tree-local
+	  world = (screen - viewport_center) / camera_scale + scroll_offset
+	  local = world / tree_scale"""
+	var world_pos = (screen_pos - _viewport_center) / _current_scale + _scroll_offset
+	return world_pos / _tree_scale
 
 
 func _get_grid_key(pos: Vector2) -> Vector2i:
@@ -1152,9 +1191,9 @@ func get_node_at_position(world_pos: Vector2, radius: float = 20.0) -> TreeDataM
 					# Use larger click area for nodes with dex images
 					var node_radius: float
 					if nodes_with_dex_images.has(render_data.node.id):
-						node_radius = DEX_IMAGE_SIZE / 2.0  # Half the dex image size
+						node_radius = dex_image_size / 2.0  # Half the dex image size
 					else:
-						node_radius = NODE_SIZE_BASE * render_data.scale
+						node_radius = node_size_base * render_data.scale
 
 					if dist <= node_radius + search_radius:
 						return render_data.node

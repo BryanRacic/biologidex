@@ -32,9 +32,22 @@ Dex viewing and management.
 - Shows entry details
 
 ### home/
-Main home screen after login.
-- Navigation hub
-- Quick stats
+Main home screen after login with interactive tree background.
+- TreeVisualization as pannable/zoomable background
+- World-space UI buttons that move with the tree
+- RecenterButton overlay to return to home position
+- Navigation to camera, dex, feed, social screens
+
+**Architecture**:
+```
+Home (Node2D)
+├── PaperCameraScene (pan/zoom/inertia enabled)
+│   └── WorldContent/ContentContainer
+│       ├── TreeVisualization (tree background)
+│       └── HomeUI (WorldSpaceUI) - buttons pan with tree
+└── HomeOverlayLayer (CanvasLayer)
+    └── RecenterButton (appears when off-center)
+```
 
 ### login/
 User login screen.
@@ -53,10 +66,12 @@ Friends and social features.
 - Add friends by code
 
 ### tree/
-Taxonomic tree visualization.
-- Interactive tree display
-- Zoom and pan
-- Entry markers
+Dedicated taxonomic tree visualization scene.
+- Uses TreeVisualization component for rendering
+- Full-screen interactive tree with zoom/pan controls
+- Search bar and mode selection (Personal/Friends/Selected)
+- Zoom buttons and center-on-root control
+- Stats display showing tree metrics
 
 ## Scene Development Guidelines
 
