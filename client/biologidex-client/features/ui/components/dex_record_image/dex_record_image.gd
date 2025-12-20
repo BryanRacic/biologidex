@@ -155,7 +155,10 @@ func _apply_proportional_sizes() -> void:
 # =============================================================================
 
 func set_entry_data(data: Dictionary, user_id: String = "") -> void:
-	"""Set entry data and update label. Call load_image() separately to load the image."""
+	"""Set entry data and update label. Call load_image() separately to load the image.
+	Clears existing texture to prevent showing stale image during load."""
+	# Clear existing texture to prevent showing old image while new one loads
+	clear_texture()
 	_entry_data = data
 	_user_id = user_id
 	_update_label_from_entry()
@@ -214,11 +217,13 @@ func update_aspect_ratio(width: float, height: float) -> void:
 
 
 func clear_texture() -> void:
-	"""Clear textures from both image displays."""
+	"""Clear textures from both image displays and reset aspect ratio."""
 	if _bordered_image:
 		_bordered_image.texture = null
 	if _simple_image:
 		_simple_image.texture = null
+	# Reset aspect ratio to default (prevents stale ratio from previous image)
+	ratio = 1.0
 
 
 # =============================================================================

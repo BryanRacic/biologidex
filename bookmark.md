@@ -1,10 +1,7 @@
 ## TODO
-- Fix feed next entry arrow, laggy, missing pan animation, skips entries, spams logs 
 - Update camera scene
   - Manual entry (notepad & pencil icon)
   - Research assistant (Research/magnifying glass icon)
-- Update dex scene
-  - Scrolling up/down automatically moves & recenters the next/prev entry w/in the screen
 - Update dex to display full/half page w/ additional context from COL
 - Reduce dex compatible image size (for faster loading)
 - Implement basic CDN for faster image retrieval
