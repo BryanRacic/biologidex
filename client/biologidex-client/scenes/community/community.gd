@@ -246,24 +246,22 @@ func _activate_feed_tab() -> void:
 	if _feed_visualization:
 		_feed_visualization.visible = true
 
-	# Configure scroll limits for feed (horizontal + vertical)
-	var content_width := _content_area.size.x
-	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
-	_paper_camera.set_scroll_limits(
-		Vector2(-horizontal_max, 0.0),
-		Vector2(horizontal_max, 0.0)  # Y max set in _on_feed_layout_calculated
-	)
-
 	# Disconnect friends view_changed, connect feed's
 	if _paper_camera.view_changed.is_connected(_on_friends_view_changed):
 		_paper_camera.view_changed.disconnect(_on_friends_view_changed)
 
-	# Reset scroll position
-	_paper_camera.scroll_to(Vector2.ZERO, false)
-
-	# Refresh display if we have entries
+	# Refresh display if we have entries (this sets scroll limits and position)
 	if not displayed_entries.is_empty():
 		_display_feed()
+	else:
+		# No entries - set default scroll limits
+		var content_width := _content_area.size.x
+		var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
+		_paper_camera.set_scroll_limits(
+			Vector2(-horizontal_max, 0.0),
+			Vector2(horizontal_max, 0.0)
+		)
+		_paper_camera.scroll_to(Vector2.ZERO, false)
 
 
 func _activate_friends_tab() -> void:
@@ -322,21 +320,36 @@ func _on_gesture_ended() -> void:
 		_state = CommunityState.IDLE
 
 
-func _on_feed_layout_calculated(total_height: float) -> void:
-	"""Handle feed layout calculation complete - set max scroll."""
+func _on_feed_layout_calculated(_total_height: float) -> void:
+	"""Handle feed layout calculation complete - set scroll limits."""
 	var viewport_size: Vector2 = get_viewport_rect().size
+	var current_zoom: float = _paper_camera.get_current_zoom() if _paper_camera else 1.0
+	var visible_height: float = viewport_size.y / current_zoom
 
-	# Calculate max scroll (allow scrolling so last entry can be centered)
-	var max_scroll_y: float = maxf(0.0, total_height - viewport_size.y / 2.0)
+	# Get actual entry positions from FeedVisualization
+	var first_top: float = _feed_visualization.get_first_entry_top()
+	var last_bottom: float = _feed_visualization.get_last_entry_bottom()
+
+	# Small margin in world units (3% of visible height)
+	var margin: float = visible_height * 0.03
+
+	# Min scroll: camera position that puts first image top near viewport top
+	var min_scroll_y: float = first_top + visible_height / 2.0 - margin
+
+	# Max scroll: allow last image to scroll to center of viewport
+	var max_scroll_y: float = last_bottom
+
+	# Ensure max >= min
+	max_scroll_y = maxf(min_scroll_y, max_scroll_y)
 
 	# Horizontal limits for scrapbook wobble effect
 	var horizontal_max: float = viewport_size.x * HORIZONTAL_BOUND_RATIO
 
 	_paper_camera.set_scroll_limits(
-		Vector2(-horizontal_max, 0.0),
+		Vector2(-horizontal_max, min_scroll_y),
 		Vector2(horizontal_max, max_scroll_y)
 	)
-	print("[Community] Feed layout: total=%.0f, max_scroll=%.0f" % [total_height, max_scroll_y])
+	print("[Community] Feed layout: first_top=%.0f, last_bottom=%.0f, visible=%.0f, scroll=[%.0f, %.0f]" % [first_top, last_bottom, visible_height, min_scroll_y, max_scroll_y])
 
 
 func _update_friends_scroll_limits() -> void:
@@ -496,11 +509,18 @@ func _display_feed() -> void:
 	_show_feed_empty_state(false)
 
 	# Set entries - FeedVisualization handles the rest
+	# Note: This triggers layout_calculated which sets scroll limits
 	if _feed_visualization:
 		_feed_visualization.set_entries(displayed_entries)
 
-	# Scroll to top
-	_paper_camera.scroll_to(Vector2.ZERO, false)
+	# Scroll to show first image at top with small margin
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var current_zoom: float = _paper_camera.get_current_zoom()
+	var visible_height: float = viewport_size.y / current_zoom
+	var first_top: float = _feed_visualization.get_first_entry_top()
+	var margin: float = visible_height * 0.03
+	var scroll_y: float = first_top + visible_height / 2.0 - margin
+	_paper_camera.scroll_to(Vector2(0.0, scroll_y), false)
 
 	_show_status("%d entries" % displayed_entries.size(), true)
 	print("[Community] Displaying %d entries" % displayed_entries.size())

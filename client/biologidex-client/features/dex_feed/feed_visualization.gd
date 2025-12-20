@@ -169,6 +169,31 @@ func get_entry_center_y(index: int) -> float:
 	return 0.0
 
 
+## Get first entry's top Y position (world units)
+func get_first_entry_top() -> float:
+	if _entry_layout.size() > 0:
+		return _entry_layout[0].get("y", 0.0) as float
+	return 0.0
+
+
+## Get first entry's height (world units)
+func get_first_entry_height() -> float:
+	if _entry_layout.size() > 0:
+		return _entry_layout[0].get("height", 0.0) as float
+	return 0.0
+
+
+## Get last entry's bottom Y position (world units)
+func get_last_entry_bottom() -> float:
+	if _entry_layout.size() > 0:
+		var last_idx: int = _entry_layout.size() - 1
+		var layout: Dictionary = _entry_layout[last_idx]
+		var y: float = layout.get("y", 0.0)
+		var height: float = layout.get("height", 0.0)
+		return y + height
+	return 0.0
+
+
 ## Get currently visible entry indices
 func get_visible_indices() -> Array[int]:
 	var indices: Array[int] = []
