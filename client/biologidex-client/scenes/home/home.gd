@@ -179,6 +179,9 @@ func _setup_tree_visualization() -> void:
 	# Connect to tree_loaded to re-center menu when tree data arrives
 	_tree_visualization.tree_loaded.connect(_on_tree_loaded)
 
+	# Connect to navigation arrows for quick tree navigation
+	_tree_visualization.navigation_requested.connect(_on_tree_navigation_requested)
+
 	print("[Home] TreeVisualization initialized with background styling")
 
 
@@ -374,6 +377,12 @@ func _on_tree_loaded(tree_data) -> void:
 		print("[Home] Tree loaded - ", tree_data.nodes.size(), " nodes")
 
 
+func _on_tree_navigation_requested(node_id: String, world_position: Vector2) -> void:
+	"""Handle navigation arrow click - pan camera to the target node."""
+	print("[Home] Navigation requested to node: %s at %s" % [node_id, world_position])
+	_paper_camera.scroll_to(world_position, true)
+
+
 # =============================================================================
 # Navigation Handlers
 # =============================================================================
@@ -391,15 +400,15 @@ func _on_dex_pressed() -> void:
 
 
 func _on_feed_pressed() -> void:
-	"""Navigate to friends' feed"""
+	"""Navigate to community scene (feed tab)"""
 	print("[Home] Feed button pressed")
-	navigation_manager.navigate_to("res://scenes/dex_feed/dex_feed.tscn")
+	navigation_manager.navigate_to("res://scenes/community/community.tscn")
 
 
 func _on_social_pressed() -> void:
-	"""Navigate to social/friends"""
+	"""Navigate to community scene (combined feed + friends)"""
 	print("[Home] Social button pressed")
-	navigation_manager.navigate_to("res://scenes/social/social.tscn")
+	navigation_manager.navigate_to("res://scenes/community/community.tscn")
 
 
 func _on_menu_pressed() -> void:

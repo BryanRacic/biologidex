@@ -9,440 +9,195 @@ Pokedex-style social network for wildlife observations. Users photograph animals
 - **Infra**: Docker Compose, Nginx reverse proxy, Gunicorn, Prometheus monitoring
 - **Storage**: Google Cloud Storage (media), local dex cache with deduplication
 
-## Status (2025-12-18)
-- ✅ Auth, CV pipeline, multi-user dex sync, image processing, production deployment
-- ✅ Incremental sync, image deduplication, HTTP caching, retry logic
-- ✅ Multi-stage taxonomy matching with synonym resolution (NameRelation support)
-- ✅ Taxonomic tree visualization with Eades radial layout (angular wedge allocation)
-- ✅ Two-step image upload workflow (convert → download → analyze)
-- ✅ Multiple animal detection support with selection API
-- ✅ Client-side image rotation with post-conversion transformations
-- ✅ **PaperCameraScene**: Unified pan/zoom/scroll component for all scenes
-- ✅ DexRecordImage reusable component with unified API for image display/loading
-- ✅ Dex feed vertical carousel with snap-to-item and pooled DexRecordImage rendering
-- ✅ Social scene with lab book styling, touch scrolling, and copyable friend codes
-- ✅ **TreeVisualization component**: Reusable tree rendering (composition pattern)
-- ✅ **Home + Tree integration**: Tree as interactive background with world-space UI
-- ✅ **RecenterButton component**: Appears when camera off-center with fade animation
-- ✅ **RadialMenu component**: Radial menus with two variants (RadialMenuRing + RadialMenuCircles)
-- ✅ **Web export fixes**: Multiple workarounds for Godot 4.5 web export issues:
-  - Instanced scene children bug (GitHub #101975) - UI as sibling CanvasLayer
-  - Unique name lookups - use explicit paths instead of `%NodeName`
-  - World content in instanced scenes - create programmatically
-  - Control.size unreliable - pass dimensions explicitly
-  - get_viewport_rect() timing - guard with `is_inside_tree()`
-  - CORS for media files - nginx headers added
+---
+
+## ⚠️ COORDINATE SPACE CONVENTIONS (Common Bug Source)
+
+**Many positioning bugs stem from mixing coordinate spaces.** When debugging position issues, first verify which space you're working in:
+
+| Space | Units | Origin | Used For |
+|-------|-------|--------|----------|
+| **Screen** | Pixels | Top-left (0,0) | UI, input events, viewport dimensions |
+| **World** | World units | Scene origin | Node.position, camera offset, world content |
+| **Tree-local** | World units | Tree root (0,0) | Server-provided node positions |
+
+### Critical Formulas
+- `scroll_offset` = world position that appears at viewport center
+- When `scroll_offset = (0,0)`, world origin is centered on screen
+- `world_to_screen(W)` = `(W - scroll_offset) * scale + viewport_center`
+- `screen_to_world(S)` = `(S - viewport_center) / scale + scroll_offset`
+
+### Common Coordinate Mistakes
+- ❌ Applying scale to scroll_offset when centering: `scroll_offset = pos * scale` → WRONG
+- ✅ To center on world pos: `scroll_offset = pos` (no scale!)
+- ❌ Mixing screen-space margins with world-space comparisons
+- ❌ Forgetting tree-local → world conversion when tree has transform
+- ❌ Using `get_viewport_rect()` before node is in tree (guard with `is_inside_tree()`)
+- Culling margins: define in **screen pixels**, convert to world via `margin / scale`
+- View rect center = `scroll_offset` directly (NOT scaled)
+
+### Vector2 Documentation Standard
+**ALWAYS document coordinate space for Vector2 variables.** Use suffix or comment:
+```gdscript
+# Option 1: Suffix naming
+var scroll_offset_world: Vector2
+var node_position_tree_local: Vector2
+var click_pos_screen: Vector2
+
+# Option 2: Inline comment (acceptable for locals)
+var pos: Vector2  # screen space
+var target: Vector2  # tree-local
+
+# Option 3: Docstring for class members
+## Arrow position in tree-local coordinates (same space as node.position)
+var arrow_position: Vector2
+```
+- ✅ Functions accepting/returning Vector2 must document space in docstring
+- ✅ Conversion functions should name both spaces: `_screen_to_tree_local()`, `_world_to_screen()`
+- ❌ Never leave Vector2 space ambiguous - causes subtle positioning bugs
 
 ---
 
-## Architecture
+## Client Architecture (Godot 4.5)
 
-### Client (Godot 4.5)
 - 1280×720 base, canvas_items stretch, MSDF fonts
-- **Singletons (autoload)**: APIManager, TokenManager, NavigationManager, DexDatabase (v2.0), SyncManager
-- **API Layer** (4-layer): HTTPClientCore → APIClient (auth/retry/queue) → Services (auth, vision, dex, social, tree) → APIManager
-- **Scenes**: login, create_acct, home, camera (CV integration), dex (multi-user gallery), record_image
-- **Storage**: `user://dex_data/{user_id}_dex.json`, `user://dex_cache/{user_id}/`, `user://sync_state.json`
+- **Singletons**: APIManager, TokenManager, NavigationManager, DexDatabase (v2.0), SyncManager
+- **API Layer**: HTTPClientCore → APIClient → Services → APIManager
+- **Storage**: `user://dex_data/{user_id}_dex.json`, `user://dex_cache/{user_id}/`
 
-### Critical Patterns & Gotchas
+### ⚠️ Critical Client Gotchas
 
 **API Usage**:
-- ✅ `APIManager.<service>.<method>()` for all API calls
-- ✅ Callbacks: `func(response: Dictionary, code: int)` - check `code == 200 or code == 201` (services may normalize 201→200)
-- ✅ Traditional callbacks with `.bind(context)`, NOT inline lambdas
-- ✅ Positional arguments ONLY (no `param=value` syntax in GDScript)
-- ✅ APIClient methods: `request_get()`, `post()`, `put()`, `delete()` (NOT `.get()`)
-- ✅ **Callback validation**: Always check `callback.is_valid()` before calling (prevents crashes on freed scenes)
-- ✅ **URL building**: Use plain `&` to join query params, NOT `&amp;` (HTML encoding breaks server parsing)
-- ❌ Never call `api_client` directly - use service methods
-- ❌ Never inline lambdas in service methods - causes "assignment in expression" errors
+- ✅ `APIManager.<service>.<method>()` for all calls
+- ✅ Callbacks: `func(response: Dictionary, code: int)` - check `code == 200 or 201`
+- ✅ Use `.bind(context)` for callbacks
+- ✅ `request_get()`, `post()`, `put()`, `delete()` (NOT `.get()`)
+- ✅ Always check `callback.is_valid()` before calling (prevents freed scene crashes)
+- ✅ URL params: use `&` not `&amp;` (HTML encoding breaks server)
+- ❌ Never inline lambdas in service methods (causes parse errors)
+- ❌ Never call `api_client` directly
 
 **GDScript**:
-- Type inference: `min()`, `max()`, `Array[T].pop_back()` return Variant - cast to `float`/`String`
-- Reserved: `class_name` - use `animal_class` for variables
-- `await get_tree().process_frame` before reading dynamic sizes
+- `min()`, `max()`, `Array[T].pop_back()` return Variant → cast explicitly
+- `class_name` is reserved → use `animal_class`
+- `await get_tree().process_frame` before reading dynamic Control sizes
+- Positional args ONLY (no `param=value` syntax)
+- Dictionary value access needs explicit types: `var x: float = dict.value`
 
-**Godot Architecture Best Practices**:
-- ✅ **Use built-in nodes/functions** for UI, 2D, scaling - don't write custom viewport math or scaling logic in scripts
-- ✅ **Prefer "proper Godot" architecture** even if it requires restructuring - cleaner long-term maintainability
-- ✅ **Proportional sizing**: Calculate UI element sizes (borders, fonts, margins) as percentages of content dimensions for consistent proportions at any display size
-- ❌ **Don't** write custom scaling math across multiple scripts - consolidate in proper node architecture
+**Multi-User Dex**:
+- **Camera must create BOTH** local (DexDatabase) AND server-side entries
+- Auto-sync when: database empty OR `SyncManager.get_last_sync()` returns null
 
-**UI Layout**:
-- `layout_mode`: 0=uncontrolled, 1=anchors, 2=container, 3=anchors preset
-- Container children: `layout_mode = 2`
-- AspectRatioContainer: `layout_mode = 1` with anchors
-- Touch targets: min 44×44px for mobile
+**Auth**: Use `TokenManager.is_logged_in()` NOT `has_valid_token()`
 
-**Images & Camera Workflow (Updated 2025-12-04)**:
-- **Two-step upload workflow**:
-  1. Client uploads → `/images/convert/` → Server converts to PNG → Returns conversion_id
-  2. Client downloads converted PNG, can rotate/preview → Submits to `/vision/jobs/` with conversion_id
-- **State machine** (camera.gd): IDLE → IMAGE_SELECTED → IMAGE_CONVERTING → IMAGE_READY → ANALYZING → ANALYSIS_COMPLETE → (ANIMAL_SELECTION) → COMPLETED
-- Image rotation: Client-side using `Image.rotate_90(CLOCKWISE)`, sent as `post_conversion_transformations`
-- Multiple animal detection: Backend returns `detected_animals` array, client auto-selects if 1, shows selection UI if >1
+---
 
-**DexRecordImage Component (Updated 2025-12-04)**:
-- **Location**: `features/ui/components/dex_record_image/`
-- **Files**: `dex_record_image.tscn` (scene), `dex_record_image.gd` (script with `class_name DexRecordImage`)
-- **Structure**: AspectRatioContainer root
-  - Bordered mode: `ImageBorder` (PanelContainer) + `BorderedImage` (TextureRect) + `RecordLabel` (Label)
-  - Simple mode: `SimpleImage` (TextureRect) for preview/rotation
-- **Scaling requirement**: Border widths, font sizes, and margins should be proportional to content size so the component looks identical at any display size (tree 80px, dex 400px, etc.)
-- **Usage pattern** (type as `DexRecordImage`, not `AspectRatioContainer`):
-  ```gdscript
-  @onready var record_image: DexRecordImage = get_node("%RecordImage")
+## ⚠️ Web Export Critical Issues (Godot 4.5)
 
-  # For displaying existing entries (dex.gd, feed_list_item.gd, tree_dex_image.gd):
-  record_image.set_entry_data(entry_dict, user_id)  # Sets data + updates label
-  record_image.load_image_from_entry()               # Loads via DexImageLoader
-  record_image.image_loaded.connect(_on_image_loaded)  # Signal: (success: bool)
-
-  # For camera preview/capture workflow:
-  record_image.show_simple()                         # Preview mode
-  record_image.set_simple_texture(texture)           # Set preview
-  record_image.get_simple_texture()                  # Get for rotation
-  record_image.copy_simple_to_bordered()             # Transfer to card
-  record_image.show_bordered()                       # Show final card
-  record_image.update_label_from_data(sci, common, user, date)  # Manual label
-  ```
-- **Key methods**: `set_entry_data()`, `load_image_from_entry()`, `set_texture()`, `set_simple_texture()`, `get_simple_texture()`, `show_bordered()`, `show_simple()`, `copy_simple_to_bordered()`, `update_label_from_data()`, `clear_texture()`, `set_placeholder()`
-- **Signals**: `image_loaded(success: bool)`, `image_load_failed`
-- **Used by**: dex.gd, FeedCarouselRenderer, tree_dex_image.gd, camera.gd
-
-**Multi-User Dex (v2.0)**:
-- DexDatabase: User-partitioned storage, auto-migrates v1→v2, image deduplication across users
-- SyncManager: Tracks `last_sync` per user in `sync_state.json`
-- DexService: `sync_user_dex()`, `sync_user_dex_with_retry()` with exponential backoff
-- Signals: `sync_started`, `sync_progress`, `sync_user_completed`, `sync_user_failed`
-- **Critical**: Camera must create BOTH local (DexDatabase) AND server-side (APIManager.dex.create_entry) entries
-- **Auto-sync**: Trigger sync when database empty OR never synced (check `SyncManager.get_last_sync()`)
-
-**Auth**:
-- TokenManager: Use `is_logged_in()` not `has_valid_token()`
-- Services handle auth injection automatically
-
-**Web Export (Updated 2025-12-12)**:
-- Single-threaded mode (best compatibility)
-- `HTTPRequest.accept_gzip = false` - avoid double decompression
+**Baseline Config**:
+- Single-threaded mode required (`variant/thread_support=false`)
+- `HTTPRequest.accept_gzip = false` (avoid double decompression)
 - **High DPI fix**: Custom HTML shell at `export_templates/custom_html_shell.html`
-  - `canvas_resize_policy=1` (Project) prevents double-scaling
+  - `canvas_resize_policy=1` (Project setting) prevents double-scaling
   - `stretch/mode="canvas_items"` + `allow_hidpi=true` in project settings
   - Safe area insets for notched devices
-- **CRITICAL - Instanced Scene Children Bug** (GitHub #101975):
-  - Nodes added as children of instanced scenes in .tscn files DON'T LOAD on web export
-  - Symptom: UI works in editor/desktop but nodes are null/missing on web
-  - ❌ BROKEN: Adding children to `InstancedScene/InternalNode/` in parent .tscn
-  - ✅ FIX: Add UI as SIBLING to instanced scene with separate CanvasLayer
-  - Pattern: Create `{Scene}UILayer` (CanvasLayer, layer=10) as sibling to PaperCameraScene
-  - All scenes using PaperCameraScene must follow this pattern
-- **Unique Name Lookups Can Fail** on web export even for sibling nodes:
-  - Symptom: `%NodeName` returns null on web but works in editor/desktop
-  - ✅ FIX: Use explicit paths (`$UILayer/Control/VBoxContainer/Header/BackButton`) instead of `%BackButton`
-  - Initialize node references in `_on_scene_ready()` or `_ready()`, not with `@onready`
-  - Tree scene uses this pattern for all UI nodes
-- **World Content in Instanced Scenes** must be created programmatically:
-  - ❌ BROKEN: Adding nodes to `PaperCameraScene/WorldContent/ContentContainer/` in .tscn
-  - ✅ FIX: Create in code using `_paper_camera.content_container.add_child(node)`
-  - Tree scene creates TreeGraph and all layers (EdgesLayer, NodesLayer, etc.) in `_setup_renderer()`
-- **Control.size unreliable** on web - dynamically created Controls may report incorrect `size`:
-  - ✅ FIX: Pass dimensions explicitly via `setup(width, height)` and store them
-  - FeedCarouselRenderer uses `_container_width`/`_container_height` instead of `size`
-- **get_viewport_rect() timing** - async callbacks can fire before node is in tree:
-  - ✅ FIX: Guard with `if not is_inside_tree(): return` before calling `get_viewport_rect()`
-  - Added to: `tree_renderer.gd:update_view()`, `paper_camera_scene.gd:get_view_rect()`
-- **CORS for media files**: Nginx must add CORS headers for `/media/` location (see `nginx.conf`)
 
-**PaperCameraScene Component (Updated 2025-12-12)**:
-- **Location**: `features/camera_system/` - Unified pan/zoom/scroll component
-- **Files**:
-  - `paper_camera_scene.tscn`: Instancable scene with background + camera + touch controller
-  - `paper_camera_scene.gd`: `class_name PaperCameraScene` - orchestrates camera + controller
-  - `camera_touch_controller.gd`: `class_name CameraTouchController` - gesture handling
-- **Architecture**: PaperCameraScene provides background/camera only; UI is SIBLING (due to web export bug):
-  ```
-  {Scene} (Node2D)
-  ├── PaperCameraScene (instance) - background + camera + touch handling
-  │   ├── Camera2D
-  │   ├── WorldContent/ContentContainer (for world-space content like tree nodes)
-  │   └── UILayer/UIContainer (UNUSED - don't add children here!)
-  └── {Scene}UILayer (CanvasLayer, layer=10) - YOUR UI GOES HERE
-      └── Control (anchors full rect)
-          └── ... your UI nodes
-  ```
-- **CRITICAL**: Due to GitHub #101975, NEVER add children to `PaperCameraScene/UILayer/UIContainer/` in parent scene files. Always create a separate sibling CanvasLayer for UI.
-- **Export Variables** (configurable in editor):
-  - `min_zoom`/`max_zoom`/`zoom_step`/`initial_zoom`: Zoom configuration
-  - `scroll_limits_enabled`: Enable bounded scrolling (feeds, social)
-  - `scroll_min`/`scroll_max`: Vector2 limits for bounded scrolling
-  - `rubber_band_enabled`/`rubber_band_factor`/`rubber_band_max`: Overscroll resistance
-  - `zoom_enabled`/`inertia_enabled`: Toggle features
-- **Signals**:
-  - `view_changed(position: Vector2, zoom: float)`: Emitted on any scroll/zoom change
-  - `tap_detected(world_pos: Vector2)`: Background tap (no drag occurred)
-  - `gesture_started`, `gesture_ended`: For state machine integration
-- **Public API**:
-  ```gdscript
-  # Initialize in _on_scene_ready() using explicit path (web export workaround)
-  var _paper_camera: PaperCameraScene = null
-  func _on_scene_ready():
-      _paper_camera = $PaperCameraScene
+**CRITICAL - Instanced Scene Children Bug (GitHub #101975)**:
+- Nodes added as children of instanced scenes in .tscn files **DON'T LOAD** on web
+- Symptom: UI works in editor/desktop but nodes are null/missing on web
+- ❌ BROKEN: Adding children to `InstancedScene/InternalNode/` in parent .tscn
+- ✅ FIX: Add UI as SIBLING to instanced scene with separate CanvasLayer
+- Pattern: Create `{Scene}UILayer` (CanvasLayer, layer=10) as sibling to PaperCameraScene
+- **All scenes using PaperCameraScene must follow this pattern**
 
-  # Scroll/zoom control
-  _paper_camera.scroll_to(position, animated)  # Center on world position
-  _paper_camera.set_zoom(zoom_level)           # Set zoom level
-  _paper_camera.reset()                        # Reset to initial state
+**Unique Name Lookups Can Fail** on web export even for sibling nodes:
+- Symptom: `%NodeName` returns null on web but works in editor/desktop
+- ✅ FIX: Use explicit paths (`$UILayer/Control/VBoxContainer/Header/BackButton`) instead of `%BackButton`
+- Initialize node references in `_on_scene_ready()` or `_ready()`, not with `@onready`
+- Tree scene uses this pattern for all UI nodes
 
-  # Query state
-  _paper_camera.get_camera_position()          # Current scroll offset
-  _paper_camera.get_zoom()                     # Current zoom level
+**World Content in Instanced Scenes** must be created programmatically:
+- ❌ BROKEN: Adding nodes to `PaperCameraScene/WorldContent/ContentContainer/` in .tscn
+- ✅ FIX: Create in code using `_paper_camera.content_container.add_child(node)`
+- Tree scene creates TreeGraph and all layers (EdgesLayer, NodesLayer, etc.) in `_setup_renderer()`
 
-  # Configure limits at runtime
-  _paper_camera.set_scroll_limits(min_vec, max_vec)
+**Control.size Unreliable** - dynamically created Controls may report incorrect `size`:
+- ✅ FIX: Pass dimensions explicitly via `setup(width, height)` and store them
+- FeedCarouselRenderer uses `_container_width`/`_container_height` instead of `size`
 
-  # Add world content programmatically (NOT in .tscn)
-  var my_content = Node2D.new()
-  _paper_camera.content_container.add_child(my_content)
-  ```
-- **Scene Integration Pattern** (web-compatible):
-  1. Instance `PaperCameraScene` as child of scene root (for background/camera)
-  2. Create `{Scene}UILayer` (CanvasLayer, layer=10) as SIBLING to PaperCameraScene
-  3. Add all UI content under `{Scene}UILayer/Control/...`
-  4. Connect `view_changed` signal for scroll-driven content (feeds, tree)
-  5. UI containers: `mouse_filter = 2` (IGNORE); buttons keep default STOP
-- **Scenes using component**: home, login, create_acct, camera, dex, dex_feed, social, tree
+**get_viewport_rect() Timing** - async callbacks can fire before node is in tree:
+- ✅ FIX: Guard with `if not is_inside_tree(): return` before calling `get_viewport_rect()`
+- Added to: `tree_renderer.gd:update_view()`, `paper_camera_scene.gd:get_view_rect()`
 
-**TreeVisualization Component (NEW 2025-12-17)**:
-- **Location**: `features/tree_visualization/`
-- **Purpose**: Reusable component encapsulating all tree rendering logic (composition pattern)
-- **Files**: `tree_visualization.gd` (`class_name TreeVisualization`), `tree_visualization.tscn`
-- **Usage**:
-  ```gdscript
-  # Create dynamically (web export compatible)
-  var tree_vis = TreeVisualization.new()
-  paper_camera.content_container.add_child(tree_vis)
-  tree_vis.setup(paper_camera)  # Must call after adding to tree
+**CORS for Media Files**: Nginx must add CORS headers for `/media/` location (see `nginx.conf`)
 
-  # Configure before setup
-  tree_vis.auto_load_on_ready = true  # Auto-load tree data
-  tree_vis.initial_mode = APITypes.TreeMode.FRIENDS
-  tree_vis.use_cache = true
+---
 
-  # Listen for events
-  tree_vis.tree_loaded.connect(_on_tree_loaded)
-  tree_vis.node_selected.connect(_on_node_selected)
-  ```
-- **Signals**: `tree_loaded`, `tree_load_failed`, `node_selected`, `node_hovered`, `node_unhovered`, `loading_started`, `loading_finished`
-- **Key Methods**: `setup()`, `load_tree()`, `reload_tree()`, `set_mode()`, `get_root_position()`, `clear()`
-- **Internally Creates**: TreeGraph, TreeRenderer, all layer nodes (EdgesLayer, NodesLayer, DexImagesLayer, LabelsLayer)
-- **Used by**: `tree_controller.gd`, `home.gd`
+## Key Components Reference
 
-**RecenterButton Component (NEW 2025-12-17)**:
-- **Location**: `features/ui/components/recenter_button/`
-- **Purpose**: Button that appears when camera is off-center (fade animation)
-- **Files**: `recenter_button.gd` (`class_name RecenterButton`), `recenter_button.tscn`
-- **Usage**:
-  ```gdscript
-  recenter_button.connect_to_camera(paper_camera)
-  recenter_button.center_position = Vector2.ZERO
-  recenter_button.center_threshold = 100.0  # Show when >100 world units away
-  recenter_button.recenter_requested.connect(_on_recenter)
-  ```
-- **Export Vars**: `center_threshold`, `center_position`, `fade_duration`
-- **Signals**: `recenter_requested`
+| Component | Location | Key Info |
+|-----------|----------|----------|
+| **PaperCameraScene** | `features/camera_system/` | Pan/zoom for all scenes. UI must be SIBLING CanvasLayer (web bug). Signals: `view_changed`, `tap_detected` |
+| **TreeVisualization** | `features/tree_visualization/` | Composition pattern. Create programmatically, call `setup(paper_camera)` after adding. Signals: `tree_loaded`, `node_selected`, `navigation_requested` |
+| **TreeNavigationArrows** | `features/tree_visualization/` | Shows arrows for node closest to screen center. Uses `_input()` hit detection (not Area2D). Min 44px touch targets |
+| **DexRecordImage** | `features/ui/components/dex_record_image/` | Type as `DexRecordImage` not `AspectRatioContainer`. Proportional sizing (borders/fonts scale with size) |
+| **RadialMenu*** | `features/ui/components/radial_menu/` | Two variants: RadialMenuRing (arcs), RadialMenuCircles (circles). Set properties BEFORE adding to tree |
+| **JournalTabs** | `features/ui/components/journal_tabs/` | Pre-sizes `_tab_rects` array before drawing for correct hit detection |
+| **RecenterButton** | `features/ui/components/recenter_button/` | Fade animation. Uses world units for threshold |
+| **WorldSpaceUI** | `features/ui/components/world_space_ui/` | Container that pans with world (tree background) |
+| **ClipboardHelper** | `features/ui/components/clipboard/` | Web clipboard read restricted; requires user interaction for write |
 
-**RadialMenu Component (Updated 2025-12-18)**:
-- **Location**: `features/ui/components/radial_menu/`
-- **Purpose**: Radial navigation menus with two layout variants
-- **Architecture**: Inheritance hierarchy with shared base classes (DRY principle):
-  ```
-  Button Layer:
-  RadialButtonBase (shared circular button behavior)
-  ├── RadialCenterButton (center button with larger defaults)
-  └── RadialButtonCircle (ring button with angle positioning)
+### Scene Structure Pattern (Web-Compatible)
+```
+{Scene} (Node2D)
+├── PaperCameraScene (background + camera)
+│   └── WorldContent/ContentContainer (ADD WORLD CONTENT PROGRAMMATICALLY)
+└── {Scene}UILayer (CanvasLayer, layer=10) ← SIBLING, not child!
+```
 
-  Menu Layer:
-  RadialMenuBase (shared menu orchestration, signals, animation)
-  ├── RadialMenuRing (arc-segment ring buttons)
-  │   └── RadialMenu (compatibility alias)
-  └── RadialMenuCircles (all circular buttons)
-  ```
-- **Files**:
-  - `radial_button_base.gd`: Base circular button (hit detection, drawing, states)
-  - `radial_center_button.gd`: Center button (extends base)
-  - `radial_button_circle.gd`: Ring circular button (extends base)
-  - `radial_button_ring.gd`: Arc-segment ring (unchanged)
-  - `radial_menu_base.gd`: Base menu (config storage, signals, animation)
-  - `radial_menu_ring.gd`: Arc-segment variant (extends base)
-  - `radial_menu_circles.gd`: All-circles variant (extends base)
-  - `radial_menu.gd`: Compatibility alias for RadialMenuRing
-- **Usage (RadialMenuRing - original design)**:
-  ```gdscript
-  var menu := RadialMenuRing.new()  # or RadialMenu.new() for compatibility
-  parent.add_child(menu)
-  menu.set_center_button("camera", "Upload\nImage")
-  menu.add_ring_button("feed", "Dex Feed")
-  menu.center_pressed.connect(_on_upload)
-  menu.button_pressed.connect(_on_nav)
-  ```
-- **Usage (RadialMenuCircles - new variant)**:
-  ```gdscript
-  var menu := RadialMenuCircles.new()
-  parent.add_child(menu)
-  menu.ring_button_radius = 50.0  # Size of ring buttons
-  menu.ring_distance = 180.0      # Distance from center
-  menu.set_center_button("camera", "Upload\nImage")
-  menu.add_ring_button("feed", "Dex Feed")
-  menu.center_pressed.connect(_on_upload)
-  menu.button_pressed.connect(_on_nav)
-  ```
-- **Key Export Vars (RadialMenuBase)**: `center_radius`, `ring_distance`, `start_angle`, colors, font settings, `center_icon_color`, `center_icon_size`, `ring_icon_color`, `ring_icon_size`
-- **Key Export Vars (RadialMenuRing)**: `ring_inner_radius`, `ring_outer_radius`, `ring_gap_angle`
-- **Key Export Vars (RadialMenuCircles)**: `ring_button_radius`, `ring_button_spacing`
-- **Icon-only buttons**: Set `*_normal_color = Color.TRANSPARENT` and `*_border_width = 0.0` for transparent buttons showing only icons
-- **Signals**: `center_pressed`, `button_pressed(button_id)`, `button_hovered(button_id)`, `button_unhovered`
-- **Positioning API (RadialMenuBase)**:
-  ```gdscript
-  menu.center_at_position(world_pos)  # Center menu at world position
-  var center := menu.get_menu_center()  # Get current center position
-  ```
-- **Touch Targets**: Both variants maintain 44px minimum touch targets
-- **Gotcha**: Dictionary value access needs explicit types (`var seg_start: float = seg.start`)
+---
 
-**WorldSpaceUI Component (NEW 2025-12-17)**:
-- **Location**: `features/ui/components/world_space_ui/`
-- **Purpose**: Container for UI elements that pan with the world (tree background)
-- **File**: `world_space_ui.gd` (`class_name WorldSpaceUI`)
-- **Usage**: Add to `paper_camera.content_container`, set `anchor_position`
+## Tree Visualization Specifics
 
-**Home Scene with Tree Background (Updated 2025-12-18)**:
-- **Architecture**: Tree as background + RadialMenuCircles in world-space + screen-space recenter overlay
-- **Structure**:
-  ```
-  Home (Node2D)
-  ├── PaperCameraScene (configured for tree pan/zoom)
-  │   └── WorldContent/ContentContainer
-  │       ├── TreeVisualization (created programmatically)
-  │       └── HomeUI (WorldSpaceUI)
-  │           └── RadialMenuCircles (center: Upload, ring: Dex/Friends)
-  └── HomeOverlayLayer (CanvasLayer, layer=10)
-      └── Control → TopRightContainer → RecenterButton
-  ```
-- **Export Vars** (editable in inspector):
-  - `tree_scale`: Scale of tree visualization (0.5-10.0)
-  - `menu_scale`: Scale factor for radial menu - affects all button sizes and spacing (0.5-3.0)
-  - `diff_circle`: Enable circular boundary around radial menu that clips tree edges (default: true)
-  - `diff_circle_radius`: Explicit radius in world units (0 = auto-calculate from menu dimensions)
-  - Tree appearance: `tree_node_size`, `tree_node_opacity`, `tree_edge_width`, `tree_edge_opacity`, etc.
-- **PaperCameraScene Config**: min_zoom=0.5, max_zoom=4.0, initial_zoom=1.5, pan/zoom/inertia enabled
-- **RadialMenuCircles Config**: Transparent icon-only buttons (no background, no border), black icons using Kenny board-game-icons SVGs
-  - Center: `card_add.svg` (200×200 icon at scale 1.0)
-  - Ring: `book_closed.svg` (Dex), `pawns.svg` (Friends) - 120×120 icons at scale 1.0
-  - Base dimensions: center_radius=120, ring_distance=220, ring_button_radius=70 (all scaled by `menu_scale`)
-- **Menu/Tree Alignment**: Both menu and tree root (Animalia) are at world origin (0,0). Menu uses `center_at_position(Vector2.ZERO)` to center over the tree root.
-- **Scaling gotcha**: Set menu properties BEFORE adding to tree (so `_ready()` uses correct values), then call `center_at_position()`. For runtime scale changes, use `await get_tree().process_frame` before recentering.
-- **Recenter**: Button appears when panned >100 world units from origin, scrolls back to (0,0)
-- **Diff Circle**: Circular boundary that prevents tree edges from overlapping radial menu buttons
-  - Inherits edge settings (color, width, opacity) for consistent visual style
-  - Auto-calculates radius from menu dimensions: `ring_distance + ring_button_radius + 40px padding`
-  - Clips tree edges at circle boundary using line-circle intersection math
-  - Edges entirely inside circle are not drawn; edges crossing are truncated at boundary
+**Root**: Animalia at depth 0, positioned at world origin (0,0)
 
-**Taxonomic Tree Visualization (Updated 2025-12-18)**:
-- **Root Node Centering**: Server promotes single kingdom (Animalia) to tree root at depth 0, positioned at origin (0,0). This ensures the visible root aligns with UI elements at world origin.
-- **Coordinate Space Convention** (CRITICAL - must be consistent across all tree code):
-  - `scroll_offset`: World-space position that appears at viewport center
-  - When `scroll_offset = (0,0)`, world origin is at viewport center
-  - Transform formula: `screen = (world - scroll_offset) * scale + viewport_center`
-  - To center on world position `pos`: `scroll_offset = pos` (NOT `pos * scale`)
-- **View culling**: `_get_view_rect()` returns world-space rect; center = `scroll_offset` directly
-- **Coordinate conversion**:
-  - `world_to_screen(W)`: `(W - scroll_offset) * scale + viewport_center`
-  - `screen_to_world(S)`: `(S - viewport_center) / scale + scroll_offset`
-- **Edge rendering**: Must re-render on ANY view change (scroll OR scale), not just scale changes
-- **Edge visibility**: Use bounding box intersection (`Rect2.expand().intersects()`), not endpoint visibility
-- **Culling margin**: Define in screen-space pixels, convert to world-space (`margin / scale`)
-- **Label overlap**: Priority-based culling with screen-space distance checks; zoom-based filtering by taxonomic rank
-- **Branch extension** (reduces dex image overlap):
-  - `BRANCH_EXTENSION_ENABLED`: Toggle feature on/off (default: true)
-  - `BRANCH_EXTENSION_BASE_RATIO`: Base extension as ratio of DEX_IMAGE_SIZE (default: 0.6 = 600 world units)
-  - `BRANCH_EXTENSION_ALT_RATIO`: Additional extension for alternating siblings (default: 0.5 = 500 world units)
-  - Alternation pattern: Even siblings get base extension, odd siblings get base + alt extension
-  - Extended positions stored in `extended_positions` dictionary, edges draw to extended endpoints
-- **Dex Image Lazy Loading** (optimizes scrolling performance):
-  - `TreeDexImage`: Uses `VisibleOnScreenNotifier2D` with 500 world unit preload margin
-  - `LoadState` enum: IDLE → QUEUED → LOADING → LOADED (or FAILED)
-  - Images activated without loading; `start_load()` called by queue processor
-  - Signals: `visibility_entered`, `visibility_exited`, `load_state_changed`
-- **Visibility Throttling** (TreeRenderer):
-  - Dirty flag system: Only recalculates when view moves >50 world units
-  - Minimum update interval prevents excessive recalculation during fast scrolling
-  - `_process()` handles deferred visibility updates and queue processing
-- **Image Loading Queue** (TreeRenderer):
-  - `_pending_loads`: Priority queue sorted by distance to viewport center
-  - `_loading_in_progress`: Tracks concurrent HTTP requests
-  - `IMAGES_PER_FRAME`: Max new loads started per frame (default: 1)
-  - `MAX_CONCURRENT_LOADS`: Max simultaneous HTTP requests (default: 4)
-- **Files**: `tree_visualization.gd` (reusable component), `tree_controller.gd` (tree scene), `tree_renderer.gd` (rendering), `tree_data_models.gd` (data), `tree_dex_image.gd` (pooled image wrapper)
-- **Web Export Pattern** (composition pattern):
-  - TreeVisualization created programmatically in parent scene
-  - Internally creates TreeGraph and layers in `_setup_renderer()` (not in .tscn)
-  - UI nodes initialized with explicit paths in `_on_scene_ready()`
+**Rendering Rules**:
+- Re-render edges on ANY view change (scroll OR scale), not just scale
+- Edge visibility: bounding box intersection (`Rect2.expand().intersects()`), not endpoint checks
+- Label culling: priority-based + zoom-filtered by taxonomic rank
 
-**Dex Feed Carousel (Updated 2025-12-12)**:
-- **Architecture**: Touch-driven vertical carousel with organic scrapbook-style randomization
-- **Location**: `features/dex_feed/` (FeedCarouselRenderer), `scenes/dex_feed/` (dex_feed.gd/tscn)
-- **Key Design**: Pool of 5 DexRecordImage instances, recycled as user scrolls for memory efficiency
-- **Components**:
-  - `PaperCameraScene`: Configured with scroll limits for vertical feed scrolling
-  - `FeedCarouselRenderer`: Pooled DexRecordImage instances with per-entry randomization
-  - `dex_feed.gd`: State machine orchestrating sync, filter, and carousel components
-- **State Machine**: IDLE → LOADING → SCROLLING → (back to IDLE or ERROR)
-- **Randomization Export Vars** (configurable in editor):
-  - `min_space`: Minimum vertical spacing between entries (default: 40px)
-  - `max_rand_space`: Additional random spacing 0 to max (default: 80px)
-  - `max_rand_size`: Size variation +/- percentage (default: 0.15 = 15%)
-  - `max_rand_offset`: Horizontal offset +/- percentage of width (default: 0.1 = 10%)
-  - `max_rand_rotate`: Rotation +/- degrees (default: 8°)
-- **Per-entry Random Caching**: `_entry_randoms` array stores consistent random values per entry
-- **Touch Behavior** (via PaperCameraScene with scroll limits):
-  - Free scroll up/down with configurable vertical limits (0 to max_scroll_y)
-  - Horizontal scroll bounded to ±50% of viewport width
-  - 10px drag threshold (tap passes through to navigate to dex)
-  - Rubber-banding at boundaries with smooth snap-back
-  - Scroll wheel support for desktop
-- **Pool Management Pattern** (similar to TreeRenderer):
-  - `_active_assignments: Dictionary = {}` tracks {pool_index: data_index}
-  - Visibility buffer: scroll_offset ± 0.5-1.5× viewport height
-- **Signals**: FeedCarouselRenderer emits `item_pressed`, `image_ready`, `layout_calculated`
-- **Web Export Fix**: `FeedCarouselRenderer` stores container dimensions via `setup(width, height)` instead of using `size` property (unreliable on web)
+**Branch Extension** (reduces dex image overlap):
+- Even siblings: base extension (0.6 × DEX_IMAGE_SIZE)
+- Odd siblings: base + alt extension (0.6 + 0.5 × DEX_IMAGE_SIZE)
+- Extended positions in `extended_positions` dict; edges draw to extended endpoints
 
-**Social Scene (Updated 2025-12-12)**:
-- **Architecture**: Lab book "table of contents" style with PaperCameraScene scrolling
-- **Location**: `scenes/social/` (social.gd/tscn), `scenes/social/components/` (friend_list_item, pending_request_item)
-- **Features**:
-  - PaperCameraScene with vertical-only scrolling (zoom disabled)
-  - Copyable friend codes with "Copied!" feedback animation
-  - Friend entries show: username, catches, unique species, copyable friend code, action buttons
-  - Pending requests section (hidden when empty)
-- **Components**:
-  - `friend_list_item.tscn/gd`: Friend entry with stats, copyable code button, View Dex/Tree/Remove buttons
-  - `pending_request_item.tscn/gd`: Pending request with Accept/Reject/Block buttons
-- **State Machine**: IDLE → LOADING → SCROLLING → (back to IDLE)
+**Navigation Arrows**:
+- Only show for node closest to screen center (updates as user pans)
+- Coordinate conversion: screen → world → tree-local via `_screen_to_tree_local()`
+- Extra offset near dex images; diff-circle aware at root
+- Max 40% of edge length; hidden on short edges (<120 units)
 
-**ClipboardHelper (Updated 2025-12-05)**:
-- **Location**: `features/ui/components/clipboard/clipboard_helper.gd`
-- **Purpose**: Cross-platform clipboard support (desktop + web)
-- **Usage**:
-  ```gdscript
-  const ClipboardHelper = preload("res://features/ui/components/clipboard/clipboard_helper.gd")
+**Image Loading**:
+- Lazy load via VisibleOnScreenNotifier2D (500 world unit margin)
+- Queue prioritized by distance to viewport center
+- Max 4 concurrent loads, 1 new per frame
+- LoadState: IDLE → QUEUED → LOADING → LOADED/FAILED
 
-  var success := ClipboardHelper.copy_to_clipboard("text to copy")
-  var text := ClipboardHelper.get_from_clipboard()  # May be empty on web
-  ```
-- **Desktop**: Uses `DisplayServer.clipboard_set()` / `clipboard_get()`
-- **Web**: Uses `JavaScriptBridge.eval()` with `navigator.clipboard.writeText()` + fallback to `execCommand('copy')`
-- **Limitations**: Web clipboard read heavily restricted by browsers; requires user interaction for write
+**Visibility Throttling**:
+- Dirty flag: recalculate only when view moves >50 world units
+- Minimum update interval during fast scrolling
+
+---
+
+## Camera Workflow
+
+**Two-step upload**: POST `/images/convert/` → download PNG → POST `/vision/jobs/` with conversion_id
+
+**State machine** (camera.gd): IDLE → IMAGE_SELECTED → IMAGE_CONVERTING → IMAGE_READY → ANALYZING → ANALYSIS_COMPLETE → (ANIMAL_SELECTION) → COMPLETED
+
+**Multiple animals**: Backend returns `detected_animals` array; client auto-selects if 1, shows selection UI if >1
+
+---
 
 ### Server (Django)
 - **Apps**: accounts (User, profiles), animals (species DB), dex (user collections), social (friendships), vision (CV pipeline), graph (taxonomic tree), images (transformation system)

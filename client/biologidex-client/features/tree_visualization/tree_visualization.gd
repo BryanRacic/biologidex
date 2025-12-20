@@ -14,6 +14,7 @@ class_name TreeVisualization
 
 const APITypes = preload("res://features/server_interface/api/core/api_types.gd")
 const TreeRenderer = preload("res://features/tree/tree_renderer.gd")
+const TreeNavigationArrowsLayerClass = preload("res://features/tree_visualization/tree_navigation_arrows_layer.gd")
 
 # =============================================================================
 # Signals
@@ -26,6 +27,7 @@ signal node_hovered(node: TreeDataModels.TaxonomicNode)
 signal node_unhovered()
 signal loading_started()
 signal loading_finished()
+signal navigation_requested(node_id: String, world_position: Vector2)
 
 # =============================================================================
 # Export Variables
@@ -84,18 +86,56 @@ signal loading_finished()
 		diff_circle_enabled = value
 		if tree_renderer:
 			tree_renderer.diff_circle_enabled = value
+		if _arrows_layer:
+			_arrows_layer.set_diff_circle(value, diff_circle_center, diff_circle_radius)
 ## Radius of the diff circle in world units (tree-local space)
 @export var diff_circle_radius: float = 330.0:
 	set(value):
 		diff_circle_radius = value
 		if tree_renderer:
 			tree_renderer.diff_circle_radius = value
+		if _arrows_layer:
+			_arrows_layer.set_diff_circle(diff_circle_enabled, diff_circle_center, value)
 ## Center position of the diff circle in tree-local coordinates
 @export var diff_circle_center: Vector2 = Vector2.ZERO:
 	set(value):
 		diff_circle_center = value
 		if tree_renderer:
 			tree_renderer.diff_circle_center = value
+		if _arrows_layer:
+			_arrows_layer.set_diff_circle(diff_circle_enabled, value, diff_circle_radius)
+
+@export_group("Navigation Arrows")
+## Enable navigation arrows on tree edges
+@export var navigation_arrows_enabled: bool = true:
+	set(value):
+		navigation_arrows_enabled = value
+		if _arrows_layer:
+			_arrows_layer.visible = value
+## Size of arrow buttons in tree-local units
+@export var arrow_size: float = 30.0:
+	set(value):
+		arrow_size = value
+		if _arrows_layer:
+			_arrows_layer.arrow_size = value
+## Distance from node center to place arrows
+@export var arrow_distance: float = 60.0:
+	set(value):
+		arrow_distance = value
+		if _arrows_layer:
+			_arrows_layer.arrow_distance_from_node = value
+## Opacity of navigation arrows
+@export_range(0.0, 1.0, 0.05) var arrow_opacity: float = 0.75:
+	set(value):
+		arrow_opacity = value
+		if _arrows_layer:
+			_arrows_layer.arrow_opacity = value
+## Extra offset for arrows near nodes with dex images (avoids image overlap)
+@export var arrow_dex_image_offset: float = 500.0:
+	set(value):
+		arrow_dex_image_offset = value
+		if _arrows_layer:
+			_arrows_layer.dex_image_offset = value
 
 # =============================================================================
 # Internal State
@@ -107,6 +147,7 @@ var _edges_layer: Node2D = null
 var _nodes_layer: Node2D = null
 var _labels_layer: Node2D = null
 var _dex_images_layer: Node2D = null
+var _arrows_layer = null  # TreeNavigationArrowsLayer
 var tree_renderer: TreeRenderer = null
 
 # Paper camera reference
@@ -230,6 +271,8 @@ func get_stats() -> TreeDataModels.TreeStats:
 func clear() -> void:
 	if tree_renderer:
 		tree_renderer.clear()
+	if _arrows_layer:
+		_arrows_layer.clear()
 	_tree_data = null
 	_pending_tree_data = null
 	_tree_loaded = false
@@ -265,6 +308,20 @@ func _setup_renderer() -> void:
 	_labels_layer.name = "LabelsLayer"
 	_labels_layer.z_index = 2
 	tree_graph.add_child(_labels_layer)
+
+	# Create arrows layer (z_index 3 = on top of labels)
+	_arrows_layer = TreeNavigationArrowsLayerClass.new()
+	_arrows_layer.name = "ArrowsLayer"
+	_arrows_layer.z_index = 3
+	_arrows_layer.visible = navigation_arrows_enabled
+	_arrows_layer.arrow_size = arrow_size
+	_arrows_layer.arrow_distance_from_node = arrow_distance
+	_arrows_layer.arrow_opacity = arrow_opacity
+	_arrows_layer.dex_image_offset = arrow_dex_image_offset
+	tree_graph.add_child(_arrows_layer)
+
+	# Connect arrows navigation signal (uses _input() for reliable click detection)
+	_arrows_layer.navigate_to_node.connect(_on_arrow_navigation_requested)
 
 	# Create and setup TreeRenderer
 	tree_renderer = TreeRenderer.new()
@@ -443,6 +500,14 @@ func _render_tree() -> void:
 	_current_scale = _paper_camera.get_current_zoom()
 	tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
 
+	# Update arrows layer with tree data
+	if _arrows_layer and navigation_arrows_enabled:
+		_arrows_layer.set_tree_scale(tree_scale)
+		_arrows_layer.set_tree_data(_tree_data, tree_renderer.extended_positions)
+		_arrows_layer.set_diff_circle(diff_circle_enabled, diff_circle_center, diff_circle_radius)
+		_arrows_layer.update_view(_scroll_offset, _current_scale, _viewport_center)
+		_arrows_layer.update_arrows()
+
 	print("[TreeVisualization] Rendering complete")
 
 
@@ -456,6 +521,11 @@ func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
 	# Update renderer for culling/labels
 	if tree_renderer:
 		tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
+
+	# Update arrows layer
+	if _arrows_layer and navigation_arrows_enabled:
+		_arrows_layer.update_view(_scroll_offset, _current_scale, _viewport_center)
+		_arrows_layer.update_arrows()
 
 
 func _process(_delta: float) -> void:
@@ -491,6 +561,11 @@ func _on_node_unhovered() -> void:
 	"""Handle node unhover from renderer."""
 	node_unhovered.emit()
 
+
+func _on_arrow_navigation_requested(node_id: String, world_position: Vector2) -> void:
+	"""Handle navigation arrow click - emit signal for parent scene to handle."""
+	navigation_requested.emit(node_id, world_position)
+
 # =============================================================================
 # Cleanup
 # =============================================================================
@@ -503,6 +578,11 @@ func _exit_tree() -> void:
 		tree_renderer.clear()
 		tree_renderer.queue_free()
 		tree_renderer = null
+
+	if _arrows_layer:
+		_arrows_layer.clear()
+		_arrows_layer.queue_free()
+		_arrows_layer = null
 
 	# Disconnect API signals
 	if APIManager.tree.tree_loaded.is_connected(_on_tree_data_loaded):
