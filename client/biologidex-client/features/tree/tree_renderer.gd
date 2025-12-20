@@ -3,6 +3,20 @@
 TreeRenderer - High-performance rendering engine for radial taxonomic tree visualization.
 Handles batch rendering of nodes, straight edges, and interactions using MultiMeshInstance2D.
 Updated to work with external transform control (no internal camera).
+
+COORDINATE SPACES (per CLAUDE.md conventions):
+- SCREEN space: Pixels, origin top-left (0,0). Used for input events, label placement.
+- WORLD space: World units, scene origin. Used for camera offset (_scroll_offset).
+- TREE-LOCAL space: World units, tree root (0,0). Used for node.position, render_data.position.
+
+Key formulas:
+- tree_local_to_world: world = tree_local * _tree_scale
+- world_to_tree_local: tree_local = world / _tree_scale
+- world_to_screen: screen = (world - scroll_offset) * camera_scale + viewport_center
+- screen_to_world: world = (screen - viewport_center) / camera_scale + scroll_offset
+
+All node positions (render_data.position) are in TREE-LOCAL space.
+All view calculations convert to tree-local for culling.
 """
 extends Node2D
 class_name TreeRenderer
@@ -129,11 +143,16 @@ var selected_node: TreeDataModels.TaxonomicNode = null
 var hovered_node: TreeDataModels.TaxonomicNode = null
 
 # View state (updated by controller)
+## Camera scroll offset in WORLD SPACE (position that appears at viewport center)
 var _scroll_offset: Vector2 = Vector2.ZERO
+## Camera zoom scale (1.0 = normal, 2.0 = zoomed in 2x)
 var _current_scale: float = 1.0
+## Viewport center in SCREEN SPACE (typically viewport_size / 2)
 var _viewport_center: Vector2 = Vector2.ZERO
+## Viewport size in SCREEN SPACE (pixels)
 var _viewport_size: Vector2 = Vector2(1280, 720)
-var _tree_scale: float = 1.0  # Parent TreeVisualization scale factor
+## Tree graph scale factor - affects tree-local to world conversion
+var _tree_scale: float = 1.0
 
 # Visibility throttling
 var _visibility_dirty: bool = false

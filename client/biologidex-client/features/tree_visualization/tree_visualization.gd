@@ -6,6 +6,14 @@ class_name TreeVisualization
 ## Encapsulates tree data loading, friend sync, and rendering logic.
 ## Can be added to any scene that has a PaperCameraScene.
 ##
+## Uses shared TreeViewState and TreeArrowConfig objects to eliminate
+## redundant state synchronization between components.
+##
+## COORDINATE SPACES (per CLAUDE.md conventions):
+## - View state positions are in WORLD space (camera position)
+## - Tree node positions are in TREE-LOCAL space
+## - Diff circle center/radius are in TREE-LOCAL space
+##
 ## Usage:
 ##   var tree_vis = TreeVisualization.new()
 ##   paper_camera.content_container.add_child(tree_vis)
@@ -50,6 +58,8 @@ signal navigation_requested(node_id: String, world_position: Vector2)
 			tree_graph.scale = Vector2(tree_scale, tree_scale)
 		if tree_renderer:
 			tree_renderer.set_tree_scale(tree_scale)
+		if _view_state:
+			_view_state.tree_scale = tree_scale
 ## Size of dex images in world units
 @export var dex_image_size: float = 1000.0
 ## Enable branch extension to reduce image overlap
@@ -88,7 +98,7 @@ signal navigation_requested(node_id: String, world_position: Vector2)
 			tree_renderer.diff_circle_enabled = value
 		if _arrows_layer:
 			_arrows_layer.set_diff_circle(value, diff_circle_center, diff_circle_radius)
-## Radius of the diff circle in world units (tree-local space)
+## Radius of the diff circle in TREE-LOCAL units
 @export var diff_circle_radius: float = 330.0:
 	set(value):
 		diff_circle_radius = value
@@ -96,7 +106,7 @@ signal navigation_requested(node_id: String, world_position: Vector2)
 			tree_renderer.diff_circle_radius = value
 		if _arrows_layer:
 			_arrows_layer.set_diff_circle(diff_circle_enabled, diff_circle_center, value)
-## Center position of the diff circle in tree-local coordinates
+## Center position of the diff circle in TREE-LOCAL coordinates
 @export var diff_circle_center: Vector2 = Vector2.ZERO:
 	set(value):
 		diff_circle_center = value
@@ -116,26 +126,26 @@ signal navigation_requested(node_id: String, world_position: Vector2)
 @export var arrow_size: float = 30.0:
 	set(value):
 		arrow_size = value
-		if _arrows_layer:
-			_arrows_layer.arrow_size = value
+		if _arrow_config:
+			_arrow_config.size = value
 ## Distance from node center to place arrows
 @export var arrow_distance: float = 60.0:
 	set(value):
 		arrow_distance = value
-		if _arrows_layer:
-			_arrows_layer.arrow_distance_from_node = value
+		if _arrow_config:
+			_arrow_config.distance_from_node = value
 ## Opacity of navigation arrows
 @export_range(0.0, 1.0, 0.05) var arrow_opacity: float = 0.75:
 	set(value):
 		arrow_opacity = value
-		if _arrows_layer:
-			_arrows_layer.arrow_opacity = value
+		if _arrow_config:
+			_arrow_config.opacity = value
 ## Extra offset for arrows near nodes with dex images (avoids image overlap)
 @export var arrow_dex_image_offset: float = 500.0:
 	set(value):
 		arrow_dex_image_offset = value
-		if _arrows_layer:
-			_arrows_layer.dex_image_offset = value
+		if _arrow_config:
+			_arrow_config.dex_image_offset = value
 
 # =============================================================================
 # Internal State
@@ -164,10 +174,9 @@ var _friends_synced: bool = false
 var _tree_loaded: bool = false
 var _pending_tree_data: TreeDataModels.TreeData = null
 
-# View state (for TreeRenderer culling)
-var _scroll_offset: Vector2 = Vector2.ZERO
-var _current_scale: float = 1.0
-var _viewport_center: Vector2 = Vector2.ZERO
+# Shared state objects (eliminates redundant copies in child components)
+var _view_state: TreeViewState = null
+var _arrow_config: TreeArrowConfig = null
 
 # =============================================================================
 # Read-only Properties
@@ -185,6 +194,10 @@ var current_mode: int:
 var tree_data: TreeDataModels.TreeData:
 	get: return _tree_data
 
+## Shared view state (read-only access for external components)
+var view_state: TreeViewState:
+	get: return _view_state
+
 # =============================================================================
 # Public API
 # =============================================================================
@@ -194,6 +207,9 @@ var tree_data: TreeDataModels.TreeData:
 func setup(paper_camera: PaperCameraScene) -> void:
 	_paper_camera = paper_camera
 	_current_mode = initial_mode
+
+	# Create shared state objects
+	_setup_shared_state()
 
 	# Create renderer and layers
 	_setup_renderer()
@@ -281,6 +297,20 @@ func clear() -> void:
 # Internal Methods - Setup
 # =============================================================================
 
+func _setup_shared_state() -> void:
+	"""Create shared state objects for coordinating components."""
+	# Create shared view state
+	_view_state = TreeViewState.new()
+	_view_state.tree_scale = tree_scale
+
+	# Create shared arrow config with export values
+	_arrow_config = TreeArrowConfig.new()
+	_arrow_config.size = arrow_size
+	_arrow_config.distance_from_node = arrow_distance
+	_arrow_config.opacity = arrow_opacity
+	_arrow_config.dex_image_offset = arrow_dex_image_offset
+
+
 func _setup_renderer() -> void:
 	"""Setup TreeRenderer for visualization.
 	Creates TreeGraph and layers programmatically to avoid web export bug (GitHub #101975)."""
@@ -309,15 +339,13 @@ func _setup_renderer() -> void:
 	_labels_layer.z_index = 2
 	tree_graph.add_child(_labels_layer)
 
-	# Create arrows layer (z_index 3 = on top of labels)
+	# Create arrows layer with shared state objects
 	_arrows_layer = TreeNavigationArrowsLayerClass.new()
 	_arrows_layer.name = "ArrowsLayer"
 	_arrows_layer.z_index = 3
 	_arrows_layer.visible = navigation_arrows_enabled
-	_arrows_layer.arrow_size = arrow_size
-	_arrows_layer.arrow_distance_from_node = arrow_distance
-	_arrows_layer.arrow_opacity = arrow_opacity
-	_arrows_layer.dex_image_offset = arrow_dex_image_offset
+	_arrows_layer.config = _arrow_config
+	_arrows_layer.view_state = _view_state
 	tree_graph.add_child(_arrows_layer)
 
 	# Connect arrows navigation signal (uses _input() for reliable click detection)
@@ -384,13 +412,21 @@ func _setup_camera_connection() -> void:
 	# Connect to view_changed signal
 	_paper_camera.view_changed.connect(_on_view_changed)
 
-	# Get initial state for culling calculations
-	_scroll_offset = _paper_camera.get_camera_position()
-	_current_scale = _paper_camera.get_current_zoom()
+	# Get initial view state
+	var scroll_offset: Vector2 = _paper_camera.get_camera_position()
+	var current_scale: float = _paper_camera.get_current_zoom()
+	var viewport_center: Vector2
+	var viewport_size: Vector2
+
 	if is_inside_tree():
-		_viewport_center = get_viewport_rect().size / 2.0
+		viewport_size = get_viewport_rect().size
+		viewport_center = viewport_size / 2.0
 	else:
-		_viewport_center = Vector2(640, 360)  # Default fallback
+		viewport_size = Vector2(1280, 720)
+		viewport_center = Vector2(640, 360)
+
+	# Update shared view state
+	_view_state.update(scroll_offset, current_scale, viewport_center, viewport_size)
 
 
 func _connect_api_signals() -> void:
@@ -493,39 +529,51 @@ func _render_tree() -> void:
 	print("[TreeVisualization] Rendering tree...")
 	tree_renderer.render_tree(_tree_data)
 
-	# Initialize renderer with current view state
+	# Update view state with current camera values
 	if is_inside_tree():
-		_viewport_center = get_viewport_rect().size / 2.0
-	_scroll_offset = _paper_camera.get_camera_position()
-	_current_scale = _paper_camera.get_current_zoom()
-	tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
+		var viewport_size: Vector2 = get_viewport_rect().size
+		_view_state.update(
+			_paper_camera.get_camera_position(),
+			_paper_camera.get_current_zoom(),
+			viewport_size / 2.0,
+			viewport_size
+		)
+
+	# Update renderer with current view
+	tree_renderer.update_view(
+		_view_state.scroll_offset,
+		_view_state.current_scale,
+		_view_state.viewport_center
+	)
 
 	# Update arrows layer with tree data
 	if _arrows_layer and navigation_arrows_enabled:
-		_arrows_layer.set_tree_scale(tree_scale)
 		_arrows_layer.set_tree_data(_tree_data, tree_renderer.extended_positions)
 		_arrows_layer.set_diff_circle(diff_circle_enabled, diff_circle_center, diff_circle_radius)
-		_arrows_layer.update_view(_scroll_offset, _current_scale, _viewport_center)
-		_arrows_layer.update_arrows()
+		# View state updates automatically trigger arrow updates via signal
 
 	print("[TreeVisualization] Rendering complete")
 
 
 func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
-	"""Handle view changes from PaperCameraScene."""
-	_scroll_offset = cam_position
-	_current_scale = zoom
+	"""Handle view changes from PaperCameraScene.
+	Updates shared view state which triggers updates in subscribed components."""
+	var viewport_size: Vector2
+	var viewport_center: Vector2
+
 	if is_inside_tree():
-		_viewport_center = get_viewport_rect().size / 2.0
+		viewport_size = get_viewport_rect().size
+		viewport_center = viewport_size / 2.0
+	else:
+		viewport_size = Vector2(1280, 720)
+		viewport_center = Vector2(640, 360)
+
+	# Update shared view state (triggers view_changed signal to arrows layer)
+	_view_state.update(cam_position, zoom, viewport_center, viewport_size)
 
 	# Update renderer for culling/labels
 	if tree_renderer:
-		tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
-
-	# Update arrows layer
-	if _arrows_layer and navigation_arrows_enabled:
-		_arrows_layer.update_view(_scroll_offset, _current_scale, _viewport_center)
-		_arrows_layer.update_arrows()
+		tree_renderer.update_view(cam_position, zoom, viewport_center)
 
 
 func _process(_delta: float) -> void:
@@ -536,12 +584,19 @@ func _process(_delta: float) -> void:
 	if not is_inside_tree():
 		return
 
-	var new_center = get_viewport_rect().size / 2.0
-	if new_center != _viewport_center:
-		_viewport_center = new_center
+	var new_size: Vector2 = get_viewport_rect().size
+	if new_size != _view_state.viewport_size:
+		var new_center: Vector2 = new_size / 2.0
+		_view_state.viewport_size = new_size
+		_view_state.viewport_center = new_center
+
 		# Trigger renderer update with current view state
 		if tree_renderer:
-			tree_renderer.update_view(_scroll_offset, _current_scale, _viewport_center)
+			tree_renderer.update_view(
+				_view_state.scroll_offset,
+				_view_state.current_scale,
+				new_center
+			)
 
 # =============================================================================
 # Internal Methods - Node Interaction
@@ -583,6 +638,10 @@ func _exit_tree() -> void:
 		_arrows_layer.clear()
 		_arrows_layer.queue_free()
 		_arrows_layer = null
+
+	# Cleanup shared state
+	_view_state = null
+	_arrow_config = null
 
 	# Disconnect API signals
 	if APIManager.tree.tree_loaded.is_connected(_on_tree_data_loaded):
