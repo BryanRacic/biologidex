@@ -3,13 +3,16 @@ extends BaseSceneNode
 ##
 ## Features:
 ## - JournalTabs component for switching between "Dex Feed" and "Friends" views
-## - Dex Feed: Carousel view of friends' catches with randomized scrapbook layout
+## - Dex Feed: World-space carousel with randomized scrapbook layout
 ## - Friends: Lab book style friend management (add/remove friends, pending requests)
 ## - Single PaperCameraScene handles scrolling for both tabs
+##
+## ARCHITECTURE:
+## - Feed tab uses FeedVisualization added to PaperCameraScene.content_container
+## - Friends tab positions scroll_content directly via camera.position.y
 
 const ClipboardUtils = preload("res://features/ui/components/clipboard/clipboard_helper.gd")
-const FeedCarouselRenderer = preload("res://features/dex_feed/feed_carousel_renderer.gd")
-const JournalTabs = preload("res://features/ui/components/journal_tabs/journal_tabs.gd")
+const FeedVisualizationClass = preload("res://features/dex_feed/feed_visualization.gd")
 
 # =============================================================================
 # Constants
@@ -17,7 +20,7 @@ const JournalTabs = preload("res://features/ui/components/journal_tabs/journal_t
 
 const TAB_FEED := "feed"
 const TAB_FRIENDS := "friends"
-const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizontal scroll in feed
+const HORIZONTAL_BOUND_RATIO: float = 0.3  # ±30% of viewport width for scrapbook wobble
 
 # =============================================================================
 # State Management
@@ -46,8 +49,8 @@ var pending_requests: Array = []
 # Tabs
 var _journal_tabs: JournalTabs
 
-# Feed components (created dynamically)
-var _carousel_renderer: FeedCarouselRenderer
+# Feed visualization (created dynamically for web export compatibility)
+var _feed_visualization: FeedVisualization = null
 
 # Preloaded scenes for friends list
 var friend_item_scene = preload("res://scenes/social/components/friend_list_item.tscn")
@@ -63,7 +66,6 @@ var pending_item_scene = preload("res://scenes/social/components/pending_request
 # Feed UI
 @onready var _content_area: Control = get_node("%ContentArea")
 @onready var _feed_container: Control = get_node("%FeedContainer")
-@onready var _carousel_container: Control = get_node("%CarouselContainer")
 @onready var _feed_empty_label: Label = get_node("%FeedEmptyLabel")
 
 # Filter UI (feed)
@@ -83,7 +85,6 @@ var pending_item_scene = preload("res://scenes/social/components/pending_request
 @onready var pending_section: VBoxContainer = get_node("%PendingSection")
 @onready var pending_header: HBoxContainer = get_node("%PendingHeader")
 @onready var pending_list: VBoxContainer = get_node("%PendingList")
-@onready var _friends_empty_label: Label = get_node("%FriendsEmptyLabel")
 
 # Loading overlay
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
@@ -111,7 +112,7 @@ func _on_scene_ready() -> void:
 	_setup_tabs()
 	_setup_ui()
 	await _setup_scroll_controller()
-	await _setup_feed_components()
+	await _setup_feed_visualization()
 	_setup_confirmation_dialog()
 	_connect_sync_signals()
 
@@ -161,17 +162,15 @@ func _setup_scroll_controller() -> void:
 	"""Setup PaperCameraScene for scroll system"""
 	await get_tree().process_frame
 
-	# Connect signals
-	_paper_camera.view_changed.connect(_on_view_changed)
-	_paper_camera.tap_detected.connect(_on_tap_detected)
+	# Connect gesture signals for state tracking
 	_paper_camera.gesture_started.connect(_on_gesture_started)
 	_paper_camera.gesture_ended.connect(_on_gesture_ended)
 
 	print("[Community] PaperCameraScene setup complete")
 
 
-func _setup_feed_components() -> void:
-	"""Setup carousel renderer for feed view."""
+func _setup_feed_visualization() -> void:
+	"""Setup FeedVisualization in world-space (like TreeVisualization)."""
 	await get_tree().process_frame
 
 	var content_width := _content_area.size.x
@@ -180,21 +179,21 @@ func _setup_feed_components() -> void:
 		push_error("Community: ContentArea size must be > 0")
 		return
 
-	# Create and configure carousel renderer
-	_carousel_renderer = FeedCarouselRenderer.new()
-	_carousel_renderer.name = "CarouselRenderer"
-	_carousel_renderer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_carousel_container.add_child(_carousel_renderer)
+	# Create FeedVisualization dynamically (web export compatible)
+	_feed_visualization = FeedVisualizationClass.new()
+	_feed_visualization.name = "FeedVisualization"
 
-	# Configure carousel dimensions
-	_carousel_renderer.setup(content_width, content_height)
+	# Add to PaperCameraScene content container (world-space)
+	_paper_camera.content_container.add_child(_feed_visualization)
 
-	# Connect carousel signals
-	_carousel_renderer.item_pressed.connect(_on_view_in_dex)
-	_carousel_renderer.image_ready.connect(_on_image_ready)
-	_carousel_renderer.layout_calculated.connect(_on_feed_layout_calculated)
+	# Setup with camera reference
+	_feed_visualization.setup(_paper_camera)
 
-	print("[Community] Feed carousel setup complete: %dx%d" % [int(content_width), int(content_height)])
+	# Connect signals
+	_feed_visualization.entry_pressed.connect(_on_view_in_dex)
+	_feed_visualization.layout_calculated.connect(_on_feed_layout_calculated)
+
+	print("[Community] FeedVisualization setup complete: content area %dx%d" % [int(content_width), int(content_height)])
 
 
 func _setup_confirmation_dialog() -> void:
@@ -243,6 +242,10 @@ func _activate_feed_tab() -> void:
 	_friends_container.visible = false
 	filter_bar.visible = true
 
+	# Show feed visualization
+	if _feed_visualization:
+		_feed_visualization.visible = true
+
 	# Configure scroll limits for feed (horizontal + vertical)
 	var content_width := _content_area.size.x
 	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
@@ -250,6 +253,10 @@ func _activate_feed_tab() -> void:
 		Vector2(-horizontal_max, 0.0),
 		Vector2(horizontal_max, 0.0)  # Y max set in _on_feed_layout_calculated
 	)
+
+	# Disconnect friends view_changed, connect feed's
+	if _paper_camera.view_changed.is_connected(_on_friends_view_changed):
+		_paper_camera.view_changed.disconnect(_on_friends_view_changed)
 
 	# Reset scroll position
 	_paper_camera.scroll_to(Vector2.ZERO, false)
@@ -265,6 +272,14 @@ func _activate_friends_tab() -> void:
 	_feed_container.visible = false
 	_friends_container.visible = true
 	filter_bar.visible = false
+
+	# Hide feed visualization
+	if _feed_visualization:
+		_feed_visualization.visible = false
+
+	# Connect friends view_changed for scroll_content positioning
+	if not _paper_camera.view_changed.is_connected(_on_friends_view_changed):
+		_paper_camera.view_changed.connect(_on_friends_view_changed)
 
 	# Configure scroll limits for friends (vertical only)
 	_paper_camera.set_scroll_limits(
@@ -287,28 +302,12 @@ func _activate_friends_tab() -> void:
 # Scroll Handling
 # =============================================================================
 
-func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
-	"""Handle view change from PaperCameraScene"""
-	if _active_tab == TAB_FEED:
-		if _carousel_renderer:
-			_carousel_renderer.update_scroll(cam_position, zoom)
-	else:
-		if scroll_content:
-			scroll_content.position.y = -cam_position.y
-
-
-func _on_tap_detected(world_pos: Vector2) -> void:
-	"""Handle tap on carousel background - find which entry was tapped"""
-	if _active_tab != TAB_FEED:
+func _on_friends_view_changed(cam_position: Vector2, _zoom: float) -> void:
+	"""Handle view change for friends tab (scroll_content positioning)."""
+	if _active_tab != TAB_FRIENDS:
 		return
-
-	var cam_pos := _paper_camera.get_camera_position()
-	var tap_y := cam_pos.y + _content_area.size.y / 2.0
-	var entry_index := _carousel_renderer.get_entry_at_position(tap_y)
-
-	if entry_index >= 0 and entry_index < displayed_entries.size():
-		var entry: Dictionary = displayed_entries[entry_index]
-		_on_view_in_dex(entry)
+	if scroll_content:
+		scroll_content.position.y = -cam_position.y
 
 
 func _on_gesture_started() -> void:
@@ -324,18 +323,20 @@ func _on_gesture_ended() -> void:
 
 
 func _on_feed_layout_calculated(total_height: float) -> void:
-	"""Handle feed layout calculation complete - set max scroll"""
-	var visible_height := _content_area.size.y
-	var extra_scroll := visible_height * 0.5
-	var max_scroll := maxf(0.0, total_height - visible_height + extra_scroll)
+	"""Handle feed layout calculation complete - set max scroll."""
+	var viewport_size: Vector2 = get_viewport_rect().size
 
-	var content_width := _content_area.size.x
-	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
+	# Calculate max scroll (allow scrolling so last entry can be centered)
+	var max_scroll_y: float = maxf(0.0, total_height - viewport_size.y / 2.0)
+
+	# Horizontal limits for scrapbook wobble effect
+	var horizontal_max: float = viewport_size.x * HORIZONTAL_BOUND_RATIO
+
 	_paper_camera.set_scroll_limits(
 		Vector2(-horizontal_max, 0.0),
-		Vector2(horizontal_max, max_scroll)
+		Vector2(horizontal_max, max_scroll_y)
 	)
-	print("[Community] Feed layout: total=%.0f, visible=%.0f, max_scroll=%.0f" % [total_height, visible_height, max_scroll])
+	print("[Community] Feed layout: total=%.0f, max_scroll=%.0f" % [total_height, max_scroll_y])
 
 
 func _update_friends_scroll_limits() -> void:
@@ -474,13 +475,14 @@ func _sort_by_date_desc(a: Dictionary, b: Dictionary) -> bool:
 
 
 func _display_feed() -> void:
-	"""Display the feed entries using the carousel"""
+	"""Display the feed entries using FeedVisualization."""
 	displayed_entries = _apply_filters(feed_entries)
 
 	if displayed_entries.is_empty():
 		_show_status("No entries to display", false)
 		_show_feed_empty_state(true, "No entries to display.\n\nYour friends haven't caught any animals yet!")
-		_carousel_renderer.clear()
+		if _feed_visualization:
+			_feed_visualization.clear()
 		# Reset scroll limits (horizontal only)
 		var content_width := _content_area.size.x
 		var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
@@ -492,10 +494,16 @@ func _display_feed() -> void:
 		return
 
 	_show_feed_empty_state(false)
-	_carousel_renderer.set_entries(displayed_entries)
+
+	# Set entries - FeedVisualization handles the rest
+	if _feed_visualization:
+		_feed_visualization.set_entries(displayed_entries)
+
+	# Scroll to top
 	_paper_camera.scroll_to(Vector2.ZERO, false)
+
 	_show_status("%d entries" % displayed_entries.size(), true)
-	print("[Community] Displaying %d entries in carousel" % displayed_entries.size())
+	print("[Community] Displaying %d entries" % displayed_entries.size())
 
 
 func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
@@ -511,11 +519,6 @@ func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
 		return filtered
 
 	return entries.duplicate()
-
-
-func _on_image_ready(_index: int) -> void:
-	"""Handle image loaded for carousel item"""
-	pass
 
 # =============================================================================
 # Friends Data Management

@@ -1,9 +1,13 @@
 extends BaseSceneNode
-## Dex Feed - Display friends' dex entries in a touch-driven vertical carousel.
-## Uses PaperCameraScene for gesture handling and FeedCarouselRenderer for efficient pooled rendering.
-## Entries are displayed with randomized spacing, size, offset, and rotation for an organic scrapbook feel.
+## Dex Feed - Display friends' dex entries using world-space positioning.
+## Uses PaperCameraScene with FeedVisualization (like Home uses TreeVisualization).
+##
+## ARCHITECTURE:
+## - FeedVisualization is added to PaperCameraScene.content_container (world-space)
+## - Content positions in feed-local space, camera handles screen projection
+## - No manual screen-space positioning needed
 
-const FeedCarouselRenderer = preload("res://features/dex_feed/feed_carousel_renderer.gd")
+const FeedVisualizationClass = preload("res://features/dex_feed/feed_visualization.gd")
 
 # State Management
 enum FeedState { IDLE, LOADING, SCROLLING, ERROR }
@@ -16,23 +20,20 @@ var selected_friend_id: String = ""
 # PaperCameraScene component
 @onready var _paper_camera: PaperCameraScene = get_node("%PaperCameraScene")
 
-# Carousel renderer (created dynamically)
-var _carousel_renderer: FeedCarouselRenderer
+# FeedVisualization (created dynamically for web export compatibility)
+var _feed_visualization: FeedVisualization = null
 
 # Feed-specific scroll configuration
-const HORIZONTAL_BOUND_RATIO: float = 0.5  # ±50% of viewport width for horizontal scroll
+const HORIZONTAL_BOUND_RATIO: float = 0.3  # ±30% of viewport width for horizontal wobble
 
-# UI References
+# UI References (screen-space layer)
 @onready var refresh_button: Button = get_node("%RefreshButton")
 @onready var filter_all_button: Button = get_node("%AllButton")
 @onready var filter_dropdown: OptionButton = get_node("%FriendsDropdown")
 @onready var _content_area: Control = get_node("%ContentArea")
-@onready var _carousel_container: Control = get_node("%CarouselContainer")
 @onready var _empty_state_label: Label = get_node("%EmptyStateLabel")
 @onready var _feed_status_label: Label = get_node("%StatusLabel")
 @onready var loading_overlay: Control = get_node("%LoadingOverlay")
-
-# Configuration - item dimensions are now calculated automatically from container width
 
 # Signals
 signal feed_loaded(entry_count: int)
@@ -43,7 +44,7 @@ func _on_scene_ready() -> void:
 	scene_name = "DexFeed"
 
 	_setup_ui()
-	await _setup_carousel_components()
+	await _setup_feed_visualization()
 	_connect_sync_signals()
 	_initialize_feed()
 
@@ -59,44 +60,42 @@ func _setup_ui() -> void:
 	_show_empty_state(false)
 
 
-func _setup_carousel_components() -> void:
-	"""Setup touch controller and carousel renderer"""
+func _setup_feed_visualization() -> void:
+	"""Setup FeedVisualization in world-space (like TreeVisualization)."""
 	# Wait for layout to settle
 	await get_tree().process_frame
 
-	# Use actual content area size for proper desktop/wide-screen support
+	# Get content area dimensions for scroll limit calculations
 	var content_width := _content_area.size.x
 	var content_height := _content_area.size.y
-	assert(content_width > 0 and content_height > 0, "DexFeed: ContentArea size must be > 0. Ensure layout has settled before setup.")
+	assert(content_width > 0 and content_height > 0, "DexFeed: ContentArea size must be > 0")
 
-	# Configure scroll limits for vertical feed
+	# Configure initial scroll limits (vertical max set in _on_layout_calculated)
 	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
 	_paper_camera.set_scroll_limits(
 		Vector2(-horizontal_max, 0.0),
-		Vector2(horizontal_max, 0.0)  # Y max set in _on_layout_calculated
+		Vector2(horizontal_max, 0.0)  # Y max updated after layout
 	)
 
-	# Connect PaperCameraScene signals
-	_paper_camera.view_changed.connect(_on_view_changed)
-	_paper_camera.tap_detected.connect(_on_tap_detected)
+	# Create FeedVisualization dynamically (web export compatible)
+	_feed_visualization = FeedVisualizationClass.new()
+	_feed_visualization.name = "FeedVisualization"
+
+	# Add to PaperCameraScene content container (world-space)
+	_paper_camera.content_container.add_child(_feed_visualization)
+
+	# Setup with camera reference
+	_feed_visualization.setup(_paper_camera)
+
+	# Connect signals
+	_feed_visualization.entry_pressed.connect(_on_view_in_dex)
+	_feed_visualization.layout_calculated.connect(_on_layout_calculated)
+
+	# Connect gesture signals for state tracking
 	_paper_camera.gesture_started.connect(_on_gesture_started)
 	_paper_camera.gesture_ended.connect(_on_gesture_ended)
 
-	# Create and configure carousel renderer
-	_carousel_renderer = FeedCarouselRenderer.new()
-	_carousel_renderer.name = "CarouselRenderer"
-	_carousel_renderer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_carousel_container.add_child(_carousel_renderer)
-
-	# Configure carousel dimensions (item height calculated from width automatically)
-	_carousel_renderer.setup(content_width, content_height)
-
-	# Connect carousel signals
-	_carousel_renderer.item_pressed.connect(_on_view_in_dex)
-	_carousel_renderer.image_ready.connect(_on_image_ready)
-	_carousel_renderer.layout_calculated.connect(_on_layout_calculated)
-
-	print("[DexFeed] Carousel setup complete: %dx%d" % [int(content_width), int(content_height)])
+	print("[DexFeed] FeedVisualization setup complete: content area %dx%d" % [int(content_width), int(content_height)])
 
 
 func _connect_sync_signals() -> void:
@@ -242,14 +241,14 @@ func _sort_by_date_desc(a: Dictionary, b: Dictionary) -> bool:
 
 
 func _display_feed() -> void:
-	"""Display the feed entries using the carousel"""
+	"""Display the feed entries using FeedVisualization."""
 	# Apply filters
 	displayed_entries = _apply_filters(feed_entries)
 
 	if displayed_entries.is_empty():
 		_show_status("No entries to display", false)
 		_show_empty_state(true, "No entries to display.\n\nYour friends haven't caught any animals yet!")
-		_carousel_renderer.clear()
+		_feed_visualization.clear()
 		# Reset scroll limits (horizontal only)
 		var content_width := _content_area.size.x
 		var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
@@ -263,15 +262,16 @@ func _display_feed() -> void:
 	# Hide empty state
 	_show_empty_state(false)
 
-	# Configure carousel with entries (this triggers layout calculation via layout_calculated signal)
-	_carousel_renderer.set_entries(displayed_entries)
+	# Set entries - FeedVisualization handles the rest
+	_feed_visualization.set_entries(displayed_entries)
 
-	# Scroll to top (reset to origin)
-	_paper_camera.scroll_to(Vector2.ZERO, false)
+	# Scroll to center on first entry (not origin)
+	var first_entry_y: float = _feed_visualization.get_entry_center_y(0)
+	_paper_camera.scroll_to(Vector2(0.0, first_entry_y), false)
 
 	_show_status("%d entries" % displayed_entries.size(), true)
 	feed_loaded.emit(displayed_entries.size())
-	print("[DexFeed] Displaying %d entries in carousel" % displayed_entries.size())
+	print("[DexFeed] Displaying %d entries" % displayed_entries.size())
 
 
 func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
@@ -291,46 +291,39 @@ func _apply_filters(entries: Array[Dictionary]) -> Array[Dictionary]:
 
 
 # =============================================================================
-# PaperCameraScene Signal Handlers
+# Layout Signal Handler
 # =============================================================================
 
-func _on_view_changed(cam_position: Vector2, zoom: float) -> void:
-	"""Handle view change from PaperCameraScene"""
-	if _carousel_renderer:
-		_carousel_renderer.update_scroll(cam_position, zoom)
-
-
 func _on_layout_calculated(total_height: float) -> void:
-	"""Handle layout calculation complete - set max scroll"""
-	# total_height is now in actual pixels (matching content area)
-	# Add extra half screen of scroll space at the bottom
-	var visible_height := _content_area.size.y
-	var extra_scroll := visible_height * 0.5
-	var max_scroll := maxf(0.0, total_height - visible_height + extra_scroll)
+	"""Update scroll limits based on content height."""
+	# Get viewport dimensions and current zoom
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var current_zoom: float = _paper_camera.get_current_zoom() if _paper_camera else 1.0
 
-	# Update scroll limits (keep existing horizontal limits)
-	var content_width := _content_area.size.x
-	var horizontal_max := content_width * HORIZONTAL_BOUND_RATIO
+	# Calculate visible height in world units at current zoom
+	var visible_height: float = viewport_size.y / current_zoom
+
+	# Add bottom padding so last image is fully visible (not cut off)
+	# Use full visible height as padding to ensure last entry can be centered with room to spare
+	var bottom_padding: float = visible_height * 0.6
+
+	# Calculate max scroll (allow scrolling so last entry can be fully visible)
+	var max_scroll_y: float = maxf(0.0, total_height - visible_height / 2.0 + bottom_padding)
+
+	# Horizontal limits for scrapbook wobble effect
+	var horizontal_max: float = viewport_size.x * HORIZONTAL_BOUND_RATIO
+
 	_paper_camera.set_scroll_limits(
 		Vector2(-horizontal_max, 0.0),
-		Vector2(horizontal_max, max_scroll)
+		Vector2(horizontal_max, max_scroll_y)
 	)
-	print("[DexFeed] Layout: total_height=%.0f, visible=%.0f, max_scroll=%.0f" % [total_height, visible_height, max_scroll])
+
+	print("[DexFeed] Layout: total_height=%.0f, visible_height=%.0f, max_scroll=%.0f" % [total_height, visible_height, max_scroll_y])
 
 
-func _on_tap_detected(world_pos: Vector2) -> void:
-	"""Handle tap on carousel background - find which entry was tapped"""
-	# Convert world position to content space and find entry
-	# The camera position represents the scroll offset
-	var cam_pos := _paper_camera.get_camera_position()
-	var tap_y := cam_pos.y + _content_area.size.y / 2.0
-
-	var entry_index := _carousel_renderer.get_entry_at_position(tap_y)
-
-	if entry_index >= 0 and entry_index < displayed_entries.size():
-		var entry: Dictionary = displayed_entries[entry_index]
-		_on_view_in_dex(entry)
-
+# =============================================================================
+# Gesture Handlers
+# =============================================================================
 
 func _on_gesture_started() -> void:
 	"""Handle gesture start"""
@@ -342,11 +335,6 @@ func _on_gesture_ended() -> void:
 	"""Handle gesture end"""
 	if _state == FeedState.SCROLLING:
 		_set_state(FeedState.IDLE)
-
-
-func _on_image_ready(_index: int) -> void:
-	"""Handle image loaded for carousel item"""
-	pass  # Could update status if needed
 
 
 # =============================================================================
