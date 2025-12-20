@@ -1,8 +1,5 @@
 ## TODO
-- Merge friends & dex feed scenes
-  - use (bullet journal style) tabs
-- Overlay nav arrows on tree edges
-  - Click to auto scroll to the next node in the path
+- Fix feed next entry arrow, laggy, missing pan animation, skips entries, spams logs 
 - Update camera scene
   - Manual entry (notepad & pencil icon)
   - Research assistant (Research/magnifying glass icon)
